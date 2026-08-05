@@ -8,22 +8,19 @@ class MainSpec extends munit.FunSuite:
 
   val semdbDir = FixtureCompiler.classesDir / "META-INF" / "semanticdb"
 
-  /** Runs Main.run capturing stderr, returning (exit code, captured stderr). */
-  private def runCaptured(args: Array[String]): (Int, String) =
-    val err = new java.io.ByteArrayOutputStream()
-    val oldErr = System.err
-    System.setErr(new java.io.PrintStream(err))
-    try (Main.run(args), err.toString)
-    finally System.setErr(oldErr)
+  /** Runs the real CLI as a subprocess (os.call equivalent in os-lib 0.11). */
+  private def runCli(args: String*): os.CommandResult =
+    val cmd: Seq[os.Shellable] =
+      Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
+        args.map(s => s: os.Shellable)
+    os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe)
 
   test("semdb subcommand produces dot output file") {
     val out = os.pwd / "tmp" / "cli-test" / "out.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val code = Main.run(
-      Array("semdb", semdbDir.toString, "--include", "com.example", "-f", "dot", "-o", out.toString)
-    )
-    assertEquals(code, 0)
+    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "dot", "-o", out.toString)
+    assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.startsWith("digraph deps {"))
     assert(content.contains("\"com.example.modules.module1\" -> \"com.example.util\";"))
@@ -33,15 +30,13 @@ class MainSpec extends munit.FunSuite:
     val out = os.pwd / "tmp" / "cli-test" / "out-collapsed.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val code = Main.run(
-      Array(
-        "semdb", semdbDir.toString,
-        "--include", "com.example",
-        "--collapse", "com.example.modules.**",
-        "-f", "dot", "-o", out.toString
-      )
+    val res = runCli(
+      "semdb", semdbDir.toString,
+      "--include", "com.example",
+      "--collapse", "com.example.modules.**",
+      "-f", "dot", "-o", out.toString
     )
-    assertEquals(code, 0)
+    assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"com.example.modules\" -> \"com.example.util\";"))
   }
@@ -50,42 +45,32 @@ class MainSpec extends munit.FunSuite:
     val out = os.pwd / "tmp" / "cli-test" / "out-jdeps.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val code = Main.run(
-      Array("jdeps", FixtureCompiler.jdepsFile.toString, "--include", "com.example", "-f", "json", "-o", out.toString)
-    )
-    assertEquals(code, 0)
+    val res = runCli("jdeps", FixtureCompiler.jdepsFile.toString, "--include", "com.example", "-f", "json", "-o", out.toString)
+    assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"com.example.modules.module1\""))
   }
 
   test("empty result exits 1") {
-    val (code, errMsg) = runCaptured(
-      Array("semdb", semdbDir.toString, "--include", "no.such.pkg", "-f", "dot")
-    )
-    assertEquals(code, 1)
-    assert(errMsg.contains("no packages remain after filtering"))
+    val res = runCli("semdb", semdbDir.toString, "--include", "no.such.pkg", "-f", "dot")
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("no packages remain after filtering"))
   }
 
   test("nonexistent input exits 1 with clean error") {
-    val (code, errMsg) = runCaptured(
-      Array("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot")
-    )
-    assertEquals(code, 1)
-    assert(errMsg.contains("input path does not exist"))
+    val res = runCli("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot")
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("input path does not exist"))
   }
 
   test("bad format exits non-zero") {
-    val (code, errMsg) = runCaptured(
-      Array("semdb", semdbDir.toString, "--include", "com.example", "-f", "bogus")
-    )
-    assert(code != 0)
-    assert(errMsg.contains("unknown format: bogus"))
+    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "bogus")
+    assert(res.exitCode != 0)
+    assert(res.err.text().contains("unknown format: bogus"))
   }
 
   test("bad collapse rule exits 1") {
-    val (code, errMsg) = runCaptured(
-      Array("semdb", semdbDir.toString, "--include", "com.example", "--collapse", "a.b.c", "-f", "dot")
-    )
-    assertEquals(code, 1)
-    assert(errMsg.contains("collapse rule must end with '**' or '*'"))
+    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "--collapse", "a.b.c", "-f", "dot")
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("collapse rule must end with '**' or '*'"))
   }
