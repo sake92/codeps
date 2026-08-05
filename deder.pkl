@@ -1,0 +1,141 @@
+amends "https://sake92.github.io/deder/config/v0.20.0/DederProject.pkl"
+
+local const baseModule: ScalaModule = new {
+  scalaVersion = "3.7.4"
+  publish = false
+}
+
+local const core = (baseModule) {
+  id = "core"
+  deps {
+    "org.jgrapht:jgrapht-core:1.5.3"
+  }
+}
+
+local const parserSemanticdb = (baseModule) {
+  id = "parser-semanticdb"
+  root = "parsers/semanticdb"
+  moduleDeps {
+    core
+  }
+  deps {
+    "org.scalameta::semanticdb-shared:4.17.2"
+  }
+}
+
+local const parserJdeps = (baseModule) {
+  id = "parser-jdeps"
+  root = "parsers/jdeps"
+  moduleDeps {
+    core
+  }
+}
+
+local const exportModule = (baseModule) {
+  id = "export"
+  moduleDeps {
+    core
+  }
+}
+
+local const cli = (baseModule) {
+  id = "cli"
+  moduleDeps {
+    core
+    parserSemanticdb
+    parserJdeps
+    exportModule
+  }
+  deps {
+    "com.lihaoyi::mainargs:0.7.8"
+    "com.lihaoyi::os-lib:0.11.8"
+  }
+  mainClass = "ba.sake.codeps.cli.Main"
+}
+
+local const testUtils = (baseModule) {
+  id = "test-utils"
+  moduleDeps {
+    core
+  }
+  deps {
+    "com.lihaoyi::os-lib:0.11.8"
+  }
+}
+
+local const coreTest: ScalaTestModule = new {
+  id = "core-test"
+  root = "core/test"
+  scalaVersion = "3.7.4"
+  moduleDeps {
+    core
+  }
+  deps {
+    "org.scalameta::munit:1.3.4"
+  }
+}
+
+local const parserSemanticdbTest: ScalaTestModule = new {
+  id = "parser-semanticdb-test"
+  root = "parsers/semanticdb/test"
+  scalaVersion = "3.7.4"
+  moduleDeps {
+    parserSemanticdb
+    testUtils
+  }
+  deps {
+    "org.scalameta::munit:1.3.4"
+  }
+}
+
+local const parserJdepsTest: ScalaTestModule = new {
+  id = "parser-jdeps-test"
+  root = "parsers/jdeps/test"
+  scalaVersion = "3.7.4"
+  moduleDeps {
+    parserJdeps
+    testUtils
+  }
+  deps {
+    "org.scalameta::munit:1.3.4"
+  }
+}
+
+local const exportTest: ScalaTestModule = new {
+  id = "export-test"
+  root = "export/test"
+  scalaVersion = "3.7.4"
+  moduleDeps {
+    exportModule
+  }
+  deps {
+    "org.scalameta::munit:1.3.4"
+  }
+}
+
+local const cliTest: ScalaTestModule = new {
+  id = "cli-test"
+  root = "cli/test"
+  scalaVersion = "3.7.4"
+  moduleDeps {
+    cli
+    testUtils
+  }
+  deps {
+    "org.scalameta::munit:1.3.4"
+  }
+}
+
+modules {
+  core
+  parserSemanticdb
+  parserJdeps
+  exportModule
+  cli
+  testUtils
+  coreTest
+  parserSemanticdbTest
+  parserJdepsTest
+  exportTest
+  cliTest
+}
