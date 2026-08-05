@@ -66,8 +66,13 @@ object Main:
       System.err.println("error: at least one directory is required")
       1
     else
-      val files = dirs.flatMap(d => os.walk(os.Path(d, os.pwd)).filter(_.ext == "semanticdb").toSeq)
-      analyze(files, SemanticDbParser.parse, include, exclude, collapse, format, out)
+      dirs.map(d => os.Path(d, os.pwd)).find(!os.exists(_)) match
+        case Some(missing) =>
+          System.err.println(s"error: input path does not exist: $missing")
+          1
+        case None =>
+          val files = dirs.flatMap(d => os.walk(os.Path(d, os.pwd)).filter(_.ext == "semanticdb").toSeq)
+          analyze(files, SemanticDbParser.parse, include, exclude, collapse, format, out)
 
   @main
   def jdeps(

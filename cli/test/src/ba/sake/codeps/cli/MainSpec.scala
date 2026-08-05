@@ -57,11 +57,15 @@ class MainSpec extends munit.FunSuite:
     assertEquals(code, 1)
   }
 
-  test("nonexistent input exits 1") {
-    val code = Main.run(
-      Array("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot")
-    )
-    assertEquals(code, 1)
+  test("nonexistent input exits 1 with clean error") {
+    val err = new java.io.ByteArrayOutputStream()
+    val oldErr = System.err
+    System.setErr(new java.io.PrintStream(err))
+    try
+      val code = Main.run(Array("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot"))
+      assertEquals(code, 1)
+      assert(err.toString.contains("input path does not exist"))
+    finally System.setErr(oldErr)
   }
 
   test("bad format exits non-zero") {
