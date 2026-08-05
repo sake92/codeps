@@ -10,7 +10,7 @@ class GraphBuilderSpec extends munit.FunSuite:
     val nodes = Set("a.b", "a.c", "isolated.x")
     val edges = Set(PackageEdge("a.b", "a.c"))
     val g = GraphBuilder.build(nodes, edges)
-    assertEquals(g.vertexSet().asScala, nodes)
+    assertEquals(g.vertexSet().asScala.toSet, nodes)
     assertEquals(g.edgeSet().asScala.size, 1)
     val e = g.edgeSet().asScala.head
     assertEquals(g.getEdgeSource(e), "a.b")
