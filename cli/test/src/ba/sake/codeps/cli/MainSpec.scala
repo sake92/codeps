@@ -8,6 +8,14 @@ class MainSpec extends munit.FunSuite:
 
   val semdbDir = FixtureCompiler.classesDir / "META-INF" / "semanticdb"
 
+  /** Runs Main.run capturing stderr, returning (exit code, captured stderr). */
+  private def runCaptured(args: Array[String]): (Int, String) =
+    val err = new java.io.ByteArrayOutputStream()
+    val oldErr = System.err
+    System.setErr(new java.io.PrintStream(err))
+    try (Main.run(args), err.toString)
+    finally System.setErr(oldErr)
+
   test("semdb subcommand produces dot output file") {
     val out = os.pwd / "tmp" / "cli-test" / "out.dot"
     os.makeDir.all(out / os.up)
@@ -51,33 +59,33 @@ class MainSpec extends munit.FunSuite:
   }
 
   test("empty result exits 1") {
-    val code = Main.run(
+    val (code, errMsg) = runCaptured(
       Array("semdb", semdbDir.toString, "--include", "no.such.pkg", "-f", "dot")
     )
     assertEquals(code, 1)
+    assert(errMsg.contains("no packages remain after filtering"))
   }
 
   test("nonexistent input exits 1 with clean error") {
-    val err = new java.io.ByteArrayOutputStream()
-    val oldErr = System.err
-    System.setErr(new java.io.PrintStream(err))
-    try
-      val code = Main.run(Array("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot"))
-      assertEquals(code, 1)
-      assert(err.toString.contains("input path does not exist"))
-    finally System.setErr(oldErr)
+    val (code, errMsg) = runCaptured(
+      Array("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot")
+    )
+    assertEquals(code, 1)
+    assert(errMsg.contains("input path does not exist"))
   }
 
   test("bad format exits non-zero") {
-    val code = Main.run(
+    val (code, errMsg) = runCaptured(
       Array("semdb", semdbDir.toString, "--include", "com.example", "-f", "bogus")
     )
     assert(code != 0)
+    assert(errMsg.contains("unknown format: bogus"))
   }
 
   test("bad collapse rule exits 1") {
-    val code = Main.run(
+    val (code, errMsg) = runCaptured(
       Array("semdb", semdbDir.toString, "--include", "com.example", "--collapse", "a.b.c", "-f", "dot")
     )
     assertEquals(code, 1)
+    assert(errMsg.contains("collapse rule must end with '**' or '*'"))
   }
