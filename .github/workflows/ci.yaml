@@ -24,6 +24,10 @@ jobs:
           distribution: zulu
           java-version: 21
       - uses: coursier/cache-action@v7
+      # test fixtures are compiled with scala-cli (see FixtureCompiler)
+      - uses: VirtusLab/scala-cli-setup@v1.5
+        with:
+          scala-cli-version: 1.8.4
       - name: Set Homebrew env
         shell: bash
         run: echo "HOMEBREW_NO_SANDBOX_LINUX=1" >> $GITHUB_ENV
