@@ -53,7 +53,8 @@ jobs:
           path: ${{ env.JAR_NAME }}
           if-no-files-found: error
       - name: Create GitHub Release
-        if: github.ref_type == 'tag'
+        # on main pushes: creates/updates a rolling "main" release
+        # on tag pushes: creates/updates a release for the tag (e.g. v1.2.3)
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.JAR_NAME }}
