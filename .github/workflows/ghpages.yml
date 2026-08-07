@@ -1,0 +1,35 @@
+name: Deploy GhPages
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    if: github.repository == 'sake92/codeps'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Install Flatmark
+        run: |
+          FLATMARK_VERSION=0.0.29
+          curl -L https://github.com/sake92/flatmark/releases/download/v${FLATMARK_VERSION}/flatmark_${FLATMARK_VERSION}_amd64.deb -o flatmark.deb
+          sudo apt-get install -y ./flatmark.deb
+      - name: Build
+        env:
+          FLATMARK_BASE_URL: https://sake92.github.io/codeps
+        run: ./scripts/build-docs.sh
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: docs/_site
