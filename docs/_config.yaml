@@ -1,0 +1,13 @@
+name: codeps
+description: Code package dependency analyzer
+
+categories:
+  tutorials:
+    label: Tutorials
+    description: codeps Tutorials
+  howtos:
+    label: How-Tos
+    description: codeps How-Tos
+  reference:
+    label: Reference
+    description: codeps Reference Documentation

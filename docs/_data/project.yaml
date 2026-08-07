@@ -1,0 +1,19 @@
+tutorials:
+  - label: "Quickstart"
+    url: "/tutorials/quickstart.html"
+
+howtos:
+  - label: "SemanticDB analysis"
+    url: "/howtos/semdb.html"
+  - label: "jdeps analysis"
+    url: "/howtos/jdeps.html"
+  - label: "Exporting graphs"
+    url: "/howtos/exporting.html"
+
+references:
+  - label: "CLI"
+    url: "/reference/cli.html"
+  - label: "Export formats"
+    url: "/reference/export-formats.html"
+  - label: "Architecture"
+    url: "/reference/architecture.html"

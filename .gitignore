@@ -9,6 +9,10 @@
 # here tests run
 tmp/
 
+# flatmark docs output + theme cache
+docs/_site/
+docs/.flatmark-cache/
+
 
 # AI
 docs/superpowers/
