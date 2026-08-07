@@ -1,16 +1,22 @@
 # Agent Instructions
 
 ## Build Tool
-- Use **deder** (install: `brew install sake92/tap/deder`); project config lives in `deder.pkl` (module ids, deps, Scala version). No sbt/Mill files.
+- Development uses **deder** (install: `brew install sake92/tap/deder`); project config lives in `deder.pkl` (module ids, deps, Scala version). No sbt/Mill files.
+- For running the CLI, use the prebuilt uber jar — no deder needed:
+
+  ```shell
+  curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
+  ```
 
 ## Commands
 | Task | Command |
 |------|---------|
-| All tests | `deder test` |
-| Test one module | `deder exec -t test -m core-test` |
-| Run CLI | `deder exec -t run -m cli semdb <dir> -i com.example -f json` |
-| CLI assembly | `deder exec -t assembly -m cli` |
+| Download CLI jar | `curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar` |
+| Run CLI | `java -jar codeps.jar semdb <dir> -i com.example -f json` |
 | Build docs | `./scripts/build-docs.sh` (outputs `docs/_site/`) |
+| All tests (dev, needs deder) | `deder test` |
+| Test one module (dev, needs deder) | `deder exec -t test -m core-test` |
+| CLI assembly (dev, needs deder) | `deder exec -t assembly -m cli` |
 
 ## External References
 | Need | File |
