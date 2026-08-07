@@ -68,6 +68,7 @@
     <li><strong>stats</strong> — per package: number of source files and number of class-like types (classes, objects, traits)</li>
    </ul>
    <h2 id="generating-semanticdb-files">Generating SemanticDB files<a href="#generating-semanticdb-files" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>If your build already emits SemanticDB (scala-cli, sbt or Maven with the <code>semanticdb</code> plugin, plain scalac with <code>-Xsemanticdb</code>), the <code>.semanticdb</code> files are already on your disk — the example below is just one way to get them:</p>
    <p>With scala-cli:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">scala-cli compile --server=false --semanticdb -d classes src/
 </code></pre>
@@ -76,18 +77,17 @@
    <ul>
     <li>scalac directly: add <code>-Xsemanticdb</code> (and optionally <code>-P:semanticdb:sourceroot:...</code>) to your compile flags</li>
     <li>Maven / sbt: enable the <code>semanticdb</code> compiler plugin and check the generated files in the target dir</li>
-    <li>The codeps repo itself ships a checked-in example: <code>testFixtures/example1</code> is compiled by tests into <code>tmp/examples/example1/classes/META-INF/semanticdb</code></li>
    </ul>
    <h2 id="running-the-analysis">Running the analysis<a href="#running-the-analysis" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb &lt;dir-with-semanticdb&gt; -i com.example -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb &lt;dir-with-semanticdb&gt; -i com.example -f dot
 </code></pre>
    <ul>
     <li><code>&lt;dir-with-semanticdb&gt;</code> is a positional argument — the whole directory tree is walked for <code>.semanticdb</code> files</li>
     <li><code>-i/--include</code> keeps only your packages (see <a href="#filtering">filtering</a>)</li>
     <li><code>-f/--format</code> selects the output format: <code>dot</code>, <code>json</code> or <code>mermaid</code></li>
    </ul>
-   <p>Example, using the fixture in this repo:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f dot
+   <p>Example:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
 </code></pre>
    <pre><code class="language-dot">digraph deps {
   "com.example.app" -&gt; "com.example.modules.module2";
@@ -107,10 +107,10 @@
    <h2 id="filtering">Filtering<a href="#filtering" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>--include</code> and <code>--exclude</code> take package patterns: a pattern <code>com.example</code> matches the package itself and everything below it. Excludes win over includes.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">only com.example packages, no third-party or JDK noise</span>
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f json
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json
 <span class="hljs-meta prompt_">
 # </span><span class="language-bash">com.example.* minus internal helpers</span>
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f json
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f json
 </code></pre>
    <h2 id="collapsing">Collapsing<a href="#collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:</p>
@@ -132,7 +132,7 @@ deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com
      </tr>
     </tbody>
    </table>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
 </code></pre>
    <p>When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.</p>
    <div role="group">

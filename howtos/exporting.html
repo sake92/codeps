@@ -84,7 +84,7 @@
    </table>
    <p>Output goes to stdout by default; use <code>-o/--out</code> to write to a file.</p>
    <h2 id="dot">DOT<a href="#dot" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
 dot -Tsvg graph.dot -o graph.svg   # render with graphviz
 </code></pre>
    <pre><code class="language-dot">digraph deps {
@@ -95,7 +95,7 @@ dot -Tsvg graph.dot -o graph.svg   # render with graphviz
 </code></pre>
    <p>Nodes that have no edges are emitted as standalone lines, so they are not lost.</p>
    <h2 id="json">JSON<a href="#json" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
 </code></pre>
    <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module1"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.util"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
@@ -115,7 +115,7 @@ dot -Tsvg graph.dot -o graph.svg   # render with graphviz
    </ul>
    <p>This is the format the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> consumes — export, then drop the file on the page.</p>
    <h2 id="mermaid">Mermaid<a href="#mermaid" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f mermaid
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f mermaid
 </code></pre>
    <pre><code class="language-mermaid">flowchart LR
   N0["com.example.app"]

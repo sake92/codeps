@@ -52,7 +52,7 @@
           <li><a href="#include--exclude-patterns">Include / exclude patterns</a></li>
           <li><a href="#collapse-rules">Collapse rules</a></li>
           <li><a href="#exit-codes-and-errors">Exit codes and errors</a></li>
-          <li><a href="#running-without-deder">Running without deder</a></li>
+          <li><a href="#building-from-source">Building from source</a></li>
          </ul></li>
        </ul>
       </div>
@@ -63,8 +63,9 @@
     <div></div>
    </div>
    <h1 id="cli">CLI<a href="#cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>) with two subcommands: <a href="#semdb"><code>semdb</code></a> for SemanticDB input and <a href="#jdeps"><code>jdeps</code></a> for jdeps input. It is built with deder, so run it as:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli &lt;subcommand&gt; [options] &lt;inputs...&gt;
+   <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>) with two subcommands: <a href="#semdb"><code>semdb</code></a> for SemanticDB input and <a href="#jdeps"><code>jdeps</code></a> for jdeps input. Download the prebuilt jar (requires a JDK, 11+) and run it with <code>java -jar</code>:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
+java -jar codeps.jar &lt;subcommand&gt; [options] &lt;inputs...&gt;
 </code></pre>
    <h2 id="common-options">Common options<a href="#common-options" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Both subcommands share these options:</p>
@@ -106,23 +107,23 @@
    </table>
    <p>Positional inputs (directories for <code>semdb</code>, files for <code>jdeps</code>) are required.</p>
    <h2 id="semdb">semdb<a href="#semdb" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;dir...&gt;
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;dir...&gt;
 </code></pre>
    <p>Walks each given directory (recursively) for <code>*.semanticdb</code> files, parses them, and builds the package graph. Requires at least one directory; errors out if a path does not exist or no <code>.semanticdb</code> files are found.</p>
    <p>Also extracts per-package stats (file and class counts) — these appear as <code>nodeInfo</code> in JSON output.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f json
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json
 </code></pre>
    <h2 id="jdeps">jdeps<a href="#jdeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli jdeps [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;file...&gt;
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;file...&gt;
 </code></pre>
    <p>Parses <code>jdeps -verbose:package</code> text output (one or more files). Requires at least one file. Indented detail lines (<code>pkg.a -&gt; pkg.b archive</code>) become edges; non-indented summary lines are ignored.</p>
    <p>No stats are available for jdeps input, so JSON <code>nodeInfo</code> is omitted.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli jdeps jdeps.txt -i com.example -e java.** -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps jdeps.txt -i com.example -e java.** -f dot
 </code></pre>
    <h2 id="include--exclude-patterns">Include / exclude patterns<a href="#include--exclude-patterns" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to the <strong>own packages</strong> found in the input; an edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped).</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">keep only com.example and subpackages, minus internal helpers</span>
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f dot
 </code></pre>
    <h2 id="collapse-rules">Collapse rules<a href="#collapse-rules" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Collapse rules merge packages into a single node, making large graphs readable. Only trailing wildcards are supported:</p>
@@ -145,7 +146,7 @@ deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com
     </tbody>
    </table>
    <p>When multiple rules match a package, the <strong>longest prefix wins</strong> (ties: first rule in the sequence). Loops created by collapsing are dropped; edges are deduplicated.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
 </code></pre>
    <h2 id="exit-codes-and-errors">Exit codes and errors<a href="#exit-codes-and-errors" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
@@ -155,9 +156,9 @@ deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com
    <p>Unparseable input files produce a warning on stderr and are skipped, so a partial run still succeeds:</p>
    <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">warning: failed to parse semanticdb: ...
 </code></pre>
-   <h2 id="running-without-deder">Running without deder<a href="#running-without-deder" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>Main</code> is a plain JVM entry point; it can also be run directly if you have the classpath:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -cp &lt;codeps-classpath&gt; ba.sake.codeps.cli.Main semdb &lt;dir&gt; -i com.example -f dot
+   <h2 id="building-from-source">Building from source<a href="#building-from-source" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>For developing codeps itself, the repo is built with <a href="https://sake92.github.io/deder/">deder</a> — see the <a href="https://github.com/sake92/codeps#development">README</a>:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb &lt;dir&gt; -i com.example -f dot
 </code></pre>
    <div role="group">
     <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats ➡️</a>
