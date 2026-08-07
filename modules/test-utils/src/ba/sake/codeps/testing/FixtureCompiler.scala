@@ -31,7 +31,7 @@ object FixtureCompiler:
 
   private def compileFixtures(): Unit =
     os.makeDir.all(exampleDir)
-    os.copy.over(os.pwd / "test" / "resources" / "examples" / "example1", exampleDir / "src")
+    os.copy.over(os.pwd / "testFixtures" / "example1", exampleDir / "src")
     os.proc("scala-cli", "compile", "--server=false", "--semanticdb", "-d", classesDir, exampleDir / "src")
       .call(check = true)
     val jdepsResult = os.proc("jdeps", "-verbose:package", "-filter:none", "-cp", classesDir, classesDir)
