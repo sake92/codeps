@@ -19,7 +19,7 @@ Output goes to stdout by default; use `-o/--out` to write to a file.
 ## DOT
 
 ```shell
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
 dot -Tsvg graph.dot -o graph.svg   # render with graphviz
 ```
 
@@ -36,7 +36,7 @@ Nodes that have no edges are emitted as standalone lines, so they are not lost.
 ## JSON
 
 ```shell
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
 ```
 
 ```json
@@ -61,7 +61,7 @@ This is the format the [interactive demo](/demo/cytoscape-graph.html) consumes â
 ## Mermaid
 
 ```shell
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f mermaid
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f mermaid
 ```
 
 ```mermaid

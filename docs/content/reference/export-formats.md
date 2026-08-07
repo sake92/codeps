@@ -27,7 +27,7 @@ digraph deps {
 Render it with Graphviz:
 
 ```shell
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
 dot -Tsvg graph.dot -o graph.svg
 ```
 

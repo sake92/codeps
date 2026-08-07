@@ -6,7 +6,7 @@ description: codeps module architecture
 
 # Architecture
 
-codeps is a Scala 3 project built with [deder](https://sake92.github.io/deder).
+codeps is a Scala 3 project built with [deder](https://sake92.github.io/deder) (during development; end users run the prebuilt jar).
 It is organized as small modules with a clear data flow:
 
 ```diagram:mermaid
@@ -77,8 +77,7 @@ stdout or `-o` file. See the [CLI reference](/reference/cli.html).
 
 `FixtureCompiler` compiles the checked-in `testFixtures/example1` sources once into
 `tmp/examples/example1` (using scala-cli with `--semanticdb` and `jdeps`), thread-safe
-and cached across test runs. The resulting `classes/META-INF/semanticdb` and `jdeps.txt`
-double as ready-made demo inputs.
+and cached across test runs.
 
 ## Testing
 

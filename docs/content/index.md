@@ -11,7 +11,9 @@ codeps is a **code package dependency analyzer** for JVM projects (Java and Scal
 It parses existing compiler output — [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` — and produces a
 **package-level dependency graph**, which you can export as [DOT](/howtos/exporting.html), [JSON](/howtos/exporting.html) or [Mermaid](/howtos/exporting.html).
 
-No build-system integration needed: it just reads what your compiler already produced.
+No build-system integration needed: your local build tools already produce the inputs —
+`.semanticdb` files from a Scala compiler with SemanticDB enabled, and `.class` files for the JDK's `jdeps` —
+codeps just reads them.
 
 > **New here?** Start with the [Quickstart](/tutorials/quickstart.html).
 > Want to explore a graph interactively? Try the [interactive demo](/demo/cytoscape-graph.html) — it loads graphs exported with `-f json`.
@@ -29,7 +31,7 @@ No build-system integration needed: it just reads what your compiler already pro
 ## Quick example
 
 ```shell
-deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
 ```
 
 ```dot

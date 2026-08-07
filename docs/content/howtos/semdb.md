@@ -17,6 +17,10 @@ The `semdb` subcommand walks a directory, reads every `*.semanticdb` file, and e
 
 ## Generating SemanticDB files
 
+If your build already emits SemanticDB (scala-cli, sbt or Maven with the `semanticdb` plugin,
+plain scalac with `-Xsemanticdb`), the `.semanticdb` files are already on your disk —
+the example below is just one way to get them:
+
 With scala-cli:
 
 ```shell
@@ -29,23 +33,21 @@ Other ways to get SemanticDB output:
 
 - scalac directly: add `-Xsemanticdb` (and optionally `-P:semanticdb:sourceroot:...`) to your compile flags
 - Maven / sbt: enable the `semanticdb` compiler plugin and check the generated files in the target dir
-- The codeps repo itself ships a checked-in example: `testFixtures/example1` is compiled by tests into
-  `tmp/examples/example1/classes/META-INF/semanticdb`
 
 ## Running the analysis
 
 ```shell
-deder exec -t run -m cli semdb <dir-with-semanticdb> -i com.example -f dot
+java -jar codeps.jar semdb <dir-with-semanticdb> -i com.example -f dot
 ```
 
 - `<dir-with-semanticdb>` is a positional argument — the whole directory tree is walked for `.semanticdb` files
 - `-i/--include` keeps only your packages (see [filtering](#filtering))
 - `-f/--format` selects the output format: `dot`, `json` or `mermaid`
 
-Example, using the fixture in this repo:
+Example:
 
 ```shell
-deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
 ```
 
 ```dot
@@ -76,10 +78,10 @@ and everything below it. Excludes win over includes.
 
 ```shell
 # only com.example packages, no third-party or JDK noise
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f json
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json
 
 # com.example.* minus internal helpers
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f json
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f json
 ```
 
 ## Collapsing
@@ -92,7 +94,7 @@ Collapse rules merge whole subtrees into a single node, which keeps big graphs r
 | `org.lib.*` | sub-packages collapse one level below the prefix (e.g. `org.lib.http`, `org.lib.json`) |
 
 ```shell
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
 ```
 
 When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.

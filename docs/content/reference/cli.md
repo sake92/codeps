@@ -8,10 +8,11 @@ description: codeps CLI reference
 
 `codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with two subcommands:
 [`semdb`](#semdb) for SemanticDB input and [`jdeps`](#jdeps) for jdeps input.
-It is built with deder, so run it as:
+Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
 ```shell
-deder exec -t run -m cli <subcommand> [options] <inputs...>
+curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
+java -jar codeps.jar <subcommand> [options] <inputs...>
 ```
 
 ## Common options
@@ -31,7 +32,7 @@ Positional inputs (directories for `semdb`, files for `jdeps`) are required.
 ## semdb
 
 ```shell
-deder exec -t run -m cli semdb [-i include] [-e exclude] [-c collapse] -f format [-o out] <dir...>
+java -jar codeps.jar semdb [-i include] [-e exclude] [-c collapse] -f format [-o out] <dir...>
 ```
 
 Walks each given directory (recursively) for `*.semanticdb` files, parses them,
@@ -41,13 +42,13 @@ does not exist or no `.semanticdb` files are found.
 Also extracts per-package stats (file and class counts) — these appear as `nodeInfo` in JSON output.
 
 ```shell
-deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f json
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json
 ```
 
 ## jdeps
 
 ```shell
-deder exec -t run -m cli jdeps [-i include] [-e exclude] [-c collapse] -f format [-o out] <file...>
+java -jar codeps.jar jdeps [-i include] [-e exclude] [-c collapse] -f format [-o out] <file...>
 ```
 
 Parses `jdeps -verbose:package` text output (one or more files). Requires at least one file.
@@ -56,7 +57,7 @@ Indented detail lines (`pkg.a -> pkg.b archive`) become edges; non-indented summ
 No stats are available for jdeps input, so JSON `nodeInfo` is omitted.
 
 ```shell
-deder exec -t run -m cli jdeps jdeps.txt -i com.example -e java.** -f dot
+java -jar codeps.jar jdeps jdeps.txt -i com.example -e java.** -f dot
 ```
 
 ## Include / exclude patterns
@@ -67,7 +68,7 @@ when **both** its endpoints are in the resulting universe (self-edges are droppe
 
 ```shell
 # keep only com.example and subpackages, minus internal helpers
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f dot
 ```
 
 ## Collapse rules
@@ -84,7 +85,7 @@ When multiple rules match a package, the **longest prefix wins** (ties: first ru
 Loops created by collapsing are dropped; edges are deduplicated.
 
 ```shell
-deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
 ```
 
 ## Exit codes and errors
@@ -98,10 +99,11 @@ Unparseable input files produce a warning on stderr and are skipped, so a partia
 warning: failed to parse semanticdb: ...
 ```
 
-## Running without deder
+## Building from source
 
-`Main` is a plain JVM entry point; it can also be run directly if you have the classpath:
+For developing codeps itself, the repo is built with [deder](https://sake92.github.io/deder/) —
+see the [README](https://github.com/sake92/codeps#development):
 
 ```shell
-java -cp <codeps-classpath> ba.sake.codeps.cli.Main semdb <dir> -i com.example -f dot
+deder exec -t run -m cli semdb <dir> -i com.example -f dot
 ```
