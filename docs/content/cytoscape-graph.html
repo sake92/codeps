@@ -798,6 +798,33 @@
     });
   }
 
+  // Node labels keep a constant on-screen size/width/gap regardless of zoom,
+  // otherwise text becomes unreadable when zoomed out (cytoscape scales text
+  // with the viewport by default). Model units = target screen px / zoom.
+  var LABEL_FONT = 11;     // on-screen font size in px
+  var LABEL_MAX_W = 170;   // on-screen max label width in px
+  var LABEL_MARGIN = 5;    // on-screen gap below the node in px
+
+  function updateLabelMetrics() {
+    if (!cy) return;
+    var zoom = Math.max(cy.zoom(), 0.05);
+    cy.nodes().style({
+      'font-size': LABEL_FONT / zoom,
+      'text-max-width': LABEL_MAX_W / zoom,
+      'text-margin-y': LABEL_MARGIN / zoom
+    });
+  }
+
+  var labelMetricsPending = false;
+  function scheduleLabelMetrics() {
+    if (labelMetricsPending) return;
+    labelMetricsPending = true;
+    requestAnimationFrame(function () {
+      labelMetricsPending = false;
+      updateLabelMetrics();
+    });
+  }
+
   function escapeHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -916,13 +943,16 @@
           'border-width': 1.5,
           'border-color': '#0a0f17',
           'label': 'data(label)',
-          'font-size': 10.5,
+          'font-size': 11,
           'font-family': 'ui-sans-serif, system-ui, sans-serif',
           'color': '#e2e8f0',
-          'text-valign': 'center',
+          'text-valign': 'bottom',
           'text-halign': 'center',
-          'text-wrap': 'ellipsis',
-          'text-max-width': '150px',
+          'text-margin-y': 5,
+          'text-outline-color': '#0b0e14',
+          'text-outline-width': 2,
+          'text-wrap': 'wrap',
+          'text-max-width': '170px',
           'overlay-opacity': 0
         }
       },
@@ -1074,17 +1104,19 @@
     removedEdges = removedEdges.filter(edgeGone).concat(edgesToRemove);
   }
 
-  function applyDimClasses(visible, focused) {
+  /**
+   * Applies focus/dim classes to every element; stale classes are always
+   * toggled off so clearing focus fully restores the graph.
+   */
+  function applyClasses(visible, focused) {
     cy.nodes().forEach(function (node) {
       var id = node.id();
-      var isDim = focused ? !focused.has(id) : !visible.has(id);
-      node.toggleClass('dimmed', isDim);
       node.toggleClass('focused', state.focusId === id);
+      node.toggleClass('dimmed', focused ? !focused.has(id) : !visible.has(id));
     });
     cy.edges().forEach(function (edge) {
       var s = edge.data('source'), t = edge.data('target');
-      var isDim = focused ? !(focused.has(s) && focused.has(t)) : !(visible.has(s) && visible.has(t));
-      edge.toggleClass('edge-dimmed', isDim);
+      edge.toggleClass('edge-dimmed', focused ? !(focused.has(s) && focused.has(t)) : !(visible.has(s) && visible.has(t)));
     });
   }
 
@@ -1101,29 +1133,16 @@
 
     if (state.dim) {
       syncTo(allIds()); // restore everything, then dim instead of hide
-      applyDimClasses(visible, focused);
     } else {
       syncTo(visible);
       runLayout();
-      if (focused) applyFocusClasses(focused);
     }
+    applyClasses(visible, focused);
 
     refreshLabels();
     updateStats(visible);
     updateEmptyOverlay(visible);
     syncPackagePanel();
-  }
-
-  function applyFocusClasses(focused) {
-    if (!focused) return;
-    cy.nodes().forEach(function (node) {
-      node.toggleClass('focused', state.focusId === node.id());
-      node.toggleClass('dimmed', !focused.has(node.id()));
-    });
-    cy.edges().forEach(function (edge) {
-      var s = edge.data('source'), t = edge.data('target');
-      edge.toggleClass('edge-dimmed', !(focused.has(s) && focused.has(t)));
-    });
   }
 
   function updateStats(visible) {
@@ -1307,6 +1326,7 @@
     buildSuggestions();
     updateFocusBadge();
     render();
+    updateLabelMetrics();
     toast('Loaded ' + parsed.ids.size + ' packages, ' + parsed.edges.length + ' deps' + (label ? ' from ' + label : ''));
   }
 
@@ -1424,7 +1444,8 @@
       else setFocus(id);
     });
     cy.on('tap', function (e) {
-      if (e.cyTarget === cy) clearFocus();
+      // background tap: e.cyTarget is undefined in cytoscape 3; e.target === cy marks core taps
+      if (e.target === cy) clearFocus();
     });
 
     // right-click: hide node + transitive dependencies
@@ -1453,6 +1474,7 @@
     });
     cy.on('pan zoom drag', hideTooltip);
     cy.on('tap', hideTooltip);
+    cy.on('zoom', scheduleLabelMetrics);
 
     cy.container().addEventListener('contextmenu', function (e) { e.preventDefault(); });
   }
