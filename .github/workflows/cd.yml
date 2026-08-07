@@ -57,8 +57,10 @@ jobs:
       - name: Create GitHub Release
         # on main pushes: rolling "main" release, always overridden with the latest build
         # on tag pushes: versioned release (e.g. v1.2.3)
+        # explicit tag_name is required: the action refuses to run without a tag ref
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ github.ref_name }}
           files: ${{ env.JAR_NAME }}
           # no changelog needed for the rolling main release
           generate_release_notes: ${{ github.ref_type == 'tag' }}
