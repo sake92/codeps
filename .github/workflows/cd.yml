@@ -40,11 +40,13 @@ jobs:
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
             VERSION=$(deder exec -t version -m cli -f json | jq -r '.results.cli')
+            JAR="codeps-cli-${VERSION}.jar"
           else
-            VERSION=${GITHUB_SHA::7}
+            # fixed name so the rolling "main" release asset gets overridden on every push
+            JAR="codeps-cli-main.jar"
           fi
-          cp .deder/out/cli/assembly/out.jar "codeps-cli-${VERSION}.jar"
-          echo "JAR_NAME=codeps-cli-${VERSION}.jar" >> $GITHUB_ENV
+          cp .deder/out/cli/assembly/out.jar "$JAR"
+          echo "JAR_NAME=$JAR" >> $GITHUB_ENV
       - name: Upload artifact
         if: github.ref_type == 'branch'
         uses: actions/upload-artifact@v7
@@ -53,9 +55,10 @@ jobs:
           path: ${{ env.JAR_NAME }}
           if-no-files-found: error
       - name: Create GitHub Release
-        # on main pushes: creates/updates a rolling "main" release
-        # on tag pushes: creates/updates a release for the tag (e.g. v1.2.3)
+        # on main pushes: rolling "main" release, always overridden with the latest build
+        # on tag pushes: versioned release (e.g. v1.2.3)
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.JAR_NAME }}
-          generate_release_notes: true
+          # no changelog needed for the rolling main release
+          generate_release_notes: ${{ github.ref_type == 'tag' }}
