@@ -16,7 +16,8 @@ local const baseModule: ScalaModule = new {
 }
 
 local const coreModules = new CreateScalaModules {
-  root = "core"
+  root = "modules/core"
+  id = "core"
   template = (baseModule) {
     deps {
       "org.jgrapht:jgrapht-core:1.5.3"
@@ -31,6 +32,7 @@ local const coreModules = new CreateScalaModules {
 
 local const testUtils = (baseModule) {
   id = "test-utils"
+  root = "modules/test-utils"
   moduleDeps { coreModules.main }
   deps {
     "com.lihaoyi::os-lib:0.11.8"
@@ -38,7 +40,7 @@ local const testUtils = (baseModule) {
 }
 
 local const parserSemanticdbModules = new CreateScalaModules {
-  root = "parsers/semanticdb"
+  root = "modules/parser-semanticdb"
   id = "parser-semanticdb"
   template = (baseModule) {
     moduleDeps { coreModules.main }
@@ -55,7 +57,7 @@ local const parserSemanticdbModules = new CreateScalaModules {
 }.get
 
 local const parserJdepsModules = new CreateScalaModules {
-  root = "parsers/jdeps"
+  root = "modules/parser-jdeps"
   id = "parser-jdeps"
   template = (baseModule) {
     moduleDeps { coreModules.main }
@@ -69,7 +71,8 @@ local const parserJdepsModules = new CreateScalaModules {
 }.get
 
 local const exportModules = new CreateScalaModules {
-  root = "export"
+  root = "modules/export"
+  id = "export"
   template = (baseModule) {
     moduleDeps { coreModules.main }
   }
@@ -81,7 +84,8 @@ local const exportModules = new CreateScalaModules {
 }.get
 
 local const cliModules = new CreateScalaModules {
-  root = "cli"
+  root = "modules/cli"
+  id = "cli"
   template = (baseModule) {
     moduleDeps {
       coreModules.main
