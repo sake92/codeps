@@ -1,7 +1,7 @@
 package ba.sake.codeps.exporting
 
 import ba.sake.codeps.graph.GraphBuilder
-import ba.sake.codeps.model.PackageEdge
+import ba.sake.codeps.model.{PackageEdge, PkgStats}
 
 class ExportSpec extends munit.FunSuite:
 
@@ -26,6 +26,22 @@ class ExportSpec extends munit.FunSuite:
                      |}
                      |""".stripMargin
     assertEquals(JsonExporter.render(g), expected)
+  }
+
+  test("json with counts emits nodeInfo (sorted by node name)") {
+    val expected = """{
+                     |  "nodes": ["com.example.a", "com.example.b", "isolated.pkg"],
+                     |  "edges": [["com.example.a", "com.example.b"]],
+                     |  "nodeInfo": {
+                     |    "com.example.a": {"files": 12, "classes": 7},
+                     |    "isolated.pkg": {"files": 1, "classes": 1}
+                     |  }
+                     |}
+                     |""".stripMargin
+    assertEquals(
+      JsonExporter.render(g, Map("isolated.pkg" -> PkgStats(1, 1), "com.example.a" -> PkgStats(12, 7))),
+      expected
+    )
   }
 
   test("mermaid") {

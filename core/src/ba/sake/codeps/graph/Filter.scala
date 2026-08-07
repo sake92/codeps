@@ -12,16 +12,17 @@ object Filter:
   def apply(
       ownPackages: Set[String],
       edges: Set[PackageEdge],
+      counts: Map[String, PkgStats],
       includes: Seq[String],
       excludes: Seq[String]
-  ): (Set[String], Set[PackageEdge]) =
+  ): (Set[String], Set[PackageEdge], Map[String, PkgStats]) =
     val universe = ownPackages
       .filter(pkg => includes.exists(matches(pkg, _)))
       .filterNot(pkg => excludes.exists(matches(pkg, _)))
     val kept = edges.filter { e =>
       universe.contains(e.source) && universe.contains(e.target) && e.source != e.target
     }
-    (universe, kept)
+    (universe, kept, counts.filter((pkg, _) => universe.contains(pkg)))
 
   private def matches(pkg: String, pattern: String): Boolean =
     pkg == pattern || pkg.startsWith(pattern + ".")

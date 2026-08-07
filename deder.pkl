@@ -1,4 +1,14 @@
 amends "https://sake92.github.io/deder/config/v0.20.0/DederProject.pkl"
+import "https://sake92.github.io/deder-plugins/config/deder-web-dashboard/early-access/WebDashboardPlugin.pkl" as WD
+
+plugins {
+  new WD.WebDashboardPlugin {
+    // version = "1.2.3" // optionally override version
+    config { // most plugins have some config
+
+    }
+  }
+}
 
 local const baseModule: ScalaModule = new {
   scalaVersion = "3.7.4"

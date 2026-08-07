@@ -2,13 +2,13 @@ package ba.sake.codeps.cli
 
 import ba.sake.codeps.exporting.{DotExporter, JsonExporter, MermaidExporter, OutputFormat}
 import ba.sake.codeps.graph.{Collapser, Filter, GraphBuilder}
-import ba.sake.codeps.model.{CollapseRule, PackageEdge}
+import ba.sake.codeps.model.{CollapseRule, PackageEdge, PkgStats}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import mainargs.{arg, main, Leftover, ParserForMethods, TokensReader}
 
 object Main:
-
+ 
   def main(args: Array[String]): Unit = sys.exit(run(args))
 
   /** Testable entry point: returns the process exit code. */
@@ -93,7 +93,7 @@ object Main:
 
   private def analyze(
       files: Seq[os.Path],
-      parse: Array[Byte] => Either[String, (Set[String], Set[PackageEdge])],
+      parse: Array[Byte] => Either[String, (Set[String], Set[PackageEdge], Map[String, PkgStats])],
       include: Seq[String],
       exclude: Seq[String],
       collapse: Seq[String],
@@ -120,22 +120,30 @@ object Main:
               System.err.println(s"error: $err")
               1
             case Right(rules) =>
-              var own   = Set.empty[String]
-              var edges = Set.empty[PackageEdge]
+              var own    = Set.empty[String]
+              var edges  = Set.empty[PackageEdge]
+              var counts = Map.empty[String, PkgStats]
               for f <- files do
                 parse(os.read.bytes(f)) match
-                  case Right((o, e)) => own ++= o; edges ++= e
-                  case Left(err)     => System.err.println(s"warning: $err")
-              val (universe, filteredEdges) = Filter(own, edges, include, exclude)
+                  case Right((o, e, c)) =>
+                    own ++= o; edges ++= e
+                    counts = c.foldLeft(counts) { case (acc, (k, v)) =>
+                      acc.get(k) match
+                        case Some(prev) => acc.updated(k, prev + v)
+                        case None       => acc + (k -> v)
+                    }
+                  case Left(err) => System.err.println(s"warning: $err")
+              val (universe, filteredEdges, filteredCounts) = Filter(own, edges, counts, include, exclude)
               if universe.isEmpty then
                 System.err.println("error: no packages remain after filtering")
                 1
               else
-                val (collapsedNodes, collapsedEdges) = Collapser.collapse(universe, filteredEdges, rules)
+                val (collapsedNodes, collapsedEdges, collapsedCounts) =
+                  Collapser.collapse(universe, filteredEdges, filteredCounts, rules)
                 val graph = GraphBuilder.build(collapsedNodes, collapsedEdges)
                 val content = format match
                   case OutputFormat.Dot     => DotExporter.render(graph)
-                  case OutputFormat.Json    => JsonExporter.render(graph)
+                  case OutputFormat.Json    => JsonExporter.render(graph, collapsedCounts)
                   case OutputFormat.Mermaid => MermaidExporter.render(graph)
                 out match
                   case Some(path) => os.write.over(os.Path(path, os.pwd), content)

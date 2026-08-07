@@ -7,24 +7,33 @@ object SemanticDbParser:
 
   /**
     * Parses the bytes of one .semanticdb file (a TextDocuments protobuf payload).
-    * Returns the own packages defined in the file and the package edges
+    * Returns the own packages defined in the file, the package edges
     * (own package -> referenced package, for every occurrence referencing
-    * a symbol with package info).
+    * a symbol with package info), and per-package stats (file count = number of
+    * documents, class count = class-like symbols: CLASS, OBJECT or TRAIT).
     */
-  def parse(bytes: Array[Byte]): Either[String, (Set[String], Set[PackageEdge])] =
+  def parse(bytes: Array[Byte]): Either[String, (Set[String], Set[PackageEdge], Map[String, PkgStats])] =
     try
       val docs = TextDocuments.parseFrom(bytes)
-      var own   = Set.empty[String]
-      var edges = Set.empty[PackageEdge]
+      var own    = Set.empty[String]
+      var edges  = Set.empty[PackageEdge]
+      var counts = Map.empty[String, PkgStats]
       for doc <- docs.documents do
         deriveOwnPackage(doc).foreach { pkg =>
           own += pkg
+          val classes = doc.symbols.count(s => s.kind.isClass || s.kind.isObject || s.kind.isTrait)
+          counts = counts.updated(
+            pkg,
+            counts.get(pkg) match
+              case Some(prev) => prev + PkgStats(1, classes)
+              case None       => PkgStats(1, classes)
+          )
           for occ <- doc.occurrences do
             packageOfSymbol(occ.symbol).foreach { ref =>
               if ref != pkg then edges += PackageEdge(pkg, ref)
             }
         }
-      Right((own, edges))
+      Right((own, edges, counts))
     catch
       case e: Exception => Left(s"failed to parse semanticdb: ${e.getMessage}")
 

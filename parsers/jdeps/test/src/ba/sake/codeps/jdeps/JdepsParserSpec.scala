@@ -1,7 +1,7 @@
 package ba.sake.codeps.jdeps
 
 import ba.sake.codeps.testing.FixtureCompiler
-import ba.sake.codeps.model.PackageEdge
+import ba.sake.codeps.model.{PackageEdge, PkgStats}
 
 class JdepsParserSpec extends munit.FunSuite:
 
@@ -19,7 +19,7 @@ class JdepsParserSpec extends munit.FunSuite:
                  |""".stripMargin
 
   test("parses indented package lines, skips summary lines") {
-    val (own, edges) = JdepsParser.parse(sample)
+    val (own, edges, counts) = JdepsParser.parse(sample)
     assertEquals(
       own,
       Set("com.example.modules.module1", "com.example.modules.module2", "com.example.util")
@@ -27,17 +27,18 @@ class JdepsParserSpec extends munit.FunSuite:
     assert(edges.contains(PackageEdge("com.example.modules.module1", "com.example.util")))
     assert(edges.contains(PackageEdge("com.example.modules.module2", "com.example.modules.module1")))
     assert(!edges.exists(e => e.source == "classes"))
+    assertEquals(counts, Map.empty[String, PkgStats])
   }
 
   test("parses real jdeps output of compiled fixtures") {
-    val (own, edges) = JdepsParser.parse(os.read(FixtureCompiler.jdepsFile))
+    val (own, edges, _) = JdepsParser.parse(os.read(FixtureCompiler.jdepsFile))
     assert(own.contains("com.example.modules.module2"))
     assert(edges.contains(PackageEdge("com.example.modules.module2", "org.thirdparty")))
     assert(!edges.exists(e => e.source == "classes"))
   }
 
   test("malformed lines are skipped") {
-    val (own, edges) = JdepsParser.parse("garbage line\nnot an arrow\n   a.b -> \n   -> b.c\n")
+    val (own, edges, _) = JdepsParser.parse("garbage line\nnot an arrow\n   a.b -> \n   -> b.c\n")
     assertEquals(own, Set.empty[String])
     assertEquals(edges, Set.empty[PackageEdge])
   }

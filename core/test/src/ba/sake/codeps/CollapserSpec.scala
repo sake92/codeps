@@ -8,7 +8,8 @@ class CollapserSpec extends munit.FunSuite:
   test("no rules leaves graph unchanged") {
     val nodes = Set("a.b", "a.c")
     val edges = Set(PackageEdge("a.b", "a.c"))
-    assertEquals(Collapser.collapse(nodes, edges, Nil), (nodes, edges))
+    val counts = Map("a.b" -> PkgStats(1, 2))
+    assertEquals(Collapser.collapse(nodes, edges, counts, Nil), (nodes, edges, counts))
   }
 
   test("wild merges nodes and re-derives edges") {
@@ -17,7 +18,7 @@ class CollapserSpec extends munit.FunSuite:
       PackageEdge("com.example.foo", "com.example.bar.baz"),
       PackageEdge("org.other", "com.example.foo")
     )
-    val (n, e) = Collapser.collapse(nodes, edges, Seq(CollapseRule.Wild("com.example")))
+    val (n, e, _) = Collapser.collapse(nodes, edges, Map.empty, Seq(CollapseRule.Wild("com.example")))
     assertEquals(n, Set("com.example", "org.other"))
     assertEquals(e, Set(PackageEdge("org.other", "com.example"))) // inner loop dropped
   }
@@ -25,7 +26,7 @@ class CollapserSpec extends munit.FunSuite:
   test("single level keeps one level below prefix") {
     val nodes = Set("org.lib.foo.bar", "org.lib.baz.qux", "org.lib.alone")
     val edges = Set(PackageEdge("org.lib.foo.bar", "org.lib.baz.qux"))
-    val (n, e) = Collapser.collapse(nodes, edges, Seq(CollapseRule.SingleLevel("org.lib")))
+    val (n, e, _) = Collapser.collapse(nodes, edges, Map.empty, Seq(CollapseRule.SingleLevel("org.lib")))
     assertEquals(n, Set("org.lib.foo", "org.lib.baz", "org.lib.alone"))
     assertEquals(e, Set(PackageEdge("org.lib.foo", "org.lib.baz")))
   }
@@ -37,7 +38,7 @@ class CollapserSpec extends munit.FunSuite:
       CollapseRule.Wild("com.example"),
       CollapseRule.Wild("com.example.modules")
     )
-    val (n, e) = Collapser.collapse(nodes, edges, rules)
+    val (n, e, _) = Collapser.collapse(nodes, edges, Map.empty, rules)
     assertEquals(n, Set("com.example.modules", "com.example"))
     assertEquals(e, Set(PackageEdge("com.example.modules", "com.example")))
   }
@@ -45,7 +46,20 @@ class CollapserSpec extends munit.FunSuite:
   test("collapse can create loops which are dropped") {
     val nodes = Set("a.b.c", "a.b.x")
     val edges = Set(PackageEdge("a.b.c", "a.b.x"))
-    val (n, e) = Collapser.collapse(nodes, edges, Seq(CollapseRule.Wild("a.b")))
+    val (n, e, _) = Collapser.collapse(nodes, edges, Map.empty, Seq(CollapseRule.Wild("a.b")))
     assertEquals(n, Set("a.b"))
     assertEquals(e, Set.empty[PackageEdge])
+  }
+
+  test("counts are summed when packages collapse") {
+    val nodes = Set("com.example.foo", "com.example.bar.baz", "org.other")
+    val edges = Set.empty[PackageEdge]
+    val counts = Map(
+      "com.example.foo"      -> PkgStats(1, 2),
+      "com.example.bar.baz"  -> PkgStats(3, 4),
+      "org.other"            -> PkgStats(5, 6)
+    )
+    val (n, _, c) = Collapser.collapse(nodes, edges, counts, Seq(CollapseRule.Wild("com.example")))
+    assertEquals(n, Set("com.example", "org.other"))
+    assertEquals(c, Map("com.example" -> PkgStats(4, 6), "org.other" -> PkgStats(5, 6)))
   }

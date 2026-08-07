@@ -49,6 +49,19 @@ class MainSpec extends munit.FunSuite:
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"com.example.modules.module1\""))
+    // jdeps carries no per-package file/class info
+    assert(!content.contains("nodeInfo"))
+  }
+
+  test("semdb json output includes nodeInfo with file/class counts") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-nodeinfo.json"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "json", "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.contains("\"nodeInfo\""))
+    assert(content.contains("\"com.example.util\": {\"files\": 1, \"classes\": 1}"))
   }
 
   test("empty result exits 1") {

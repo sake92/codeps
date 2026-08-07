@@ -1,6 +1,6 @@
 package ba.sake.codeps.jdeps
 
-import ba.sake.codeps.model.PackageEdge
+import ba.sake.codeps.model.{PackageEdge, PkgStats}
 
 object JdepsParser:
 
@@ -10,8 +10,9 @@ object JdepsParser:
     * Parses `jdeps -verbose:package` text output.
     * Summary lines ("classes -> java.base") are not indented and are skipped;
     * detail lines are indented: "   pkg.a -> pkg.b   archive".
+    * jdeps carries no per-package file/class info, so the stats map is empty.
     */
-  def parse(content: String): (Set[String], Set[PackageEdge]) =
+  def parse(content: String): (Set[String], Set[PackageEdge], Map[String, PkgStats]) =
     var own   = Set.empty[String]
     var edges = Set.empty[PackageEdge]
     for line <- content.linesIterator do
@@ -19,7 +20,7 @@ object JdepsParser:
         own += src
         edges += PackageEdge(src, tgt)
       }
-    (own, edges)
+    (own, edges, Map.empty)
 
   private def parseLine(line: String): Option[(String, String)] =
     if line.isEmpty || !line.head.isWhitespace then None

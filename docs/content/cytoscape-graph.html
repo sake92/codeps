@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>codeps · package dependency graph</title>
+<link rel="icon" href="data:," />
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #12161f;
+    --panel-2: #0f131b;
+    --border: #1e2633;
+    --text: #cbd5e1;
+    --text-dim: #64748b;
+    --accent: #38bdf8;
+    --teal: #2dd4bf;
+    --amber: #f59e0b;
+    --danger-bg: rgba(127, 29, 29, 0.95);
+    --danger-border: #991b1b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .hidden { display: none !important; }
+
+  /* ---------- toolbar ---------- */
+  #toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+  }
+  .brand {
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: #e2e8f0;
+    margin-right: 6px;
+    white-space: nowrap;
+  }
+  .brand .dot { color: var(--teal); }
+  #toolbar select, #toolbar input[type="text"] {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12.5px;
+    font-family: inherit;
+    outline: none;
+  }
+  #toolbar select:focus, #toolbar input[type="text"]:focus { border-color: var(--accent); }
+  #toolbar button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #toolbar button:hover { border-color: var(--accent); color: #e2e8f0; }
+  .searchbox { position: relative; }
+  .searchbox input { width: 250px; padding-right: 26px; }
+  .searchbox .mini {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 14px;
+    padding: 2px 6px;
+    line-height: 1;
+  }
+  .searchbox .mini:hover { color: var(--text); border: none; }
+  label.chk {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: var(--text-dim);
+    white-space: nowrap;
+    user-select: none;
+  }
+  input[type="checkbox"] { accent-color: var(--teal); }
+  .slider {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  input[type="range"] { accent-color: var(--teal); width: 110px; }
+  .legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    cursor: help;
+  }
+  .legend .grad {
+    width: 84px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #22c55e, #eab308, #ef4444);
+    border: 1px solid var(--border);
+  }
+  #stats {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* ---------- main / graph ---------- */
+  #main { position: relative; flex: 1; min-height: 0; }
+  #cy {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 0%, #10151f 0%, var(--bg) 70%),
+      radial-gradient(rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+    background-size: 100% 100%, 22px 22px;
+  }
+
+  /* ---------- overlays ---------- */
+  #hero {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+  }
+  .hero-card {
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 40px 48px;
+    max-width: 480px;
+    margin: 0 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  }
+  .hero-card h1 { font-size: 22px; margin: 0 0 8px; color: #e2e8f0; }
+  .hero-card p { color: var(--text-dim); line-height: 1.55; margin: 0 0 22px; }
+  .hero-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .hero-actions button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .hero-actions button:hover { border-color: var(--accent); color: #e2e8f0; }
+  .hero-actions button.primary { background: #0c4a6e; border-color: #0e7490; color: #e0f2fe; }
+  .hero-actions button.primary:hover { border-color: var(--accent); }
+
+  #empty-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 20px;
+    z-index: 4;
+    pointer-events: none;
+  }
+  #empty-overlay span {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    border-radius: 999px;
+    padding: 6px 14px;
+  }
+
+  .panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 8;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+  }
+  #paste-panel { width: 480px; max-width: calc(100vw - 24px); padding: 12px; gap: 8px; }
+  #paste-panel textarea {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    padding: 8px;
+    resize: vertical;
+    min-height: 200px;
+    outline: none;
+  }
+  #paste-panel textarea:focus { border-color: var(--accent); }
+  .panel-row { display: flex; align-items: center; gap: 8px; }
+  .panel-row .grow { flex: 1; }
+  .panel-row .hint { color: var(--text-dim); font-size: 11.5px; }
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .close-btn:hover { color: var(--text); }
+
+  #pkg-panel { width: 300px; max-height: min(60vh, 480px); }
+  #pkg-panel .pkg-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  #pkg-panel .pkg-head .title { flex: 1; font-weight: 600; color: #e2e8f0; }
+  #pkg-panel .pkg-head .count { color: var(--text-dim); font-size: 11.5px; }
+  #pkg-panel .pkg-head button {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-size: 11.5px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #pkg-panel .pkg-head button:hover { color: var(--text); border-color: var(--accent); }
+  #pkg-list { overflow-y: auto; flex: 1; padding: 6px; }
+  .pkg-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .pkg-item:hover { background: var(--panel-2); }
+  .pkg-item span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .pkg-item .meta {
+    flex: none;
+    color: var(--text-dim);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #suggest-panel { width: 320px; max-height: min(70vh, 560px); }
+  .suggest-section {
+    padding: 8px 12px 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .suggest-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+  }
+  .suggest-item:hover { background: var(--panel-2); }
+  .suggest-item .dot { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .suggest-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .suggest-item .io { color: var(--text-dim); font-variant-numeric: tabular-nums; font-size: 11px; flex: none; }
+  .suggest-empty { color: var(--text-dim); font-size: 11.5px; padding: 4px 12px 8px; }
+
+  #tooltip {
+    position: absolute;
+    z-index: 20;
+    pointer-events: none;
+    background: #0f172a;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    line-height: 1.55;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    max-width: 340px;
+  }
+  #tooltip .tt-name { font-weight: 600; color: #e2e8f0; word-break: break-all; }
+  #tooltip .tt-row { color: var(--text); font-variant-numeric: tabular-nums; }
+  #tooltip .tt-dim { color: var(--text-dim); }
+  #tooltip .tt-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    margin-right: 6px;
+  }
+
+  #focus-badge {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 8;
+    background: #0c4a6e;
+    color: #bae6fd;
+    border: 1px solid #0e7490;
+    border-radius: 999px;
+    padding: 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 70vw;
+  }
+  #focus-badge .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  #focus-badge button {
+    background: none;
+    border: none;
+    color: #bae6fd;
+    padding: 0 2px;
+    font-size: 14px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  #focus-badge button:hover { color: #fff; }
+
+  #error-banner {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    background: var(--danger-bg);
+    color: #fecaca;
+    border: 1px solid var(--danger-border);
+    padding: 8px 14px;
+    border-radius: 8px;
+    max-width: 80vw;
+    font-size: 12.5px;
+  }
+
+  #toast {
+    position: absolute;
+    bottom: 44px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    white-space: nowrap;
+    max-width: 80vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(8, 145, 178, 0.12);
+    border: 2px dashed #22d3ee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a5f3fc;
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  /* ---------- hints footer ---------- */
+  #hints {
+    padding: 6px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text-dim);
+    font-size: 11.5px;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  #hints kbd {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 0 4px;
+    font-family: inherit;
+    font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<header id="toolbar">
+  <span class="brand"><span class="dot">●</span> codeps &middot; package graph</span>
+
+  <select id="layout-select" title="Layout algorithm">
+    <option value="elk" selected>Layout: ELK (layered)</option>
+    <option value="cola">Layout: cola (force)</option>
+    <option value="fcose">Layout: fcose (force, fast)</option>
+    <option value="dagre">Layout: dagre</option>
+  </select>
+
+  <div class="searchbox">
+    <input type="text" id="search-input" placeholder="Filter: pkg1, /regex/, …" aria-label="Filter packages" spellcheck="false" autocomplete="off" />
+    <button id="search-clear" class="mini" title="Clear search">×</button>
+  </div>
+
+  <label class="chk" title="Dim matching packages instead of removing them"><input type="checkbox" id="dim-check" /> Dim</label>
+  <label class="chk" title="Hide packages with no edges"><input type="checkbox" id="isolated-check" /> Hide isolated</label>
+  <label class="chk" title="Show incoming/outgoing dependency counts on nodes, e.g. 2/5"><input type="checkbox" id="io-check" /> in/out</label>
+  <label class="chk" title="Show file counts on nodes (from semdb), e.g. 12f"><input type="checkbox" id="files-check" /> files</label>
+  <label class="chk" title="Show class counts on nodes (from semdb), e.g. 7c"><input type="checkbox" id="classes-check" /> classes</label>
+
+  <span class="slider" title="Hide packages with fewer edges than this">
+    <span id="degree-label">deg ≥ 0</span>
+    <input type="range" id="degree-slider" min="0" max="0" value="0" />
+  </span>
+
+  <span class="legend" title="Node color = hub score (incoming × outgoing edges). Red = hardest knot, green = loose. Size = total edges.">
+    <span class="grad"></span> hub
+  </span>
+
+  <button id="fit-btn" title="Fit graph to viewport">Fit</button>
+  <button id="load-btn" title="Load a JSON file from disk">Load</button>
+  <button id="paste-btn" title="Paste graph JSON">Paste</button>
+  <button id="pkg-btn" title="Show/hide the package list">Packages</button>
+  <button id="suggest-btn" title="Show suggested packages to tackle">Suggest</button>
+  <button id="reset-btn" title="Reset all filters">Reset</button>
+
+  <span id="stats"></span>
+</header>
+
+<div id="main">
+  <div id="cy"></div>
+
+  <div id="hero">
+    <div class="hero-card">
+      <h1>Package dependency graph</h1>
+      <p>
+        Load a graph JSON (as exported by the codeps CLI with <code>-f json</code>):
+        drop a file anywhere, pick one, or paste the JSON. Then filter, focus and
+        rearrange the graph.
+      </p>
+      <div class="hero-actions">
+        <button id="hero-load" class="primary">Choose file</button>
+        <button id="hero-paste">Paste JSON</button>
+        <button id="hero-sample">Load sample</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="empty-overlay" class="hidden"><span>No packages match the current filters</span></div>
+
+  <div id="paste-panel" class="panel hidden">
+    <div class="panel-row">
+      <strong>Paste graph JSON</strong>
+      <span class="hint grow">Ctrl/Cmd+Enter to render</span>
+      <button class="close-btn" id="paste-close" title="Close">×</button>
+    </div>
+    <textarea id="paste-input" placeholder='{"nodes": ["com.example.a", "com.example.b"], "edges": [["com.example.a", "com.example.b"]]}' spellcheck="false"></textarea>
+    <div class="panel-row">
+      <button id="paste-render" style="background:#0c4a6e;border-color:#0e7490;color:#e0f2fe;">Render</button>
+      <span class="hint">JSON: <code>{"nodes": ["a"], "edges": [["a", "b"]]}</code></span>
+    </div>
+  </div>
+
+  <div id="pkg-panel" class="panel hidden">
+    <div class="pkg-head">
+      <span class="title">Packages</span>
+      <span class="count" id="pkg-count"></span>
+      <button id="pkg-all" title="Show all packages">All</button>
+      <button id="pkg-none" title="Hide all packages">None</button>
+      <button class="close-btn" id="pkg-close" title="Close">×</button>
+    </div>
+    <div id="pkg-list"></div>
+  </div>
+
+  <div id="suggest-panel" class="panel hidden">
+    <div class="pkg-head">
+      <span class="title">Suggestions</span>
+      <span class="count">click to focus</span>
+      <button class="close-btn" id="suggest-close" title="Close">×</button>
+    </div>
+    <div id="suggest-list"></div>
+  </div>
+
+  <div id="focus-badge" class="hidden">
+    <span>Focus:</span>
+    <span class="name" id="focus-name"></span>
+    <button id="focus-clear" title="Clear focus">×</button>
+  </div>
+
+  <div id="tooltip" class="hidden"></div>
+
+  <div id="error-banner" class="hidden"></div>
+  <div id="toast" class="hidden"></div>
+  <div id="drop-overlay" class="hidden">Drop a JSON file to load it</div>
+</div>
+
+<footer id="hints">
+  <span><kbd>drag node</kbd> move · <kbd>wheel</kbd> zoom · <kbd>drag background</kbd> pan</span>
+  <span><kbd>click node</kbd> focus on it + its neighbors</span>
+  <span><kbd>right-click node</kbd> (ctrl+click on macOS) hide its whole subtree</span>
+  <span><kbd>Esc</kbd> clear focus / close panels</span>
+</footer>
+
+<input type="file" id="file-input" accept=".json,.txt,application/json,text/plain" class="hidden" />
+
+<script src="https://cdn.jsdelivr.net/npm/cytoscape@3/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9/lib/elk.bundled.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-elk@2/dist/cytoscape-elk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2/cytoscape-cola.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2/cytoscape-dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2/cytoscape-fcose.min.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  if (typeof cytoscape === 'undefined') {
+    var hero = document.getElementById('hero');
+    hero.querySelector('p').textContent =
+      'Failed to load cytoscape.js from the CDN. Check your internet connection and reload the page.';
+    return;
+  }
+
+  /* ================================================================
+   * Helpers
+   * ================================================================ */
+  function $(sel) { return document.querySelector(sel); }
+  function $$(sel) { return Array.from(document.querySelectorAll(sel)); }
+  function debounce(fn, ms) {
+    var t;
+    return function () {
+      var args = arguments;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(null, args); }, ms);
+    };
+  }
+
+  /* ================================================================
+   * State (single source of truth)
+   * ================================================================ */
+  var state = {
+    graph: null,          // { ids: Set, edges: [{source, target}] } — deduped master graph
+    nodeInfo: new Map(),  // id -> { name, degree, inDeg, outDeg, hubScore, benefit, files, classes }
+    maxDegree: 0,
+    maxHub: 0,            // max hubScore (in × out) across the graph
+    search: '',
+    dim: false,           // dim instead of hide
+    hideIsolated: false,
+    minDegree: 0,
+    showInOut: false,     // "2/5" on node labels
+    showFiles: false,     // "12f" on node labels
+    showClasses: false,   // "7c" on node labels
+    manualHidden: new Set(),  // unchecked in the package list
+    subtreeHidden: new Set(), // hidden via right-click subtree
+    focusId: null,
+    layout: 'elk'
+  };
+  var cy = null;
+
+  /* ================================================================
+   * Sample graph (packages with a couple of cycles + one isolated)
+   * ================================================================ */
+  var SAMPLE = {
+    nodes: [
+      'com.example.core', 'com.example.util', 'com.example.config', 'com.example.events',
+      'com.example.api', 'com.example.auth', 'com.example.metrics', 'com.example.db',
+      'com.example.cache', 'com.example.storage', 'com.example.service', 'com.example.messaging',
+      'com.example.web', 'com.example.cli', 'com.example.parser', 'com.example.compiler',
+      'com.example.repl', 'com.example.legacy'
+    ],
+    edges: [
+      ['com.example.core', 'com.example.util'],
+      ['com.example.core', 'com.example.config'],
+      ['com.example.util', 'com.example.config'],
+      ['com.example.util', 'com.example.events'],
+      ['com.example.events', 'com.example.core'],
+      ['com.example.config', 'com.example.core'],
+      ['com.example.api', 'com.example.core'],
+      ['com.example.api', 'com.example.auth'],
+      ['com.example.api', 'com.example.metrics'],
+      ['com.example.service', 'com.example.api'],
+      ['com.example.service', 'com.example.db'],
+      ['com.example.service', 'com.example.cache'],
+      ['com.example.service', 'com.example.events'],
+      ['com.example.service', 'com.example.messaging'],
+      ['com.example.db', 'com.example.storage'],
+      ['com.example.db', 'com.example.config'],
+      ['com.example.cache', 'com.example.storage'],
+      ['com.example.auth', 'com.example.core'],
+      ['com.example.auth', 'com.example.db'],
+      ['com.example.metrics', 'com.example.events'],
+      ['com.example.messaging', 'com.example.metrics'],
+      ['com.example.storage', 'com.example.metrics'],
+      ['com.example.web', 'com.example.service'],
+      ['com.example.web', 'com.example.api'],
+      ['com.example.web', 'com.example.auth'],
+      ['com.example.cli', 'com.example.web'],
+      ['com.example.cli', 'com.example.service'],
+      ['com.example.cli', 'com.example.parser'],
+      ['com.example.parser', 'com.example.util'],
+      ['com.example.parser', 'com.example.compiler'],
+      ['com.example.compiler', 'com.example.parser'],
+      ['com.example.compiler', 'com.example.core'],
+      ['com.example.repl', 'com.example.compiler'],
+      ['com.example.repl', 'com.example.cli']
+    ],
+    nodeInfo: {
+      'com.example.core': { files: 8, classes: 15 },
+      'com.example.util': { files: 5, classes: 9 },
+      'com.example.config': { files: 4, classes: 6 },
+      'com.example.events': { files: 3, classes: 5 },
+      'com.example.api': { files: 10, classes: 18 },
+      'com.example.auth': { files: 6, classes: 11 },
+      'com.example.metrics': { files: 4, classes: 7 },
+      'com.example.db': { files: 7, classes: 12 },
+      'com.example.cache': { files: 3, classes: 5 },
+      'com.example.storage': { files: 5, classes: 8 },
+      'com.example.service': { files: 12, classes: 25 },
+      'com.example.messaging': { files: 4, classes: 6 },
+      'com.example.web': { files: 9, classes: 16 },
+      'com.example.cli': { files: 5, classes: 8 },
+      'com.example.parser': { files: 6, classes: 10 },
+      'com.example.compiler': { files: 8, classes: 14 },
+      'com.example.repl': { files: 3, classes: 4 },
+      'com.example.legacy': { files: 2, classes: 3 }
+    }
+  };
+
+  /* ================================================================
+   * Parsing / normalization
+   * ================================================================ */
+  function parseGraph(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      throw new Error('expected an object like {"nodes": [...], "edges": [...]}');
+    }
+    if (!Array.isArray(obj.nodes)) throw new Error('"nodes" must be an array');
+    if (!Array.isArray(obj.edges)) throw new Error('"edges" must be an array');
+
+    var ids = new Set();
+    for (var i = 0; i < obj.nodes.length; i++) {
+      var n = obj.nodes[i];
+      var id = null;
+      if (typeof n === 'string') id = n;
+      else if (n && typeof n === 'object') id = (typeof n.id === 'string' ? n.id : (typeof n.name === 'string' ? n.name : null));
+      if (!id) throw new Error('invalid node entry at index ' + i + ': expected a string or {id|name: string}');
+      ids.add(id);
+    }
+
+    var edges = [];
+    var seen = new Set();
+    for (var j = 0; j < obj.edges.length; j++) {
+      var e = obj.edges[j];
+      var s, t;
+      if (Array.isArray(e) && e.length >= 2 && typeof e[0] === 'string' && typeof e[1] === 'string') {
+        s = e[0]; t = e[1];
+      } else if (e && typeof e === 'object' && typeof e.source === 'string' && typeof e.target === 'string') {
+        s = e.source; t = e.target;
+      } else {
+        throw new Error('invalid edge entry at index ' + j + ': expected [source, target] or {source, target}');
+      }
+      ids.add(s); // tolerate endpoints not listed in "nodes"
+      ids.add(t);
+      var key = s + '\u0000' + t;
+      if (!seen.has(key)) { seen.add(key); edges.push({ source: s, target: t }); }
+    }
+
+    // optional per-package metadata, e.g. {"com.example.a": {"files": 12, "classes": 7}}
+    var nodeInfo = {};
+    if (obj.nodeInfo && typeof obj.nodeInfo === 'object' && !Array.isArray(obj.nodeInfo)) {
+      Object.keys(obj.nodeInfo).forEach(function (id) {
+        var v = obj.nodeInfo[id];
+        if (v && typeof v === 'object') {
+          var num = function (x) { return typeof x === 'number' && isFinite(x) ? x : 0; };
+          nodeInfo[id] = { files: num(v.files), classes: num(v.classes) };
+        }
+      });
+    }
+    return { ids: ids, edges: edges, nodeInfo: nodeInfo };
+  }
+
+  function computeNodeInfo(ids, edges, nodeInfo) {
+    var info = new Map();
+    ids.forEach(function (id) {
+      var ni = nodeInfo[id];
+      info.set(id, {
+        name: id, degree: 0, inDeg: 0, outDeg: 0,
+        hubScore: 0, benefit: 0,
+        files: ni ? ni.files : null,   // null = unknown (no nodeInfo for this package)
+        classes: ni ? ni.classes : null
+      });
+    });
+    edges.forEach(function (e) {
+      var a = info.get(e.source), b = info.get(e.target);
+      if (a) { a.degree++; a.outDeg++; }
+      if (b) { b.degree++; b.inDeg++; }
+    });
+    var max = 0, maxHub = 0;
+    info.forEach(function (v) {
+      if (v.degree > max) max = v.degree;
+      v.hubScore = v.inDeg * v.outDeg;   // tangled hub: both heavily used AND heavily using
+      v.benefit = v.outDeg - v.inDeg;    // easy win: much to untangle, little risk
+      if (v.hubScore > maxHub) maxHub = v.hubScore;
+    });
+    return { info: info, max: max, maxHub: maxHub };
+  }
+
+  /* ================================================================
+   * Hub metrics: color, labels, package-list meta
+   * ================================================================ */
+  function lerpHex(c1, c2, t) {
+    var r = Math.round(c1[0] + (c2[0] - c1[0]) * t);
+    var g = Math.round(c1[1] + (c2[1] - c1[1]) * t);
+    var b = Math.round(c1[2] + (c2[2] - c1[2]) * t);
+    return '#' + [r, g, b].map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+  }
+  var COLOR_GREEN = [34, 197, 94], COLOR_YELLOW = [234, 179, 8], COLOR_RED = [239, 68, 68];
+
+  function hubColorFor(info) {
+    if (!state.maxHub) return '#22c55e';
+    var t = info.hubScore / state.maxHub;
+    if (t <= 0.5) return lerpHex(COLOR_GREEN, COLOR_YELLOW, t * 2);
+    return lerpHex(COLOR_YELLOW, COLOR_RED, (t - 0.5) * 2);
+  }
+
+  function labelFor(id) {
+    var info = state.nodeInfo.get(id);
+    if (!info) return id;
+    var parts = [];
+    if (state.showInOut) parts.push(info.inDeg + '/' + info.outDeg);
+    if (state.showFiles && info.files !== null) parts.push(info.files + 'f');
+    if (state.showClasses && info.classes !== null) parts.push(info.classes + 'c');
+    return parts.length ? id + '\n' + parts.join(' · ') : id;
+  }
+
+  function pkgMeta(id) {
+    var info = state.nodeInfo.get(id);
+    if (!info) return '';
+    var parts = [info.inDeg + '/' + info.outDeg];
+    if (info.files !== null) parts.push(info.files + 'f');
+    if (info.classes !== null) parts.push(info.classes + 'c');
+    return parts.join(' · ');
+  }
+
+  function refreshLabels() {
+    if (!cy) return;
+    cy.nodes().forEach(function (node) {
+      node.data('label', labelFor(node.id()));
+    });
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ================================================================
+   * Filtering — one visible-set computation, all filters combine
+   * ================================================================ */
+  function parseSearchTerms(q) {
+    return q.split(',').map(function (s) { return s.trim(); }).filter(Boolean).map(function (term) {
+      if (term.length > 2 && term.charAt(0) === '/' && term.charAt(term.length - 1) === '/') {
+        try {
+          var re = new RegExp(term.slice(1, -1), 'i');
+          return { matches: function (id) { return re.test(id); } };
+        } catch (e) { /* fall through to substring */ }
+      }
+      var low = term.toLowerCase();
+      return { matches: function (id) { return id.toLowerCase().indexOf(low) !== -1; } };
+    });
+  }
+
+  function matchesSearch(id) {
+    var q = state.search.trim();
+    if (!q) return true;
+    var terms = parseSearchTerms(q);
+    if (terms.length === 0) return true;
+    for (var i = 0; i < terms.length; i++) {
+      if (terms[i].matches(id)) return true;
+    }
+    return false;
+  }
+
+  function isVisible(id) {
+    if (state.manualHidden.has(id)) return false;
+    if (state.subtreeHidden.has(id)) return false;
+    var info = state.nodeInfo.get(id);
+    if (!info) return false;
+    if (info.degree < state.minDegree) return false;
+    if (state.hideIsolated && info.degree === 0) return false;
+    return matchesSearch(id);
+  }
+
+  function computeVisibleIds() {
+    var visible = new Set();
+    state.nodeInfo.forEach(function (_, id) {
+      if (isVisible(id)) visible.add(id);
+    });
+    return visible;
+  }
+
+  function focusedIds() {
+    if (!state.focusId) return null;
+    var set = new Set([state.focusId]);
+    state.graph.edges.forEach(function (e) {
+      if (e.source === state.focusId) set.add(e.target);
+      if (e.target === state.focusId) set.add(e.source);
+    });
+    return set;
+  }
+
+  function collectSubtree(rootId) {
+    var seen = new Set([rootId]);
+    var queue = [rootId];
+    while (queue.length) {
+      var cur = queue.shift();
+      state.graph.edges.forEach(function (e) {
+        if (e.source === cur && !seen.has(e.target)) { seen.add(e.target); queue.push(e.target); }
+      });
+    }
+    return seen;
+  }
+
+  /* ================================================================
+   * Element building
+   * ================================================================ */
+  function buildElements(visibleIds) {
+    var elements = [];
+    visibleIds.forEach(function (id) {
+      var info = state.nodeInfo.get(id);
+      elements.push({
+        data: {
+          id: id,
+          name: id,
+          degree: info ? info.degree : 0,
+          label: labelFor(id),
+          hubColor: info ? hubColorFor(info) : '#22c55e'
+        }
+      });
+    });
+    var seen = new Set();
+    var edgeId = 0;
+    state.graph.edges.forEach(function (e) {
+      if (!visibleIds.has(e.source) || !visibleIds.has(e.target)) return;
+      var key = e.source + '\u0000' + e.target;
+      if (seen.has(key)) return;
+      seen.add(key);
+      edgeId++;
+      // cy.json() requires an explicit id on every element (incl. edges)
+      elements.push({ data: { id: 'e' + edgeId, source: e.source, target: e.target } });
+    });
+    return elements;
+  }
+
+  /* ================================================================
+   * Cytoscape style
+   * ================================================================ */
+  function buildStyle() {
+    var max = Math.max(1, state.maxDegree);
+    return [
+      {
+        selector: 'node',
+        style: {
+          'shape': 'round-rectangle',
+          'width': 'mapData(degree, 0, ' + max + ', 64, 150)',
+          'height': 'mapData(degree, 0, ' + max + ', 26, 46)',
+          'background-color': 'data(hubColor)',
+          'border-width': 1.5,
+          'border-color': '#0a0f17',
+          'label': 'data(label)',
+          'font-size': 10.5,
+          'font-family': 'ui-sans-serif, system-ui, sans-serif',
+          'color': '#e2e8f0',
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'text-wrap': 'ellipsis',
+          'text-max-width': '150px',
+          'overlay-opacity': 0
+        }
+      },
+      {
+        selector: 'edge',
+        style: {
+          'curve-style': 'bezier',
+          'width': 1.4,
+          'line-color': '#64748b',
+          'line-opacity': 0.7,
+          'target-arrow-shape': 'triangle',
+          'target-arrow-color': '#64748b',
+          'arrow-scale': 0.8,
+          'line-cap': 'round',
+          'overlay-opacity': 0
+        }
+      },
+      {
+        selector: 'node:selected',
+        style: {
+          'border-width': 2.5,
+          'border-color': '#38bdf8',
+          'overlay-color': '#38bdf8',
+          'overlay-opacity': 0.3,
+          'overlay-padding': 6
+        }
+      },
+      {
+        selector: 'edge:selected',
+        style: {
+          'line-color': '#38bdf8',
+          'target-arrow-color': '#38bdf8'
+        }
+      },
+      {
+        selector: 'node.dimmed',
+        style: {
+          'opacity': 0.13,
+          'text-opacity': 0.13
+        }
+      },
+      {
+        selector: 'edge.edge-dimmed',
+        style: { 'opacity': 0.05 }
+      },
+      {
+        selector: 'node.focused',
+        style: {
+          'border-width': 2.5,
+          'border-color': '#38bdf8',
+          'overlay-color': '#38bdf8',
+          'overlay-opacity': 0.35,
+          'overlay-padding': 8
+        }
+      }
+    ];
+  }
+
+  /* ================================================================
+   * Layouts
+   * ================================================================ */
+  var LAYOUTS = {
+    elk: {
+      name: 'elk',
+      fit: true,
+      padding: 40,
+      animate: false,
+      elk: {
+        algorithm: 'layered',
+        'elk.direction': 'RIGHT',
+        'elk.spacing.nodeNode': 24,
+        'elk.spacing.edgeNode': 20,
+        'elk.layered.spacing.nodeNodeBetweenLayers': 80,
+        'elk.layered.cycleBreaking.strategy': 'GREEDY'
+      }
+    },
+    cola: {
+      name: 'cola',
+      fit: true,
+      padding: 40,
+      animate: false,
+      flow: { axis: 'y', minSeparation: 40 },
+      nodeSpacing: 24,
+      edgeLength: 90,
+      handleDisconnected: true,
+      convergenceThreshold: 0.01
+    },
+    fcose: {
+      name: 'fcose',
+      fit: true,
+      padding: 40,
+      animate: false,
+      quality: 'default',
+      randomize: true,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 70,
+      gravity: 0.3,
+      numIter: 2500
+    },
+    dagre: {
+      name: 'dagre',
+      fit: true,
+      padding: 40,
+      animate: false,
+      rankDir: 'LR',
+      ranker: 'network-simplex',
+      nodeSep: 30,
+      rankSep: 80,
+      edgeSep: 20,
+      spacingFactor: 1.1
+    }
+  };
+
+  function runLayout() {
+    if (!cy) return;
+    var opts = LAYOUTS[state.layout] || LAYOUTS.elk;
+    try {
+      cy.layout(opts).run();
+    } catch (err) {
+      console.error('Layout "' + state.layout + '" failed:', err);
+      try { cy.layout({ name: 'grid', fit: true, padding: 40 }).run(); }
+      catch (e) { console.error('Fallback layout failed:', e); }
+    }
+  }
+
+  /* ================================================================
+   * Render — dim mode toggles classes (no relayout); hide mode
+   * removes/restores elements and relayouts. The full graph stays in
+   * cytoscape at all times; removed elements keep their positions.
+   * ================================================================ */
+  var removedNodes = []; // detached element refs (positions retained)
+  var removedEdges = [];
+
+  function syncTo(desiredIds) {
+    var edgeGone = function (e) {
+      var s = e.data('source'), t = e.data('target');
+      return !(desiredIds.has(s) && desiredIds.has(t));
+    };
+    // remove edges before nodes, restore nodes before edges
+    var edgesToRemove = cy.edges().filter(edgeGone).toArray();
+    edgesToRemove.forEach(function (e) { e.remove(); });
+    var nodesToRemove = cy.nodes().filter(function (n) { return !desiredIds.has(n.id()); }).toArray();
+    nodesToRemove.forEach(function (n) { n.remove(); });
+
+    removedNodes.filter(function (n) { return desiredIds.has(n.id()); }).forEach(function (n) { n.restore(); });
+    removedEdges.filter(function (e) { return !edgeGone(e); }).forEach(function (e) { e.restore(); });
+
+    removedNodes = removedNodes.filter(function (n) { return !desiredIds.has(n.id()); }).concat(nodesToRemove);
+    removedEdges = removedEdges.filter(edgeGone).concat(edgesToRemove);
+  }
+
+  function applyDimClasses(visible, focused) {
+    cy.nodes().forEach(function (node) {
+      var id = node.id();
+      var isDim = focused ? !focused.has(id) : !visible.has(id);
+      node.toggleClass('dimmed', isDim);
+      node.toggleClass('focused', state.focusId === id);
+    });
+    cy.edges().forEach(function (edge) {
+      var s = edge.data('source'), t = edge.data('target');
+      var isDim = focused ? !(focused.has(s) && focused.has(t)) : !(visible.has(s) && visible.has(t));
+      edge.toggleClass('edge-dimmed', isDim);
+    });
+  }
+
+  function allIds() {
+    var set = new Set();
+    state.nodeInfo.forEach(function (_, id) { set.add(id); });
+    return set;
+  }
+
+  function render() {
+    if (!cy || !state.graph) return;
+    var visible = computeVisibleIds();
+    var focused = focusedIds();
+
+    if (state.dim) {
+      syncTo(allIds()); // restore everything, then dim instead of hide
+      applyDimClasses(visible, focused);
+    } else {
+      syncTo(visible);
+      runLayout();
+      if (focused) applyFocusClasses(focused);
+    }
+
+    refreshLabels();
+    updateStats(visible);
+    updateEmptyOverlay(visible);
+    syncPackagePanel();
+  }
+
+  function applyFocusClasses(focused) {
+    if (!focused) return;
+    cy.nodes().forEach(function (node) {
+      node.toggleClass('focused', state.focusId === node.id());
+      node.toggleClass('dimmed', !focused.has(node.id()));
+    });
+    cy.edges().forEach(function (edge) {
+      var s = edge.data('source'), t = edge.data('target');
+      edge.toggleClass('edge-dimmed', !(focused.has(s) && focused.has(t)));
+    });
+  }
+
+  function updateStats(visible) {
+    if (!state.graph) { $('#stats').textContent = ''; return; }
+    var total = state.nodeInfo.size;
+    var edgeCount = state.graph.edges.length;
+    var parts = [total + ' packages', edgeCount + ' deps'];
+    if (visible && visible.size !== total) parts.push(total - visible.size + ' hidden');
+    $('#stats').textContent = parts.join(' · ');
+  }
+
+  function updateEmptyOverlay(visible) {
+    var empty = !cy || !state.graph || !visible || visible.size === 0;
+    $('#empty-overlay').classList.toggle('hidden', !empty);
+  }
+
+  function updateFocusBadge() {
+    var badge = $('#focus-badge');
+    if (state.focusId) {
+      $('#focus-name').textContent = state.focusId;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  /* ================================================================
+   * Package list panel
+   * ================================================================ */
+  function buildPackagePanel() {
+    var list = $('#pkg-list');
+    list.textContent = '';
+    var ids = Array.from(state.nodeInfo.keys()).sort();
+    ids.forEach(function (id) {
+      var item = document.createElement('label');
+      item.className = 'pkg-item';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.id = id;
+      cb.addEventListener('change', function () {
+        if (cb.checked) state.manualHidden.delete(id);
+        else state.manualHidden.add(id);
+        render();
+      });
+      var span = document.createElement('span');
+      span.textContent = id;
+      span.title = id;
+      var meta = document.createElement('span');
+      meta.className = 'meta';
+      meta.textContent = pkgMeta(id);
+      item.appendChild(cb);
+      item.appendChild(span);
+      item.appendChild(meta);
+      list.appendChild(item);
+    });
+    syncPackagePanel();
+  }
+
+  function syncPackagePanel() {
+    $$('#pkg-list .pkg-item').forEach(function (item) {
+      var cb = item.querySelector('input');
+      cb.checked = !state.manualHidden.has(cb.dataset.id);
+    });
+    $('#pkg-count').textContent = state.manualHidden.size + ' hidden';
+  }
+
+  /* ================================================================
+   * Suggestions panel — hardest knots + easy wins
+   * ================================================================ */
+  function rankSuggestions() {
+    var knots = [], easy = [];
+    state.nodeInfo.forEach(function (info, id) {
+      if (info.hubScore > 0) knots.push(id);      // both heavily used AND heavily using
+      if (info.outDeg > 0) easy.push(id);         // depends on many things
+    });
+    knots.sort(function (a, b) {
+      return state.nodeInfo.get(b).hubScore - state.nodeInfo.get(a).hubScore;
+    });
+    // easy wins: most outgoing deps first, fewest dependents as tiebreak
+    easy.sort(function (a, b) {
+      var ia = state.nodeInfo.get(a), ib = state.nodeInfo.get(b);
+      return (ib.outDeg - ia.outDeg) || (ia.inDeg - ib.inDeg);
+    });
+    return { knots: knots.slice(0, 5), easy: easy.slice(0, 5) };
+  }
+
+  function buildSuggestions() {
+    var list = $('#suggest-list');
+    list.textContent = '';
+    var r = rankSuggestions();
+    if (r.knots.length === 0 && r.easy.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'suggest-empty';
+      empty.textContent = 'No packages to suggest (graph empty or all isolated)';
+      list.appendChild(empty);
+      return;
+    }
+    var addSection = function (label) {
+      var sec = document.createElement('div');
+      sec.className = 'suggest-section';
+      sec.textContent = label;
+      list.appendChild(sec);
+    };
+    var addEmpty = function (text) {
+      var el = document.createElement('div');
+      el.className = 'suggest-empty';
+      el.textContent = text;
+      list.appendChild(el);
+    };
+    var addItem = function (id) {
+      var info = state.nodeInfo.get(id);
+      var item = document.createElement('div');
+      item.className = 'suggest-item';
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = hubColorFor(info);
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = id;
+      name.title = id;
+      var io = document.createElement('span');
+      io.className = 'io';
+      io.textContent = info.inDeg + '/' + info.outDeg;
+      item.appendChild(dot);
+      item.appendChild(name);
+      item.appendChild(io);
+      item.addEventListener('click', function () { setFocus(id); });
+      list.appendChild(item);
+    };
+    addSection('Hardest knots');
+    if (r.knots.length === 0) addEmpty('None — no package is both heavily used and heavily using');
+    else r.knots.forEach(addItem);
+    addSection('Easy wins');
+    if (r.easy.length === 0) addEmpty('None — nothing depends on anything');
+    else r.easy.forEach(addItem);
+  }
+
+  /* ================================================================
+   * Loading graphs
+   * ================================================================ */
+  function loadGraph(obj, label) {
+    var parsed = parseGraph(obj);
+    var computed = computeNodeInfo(parsed.ids, parsed.edges, parsed.nodeInfo);
+    state.graph = { ids: parsed.ids, edges: parsed.edges };
+    state.nodeInfo = computed.info;
+    state.maxDegree = computed.max;
+    state.maxHub = computed.maxHub;
+
+    // reset per-graph filter state
+    state.search = '';
+    state.minDegree = 0;
+    state.dim = false;
+    state.hideIsolated = false;
+    state.showInOut = false;
+    state.showFiles = false;
+    state.showClasses = false;
+    state.focusId = null;
+    state.manualHidden.clear();
+    state.subtreeHidden.clear();
+    $('#search-input').value = '';
+    $('#dim-check').checked = false;
+    $('#isolated-check').checked = false;
+    $('#io-check').checked = false;
+    $('#files-check').checked = false;
+    $('#classes-check').checked = false;
+    var hasCounts = Object.keys(parsed.nodeInfo).length > 0;
+    $('#files-check').disabled = !hasCounts;
+    $('#classes-check').disabled = !hasCounts;
+    $('#degree-slider').max = String(Math.max(1, state.maxDegree));
+    $('#degree-slider').value = '0';
+    $('#degree-label').textContent = 'deg ≥ 0';
+    $('#hero').classList.add('hidden');
+    $('#paste-panel').classList.add('hidden');
+
+    removedNodes = [];
+    removedEdges = [];
+    cy.json({ elements: buildElements(allIds()) });
+
+    cy.style().fromJson(buildStyle()).update();
+    buildPackagePanel();
+    buildSuggestions();
+    updateFocusBadge();
+    render();
+    toast('Loaded ' + parsed.ids.size + ' packages, ' + parsed.edges.length + ' deps' + (label ? ' from ' + label : ''));
+  }
+
+  function loadGraphText(text, label) {
+    var obj;
+    try {
+      obj = JSON.parse(text);
+    } catch (e) {
+      showError('Invalid JSON' + (label ? ' in ' + label : '') + ': ' + e.message);
+      return;
+    }
+    try {
+      loadGraph(obj, label);
+    } catch (e) {
+      showError('Invalid graph data' + (label ? ' in ' + label : '') + ': ' + e.message);
+    }
+  }
+
+  /* ================================================================
+   * Focus
+   * ================================================================ */
+  function setFocus(id) {
+    state.focusId = id;
+    updateFocusBadge();
+    render();
+  }
+  function clearFocus() {
+    if (!state.focusId) return;
+    state.focusId = null;
+    updateFocusBadge();
+    render();
+  }
+
+  /* ================================================================
+   * Toast / error
+   * ================================================================ */
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $('#toast');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.add('hidden'); }, 2600);
+  }
+  var errorTimer = null;
+  function showError(msg) {
+    var el = $('#error-banner');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    clearTimeout(errorTimer);
+    errorTimer = setTimeout(function () { el.classList.add('hidden'); }, 6000);
+  }
+
+  /* ================================================================
+   * Tooltip
+   * ================================================================ */
+  function tooltipHtml(id) {
+    var info = state.nodeInfo.get(id);
+    if (!info) return '';
+    var color = hubColorFor(info);
+    var rows = [];
+    rows.push('<div class="tt-row"><span class="tt-dot" style="background:' + color + '"></span><span class="tt-name">' + escapeHtml(id) + '</span></div>');
+    rows.push('<div class="tt-row">in ' + info.inDeg + ' · out ' + info.outDeg + ' · total ' + info.degree + '</div>');
+    rows.push('<div class="tt-row">hub ' + info.hubScore + ' · benefit ' + (info.benefit >= 0 ? '+' : '') + info.benefit + '</div>');
+    if (info.files !== null || info.classes !== null) {
+      rows.push('<div class="tt-row tt-dim">' +
+        (info.files !== null ? info.files + ' files' : '? files') + ' · ' +
+        (info.classes !== null ? info.classes + ' classes' : '? classes') + '</div>');
+    }
+    return rows.join('');
+  }
+
+  function positionTooltip(clientX, clientY) {
+    var el = $('#tooltip');
+    var main = $('#main');
+    var rect = main.getBoundingClientRect();
+    var x = clientX - rect.left + 16;
+    var y = clientY - rect.top + 16;
+    var w = el.offsetWidth, h = el.offsetHeight;
+    if (x + w > rect.width - 8) x = clientX - rect.left - w - 16;
+    if (y + h > rect.height - 8) y = rect.height - h - 8;
+    el.style.left = Math.max(4, x) + 'px';
+    el.style.top = Math.max(4, y) + 'px';
+  }
+
+  function showTooltip(id, clientX, clientY) {
+    var el = $('#tooltip');
+    el.innerHTML = tooltipHtml(id);
+    el.classList.remove('hidden');
+    positionTooltip(clientX, clientY);
+  }
+
+  function hideTooltip() {
+    $('#tooltip').classList.add('hidden');
+  }
+
+  /* ================================================================
+   * Cytoscape init + events
+   * ================================================================ */
+  function initCy() {
+    cy = cytoscape({
+      container: $('#cy'),
+      style: buildStyle(),
+      minZoom: 0.02,
+      maxZoom: 4,
+      selectionType: 'single',
+      boxSelectionEnabled: false
+    });
+
+    // tap on a node: focus it + its direct neighbors; tap again: clear.
+    // (cytoscape already distinguishes taps from drags — no suppression needed)
+    cy.on('tap', 'node', function (e) {
+      var id = e.target.id();
+      if (state.focusId === id) clearFocus();
+      else setFocus(id);
+    });
+    cy.on('tap', function (e) {
+      if (e.cyTarget === cy) clearFocus();
+    });
+
+    // right-click: hide node + transitive dependencies
+    cy.on('cxttap', 'node', function (e) {
+      var id = e.target.id();
+      var subtree = collectSubtree(id);
+      subtree.forEach(function (n) { state.subtreeHidden.add(n); });
+      toast('Hidden ' + subtree.size + ' package' + (subtree.size === 1 ? '' : 's') + ' (subtree of ' + id + ')');
+      render();
+    });
+
+    // tooltip: follow the node under the cursor
+    cy.on('mouseover', 'node', function (e) {
+      cy.container().style.cursor = 'pointer';
+      var ev = e.originalEvent;
+      showTooltip(e.target.id(), ev.clientX, ev.clientY);
+    });
+    cy.on('mousemove', 'node', function (e) {
+      if ($('#tooltip').classList.contains('hidden')) return;
+      var ev = e.originalEvent;
+      positionTooltip(ev.clientX, ev.clientY);
+    });
+    cy.on('mouseout', 'node', function () {
+      cy.container().style.cursor = 'default';
+      hideTooltip();
+    });
+    cy.on('pan zoom drag', hideTooltip);
+    cy.on('tap', hideTooltip);
+
+    cy.container().addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  }
+
+  /* ================================================================
+   * Toolbar wiring
+   * ================================================================ */
+  function resetFilters() {
+    state.search = '';
+    state.minDegree = 0;
+    state.dim = false;
+    state.hideIsolated = false;
+    state.showInOut = false;
+    state.showFiles = false;
+    state.showClasses = false;
+    state.focusId = null;
+    state.manualHidden.clear();
+    state.subtreeHidden.clear();
+    $('#search-input').value = '';
+    $('#dim-check').checked = false;
+    $('#isolated-check').checked = false;
+    $('#io-check').checked = false;
+    $('#files-check').checked = false;
+    $('#classes-check').checked = false;
+    $('#degree-slider').value = '0';
+    $('#degree-label').textContent = 'deg ≥ 0';
+    updateFocusBadge();
+    render();
+  }
+
+  function togglePanel(sel) {
+    var el = $(sel);
+    var willShow = el.classList.contains('hidden');
+    $('#paste-panel').classList.add('hidden');
+    $('#pkg-panel').classList.add('hidden');
+    $('#suggest-panel').classList.add('hidden');
+    if (willShow) {
+      el.classList.remove('hidden');
+      if (sel === '#paste-panel') $('#paste-input').focus();
+    }
+  }
+
+  function wireUI() {
+    var scheduleRender = debounce(render, 250);
+    var scheduleRenderFast = debounce(render, 120);
+
+    $('#layout-select').addEventListener('change', function (e) {
+      state.layout = e.target.value;
+      runLayout();
+    });
+    $('#search-input').addEventListener('input', function (e) {
+      state.search = e.target.value;
+      scheduleRender();
+    });
+    $('#search-clear').addEventListener('click', function () {
+      state.search = '';
+      $('#search-input').value = '';
+      render();
+      $('#search-input').focus();
+    });
+    $('#dim-check').addEventListener('change', function (e) {
+      state.dim = e.target.checked;
+      render();
+    });
+    $('#isolated-check').addEventListener('change', function (e) {
+      state.hideIsolated = e.target.checked;
+      render();
+    });
+    $('#io-check').addEventListener('change', function (e) {
+      state.showInOut = e.target.checked;
+      refreshLabels();
+    });
+    $('#files-check').addEventListener('change', function (e) {
+      state.showFiles = e.target.checked;
+      refreshLabels();
+    });
+    $('#classes-check').addEventListener('change', function (e) {
+      state.showClasses = e.target.checked;
+      refreshLabels();
+    });
+    $('#degree-slider').addEventListener('input', function (e) {
+      state.minDegree = Number(e.target.value);
+      $('#degree-label').textContent = 'deg ≥ ' + state.minDegree;
+      scheduleRenderFast();
+    });
+    $('#fit-btn').addEventListener('click', function () {
+      if (cy && cy.nodes().length > 0) cy.fit(undefined, 40);
+    });
+    $('#load-btn').addEventListener('click', function () { $('#file-input').click(); });
+    $('#paste-btn').addEventListener('click', function () { togglePanel('#paste-panel'); });
+    $('#pkg-btn').addEventListener('click', function () { togglePanel('#pkg-panel'); });
+    $('#suggest-btn').addEventListener('click', function () { togglePanel('#suggest-panel'); });
+    $('#reset-btn').addEventListener('click', resetFilters);
+
+    $('#paste-close').addEventListener('click', function () { $('#paste-panel').classList.add('hidden'); });
+    $('#pkg-close').addEventListener('click', function () { $('#pkg-panel').classList.add('hidden'); });
+    $('#suggest-close').addEventListener('click', function () { $('#suggest-panel').classList.add('hidden'); });
+    $('#paste-render').addEventListener('click', function () {
+      var v = $('#paste-input').value.trim();
+      if (v) loadGraphText(v, 'pasted JSON');
+    });
+    $('#paste-input').addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') $('#paste-render').click();
+    });
+    $('#pkg-all').addEventListener('click', function () { state.manualHidden.clear(); render(); });
+    $('#pkg-none').addEventListener('click', function () {
+      state.nodeInfo.forEach(function (_, id) { state.manualHidden.add(id); });
+      render();
+    });
+    $('#focus-clear').addEventListener('click', clearFocus);
+
+    $('#hero-load').addEventListener('click', function () { $('#file-input').click(); });
+    $('#hero-paste').addEventListener('click', function () { togglePanel('#paste-panel'); });
+    $('#hero-sample').addEventListener('click', function () { loadGraph(SAMPLE, 'sample'); });
+
+    $('#file-input').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () { loadGraphText(reader.result, f.name); };
+      reader.onerror = function () { showError('Could not read file: ' + f.name); };
+      reader.readAsText(f);
+      e.target.value = '';
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        clearFocus();
+        $('#paste-panel').classList.add('hidden');
+        $('#pkg-panel').classList.add('hidden');
+        $('#suggest-panel').classList.add('hidden');
+      }
+    });
+
+    // drag & drop anywhere on the page
+    var dragDepth = 0;
+    var dropOverlay = $('#drop-overlay');
+    window.addEventListener('dragenter', function (e) {
+      e.preventDefault();
+      dragDepth++;
+      dropOverlay.classList.remove('hidden');
+    });
+    window.addEventListener('dragover', function (e) { e.preventDefault(); });
+    window.addEventListener('dragleave', function (e) {
+      e.preventDefault();
+      dragDepth--;
+      if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.add('hidden'); }
+    });
+    window.addEventListener('drop', function (e) {
+      e.preventDefault();
+      dragDepth = 0;
+      dropOverlay.classList.add('hidden');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () { loadGraphText(reader.result, f.name); };
+      reader.onerror = function () { showError('Could not read file: ' + f.name); };
+      reader.readAsText(f);
+    });
+  }
+
+  /* ================================================================
+   * Boot
+   * ================================================================ */
+  initCy();
+  wireUI();
+
+  // test hook (only when opened with ?test=)
+  if (/[?&]test=/.test(location.search)) {
+    window.__codeps = {
+      get cy() { return cy; },
+      state: state,
+      render: render,
+      loadGraph: loadGraph,
+      loadGraphText: loadGraphText,
+      resetFilters: resetFilters,
+      parseGraph: parseGraph,
+      labelFor: labelFor,
+      hubColorFor: hubColorFor,
+      rankSuggestions: rankSuggestions
+    };
+  }
+})();
+</script>
+</body>
+</html>

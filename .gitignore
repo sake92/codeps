@@ -1,4 +1,13 @@
-tmp/
+
 .deder/
-.bsp/
+
 .scala-build/
+.bloop/
+.bsp/
+.basamake/
+
+# here tests run
+tmp/
+
+
+

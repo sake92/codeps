@@ -11,16 +11,18 @@ object Collapser:
   def collapse(
       nodes: Set[String],
       edges: Set[PackageEdge],
+      counts: Map[String, PkgStats],
       rules: Seq[CollapseRule]
-  ): (Set[String], Set[PackageEdge]) =
-    if rules.isEmpty then (nodes, edges)
+  ): (Set[String], Set[PackageEdge], Map[String, PkgStats]) =
+    if rules.isEmpty then (nodes, edges, counts)
     else
       val resolve = resolveWith(rules)
       val newNodes = nodes.map(resolve)
       val newEdges = edges
         .map(e => PackageEdge(resolve(e.source), resolve(e.target)))
         .filter(e => e.source != e.target)
-      (newNodes, newEdges)
+      val newCounts = counts.groupMapReduce((pkg, _) => resolve(pkg))((_, stats) => stats)(_ + _)
+      (newNodes, newEdges, newCounts)
 
   private def resolveWith(rules: Seq[CollapseRule]): String => String =
     pkg =>
