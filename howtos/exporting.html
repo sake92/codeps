@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Exporting to DOT, JSON and Mermaid">
+  <title> Exporting graphs | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#exporting-graphs">Exporting graphs</a>
+         <ul>
+          <li><a href="#dot">DOT</a></li>
+          <li><a href="#json">JSON</a></li>
+          <li><a href="#mermaid">Mermaid</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="exporting-graphs">Exporting graphs<a href="#exporting-graphs" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>Every <code>codeps</code> run ends with one of three export formats, selected with <code>-f/--format</code>:</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Format</th>
+      <th>Use case</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>dot</code></td>
+      <td>Graphviz rendering, static images, <code>dot -Tsvg</code> pipelines</td>
+     </tr>
+     <tr>
+      <td><code>json</code></td>
+      <td>Programmatic consumption, the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a></td>
+     </tr>
+     <tr>
+      <td><code>mermaid</code></td>
+      <td>Markdown documentation, Mermaid live editors, GitHub markdown</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Output goes to stdout by default; use <code>-o/--out</code> to write to a file.</p>
+   <h2 id="dot">DOT<a href="#dot" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
+dot -Tsvg graph.dot -o graph.svg   # render with graphviz
+</code></pre>
+   <pre><code class="language-dot">digraph deps {
+  "com.example.app" -&gt; "com.example.modules.module2";
+  "com.example.modules.module1" -&gt; "com.example.util";
+  "com.example.modules.module2" -&gt; "com.example.modules.module1";
+}
+</code></pre>
+   <p>Nodes that have no edges are emitted as standalone lines, so they are not lost.</p>
+   <h2 id="json">JSON<a href="#json" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
+</code></pre>
+   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module1"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.util"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.modules.module1"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.util"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module1"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"nodeInfo"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"com.example.app"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"com.example.modules.module1"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"com.example.modules.module2"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"com.example.util"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+   <ul>
+    <li><code>nodes</code> — package names (sorted)</li>
+    <li><code>edges</code> — pairs <code>[source, target]</code> (sorted)</li>
+    <li><code>nodeInfo</code> — per-package <code>{files, classes}</code> stats; only present for SemanticDB input (jdeps has no stats)</li>
+   </ul>
+   <p>This is the format the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> consumes — export, then drop the file on the page.</p>
+   <h2 id="mermaid">Mermaid<a href="#mermaid" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f mermaid
+</code></pre>
+   <pre><code class="language-mermaid">flowchart LR
+  N0["com.example.app"]
+  N1["com.example.modules.module1"]
+  N2["com.example.modules.module2"]
+  N3["com.example.util"]
+  N0 --&gt; N2
+  N1 --&gt; N3
+  N2 --&gt; N1
+</code></pre>
+   <p>Node ids are aliased to <code>N0</code>, <code>N1</code>, ... because Mermaid ids break on dots. Paste the output into any Mermaid renderer (e.g. <a href="https://mermaid.live">mermaid.live</a>) or a Markdown file:</p>
+   <pre><code class="language-markdown hljs" data-highlighted="yes"><span class="hljs-code">```mermaid
+flowchart LR
+  N0["com.example.app"] --&gt; N2["com.example.modules.module2"]
+```</span>
+</code></pre>
+   <p>See <a href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats</a> for format details.</p>
+   <div role="group">
+    <a role="button" href="https://sake92.github.io/codeps/howtos/jdeps.html">⬅️ jdeps analysis</a> <span></span> <span></span>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+ </body>
+</html>

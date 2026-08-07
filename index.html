@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Code package dependency analyzer">
+  <title> codeps | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#codeps">codeps</a>
+         <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#quick-example">Quick example</a></li>
+          <li><a href="#site-map">Site Map</a></li>
+          <li><a href="#demo">Demo</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="codeps">codeps<a href="#codeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>codeps is a <strong>code package dependency analyzer</strong> for JVM projects (Java and Scala). It parses existing compiler output — <a href="https://scalameta.org/docs/semanticdb/specification.html">SemanticDB</a> or <code>jdeps</code> — and produces a <strong>package-level dependency graph</strong>, which you can export as <a href="https://sake92.github.io/codeps/howtos/exporting.html">DOT</a>, <a href="https://sake92.github.io/codeps/howtos/exporting.html">JSON</a> or <a href="https://sake92.github.io/codeps/howtos/exporting.html">Mermaid</a>.</p>
+   <p>No build-system integration needed: it just reads what your compiler already produced.</p>
+   <blockquote>
+    <p><strong>New here?</strong> Start with the <a href="https://sake92.github.io/codeps/tutorials/quickstart.html">Quickstart</a>. Want to explore a graph interactively? Try the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> — it loads graphs exported with <code>-f json</code>.</p>
+   </blockquote>
+   <h2 id="features">Features<a href="#features" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <ul>
+    <li><strong>Two input formats:</strong>
+     <ul>
+      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB</a> — detailed, from Scala compiler output (<code>.semanticdb</code> files), with per-package file/class stats</li>
+      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps</a> — from the JDK's own <code>jdeps -verbose:package</code> output, no extra tooling needed</li>
+     </ul></li>
+    <li><strong>Filtering</strong> — keep only packages matching <code>--include</code> patterns, drop noise with <code>--exclude</code> (e.g. <code>java.*</code>, <code>scala.*</code>)</li>
+    <li><strong>Collapsing</strong> — merge whole package subtrees with <code>--collapse</code> rules (<code>com.example.**</code>, <code>org.lib.*</code>)</li>
+    <li><strong>Three export formats</strong> — <a href="https://sake92.github.io/codeps/reference/export-formats.html">DOT, JSON, Mermaid</a></li>
+    <li><strong>Interactive demo</strong> — a standalone <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">graph viewer</a>: layouts, filtering, degree analysis, package suggestions</li>
+   </ul>
+   <h2 id="quick-example">Quick example<a href="#quick-example" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f dot
+</code></pre>
+   <pre><code class="language-dot">digraph deps {
+  "com.example.app" -&gt; "com.example.modules.module2";
+  "com.example.modules.module1" -&gt; "com.example.util";
+  "com.example.modules.module2" -&gt; "com.example.modules.module1";
+}
+</code></pre>
+   <h2 id="site-map">Site Map<a href="#site-map" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <ul>
+    <li>
+     <p><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a> — step-by-step guides to get things working</p>
+     <ul>
+      <li><a href="https://sake92.github.io/codeps/tutorials/quickstart.html">Quickstart</a></li>
+     </ul>
+    </li>
+    <li>
+     <p><a href="https://sake92.github.io/codeps/howtos">How Tos</a> — goal-oriented recipes for specific tasks</p>
+     <ul>
+      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB analysis</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps analysis</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/exporting.html">Exporting graphs</a></li>
+     </ul>
+    </li>
+    <li>
+     <p><a href="https://sake92.github.io/codeps/reference">Reference</a> — complete descriptions of commands, config, and internals</p>
+     <ul>
+      <li><a href="https://sake92.github.io/codeps/reference/cli.html">CLI</a></li>
+      <li><a href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats</a></li>
+      <li><a href="https://sake92.github.io/codeps/reference/architecture.html">Architecture</a></li>
+     </ul>
+    </li>
+   </ul>
+   <h2 id="demo">Demo<a href="#demo" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">Open the interactive graph demo</a> — drop a JSON graph (as exported by <code>-f json</code>) onto the page, then filter, focus and analyze packages.</p>
+  </main>
+  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+ </body>
+</html>

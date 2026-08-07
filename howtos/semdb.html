@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Analyzing dependencies with SemanticDB">
+  <title> SemanticDB analysis | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#semanticdb-analysis">SemanticDB analysis</a>
+         <ul>
+          <li><a href="#generating-semanticdb-files">Generating SemanticDB files</a></li>
+          <li><a href="#running-the-analysis">Running the analysis</a></li>
+          <li><a href="#filtering">Filtering</a></li>
+          <li><a href="#collapsing">Collapsing</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="semanticdb-analysis">SemanticDB analysis<a href="#semanticdb-analysis" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>SemanticDB is a data format describing the semantic information of Scala (and Java) programs, produced by the Scala compiler (<code>-Xsemanticdb</code> flag) or tools like scala-cli.</p>
+   <p>The <code>semdb</code> subcommand walks a directory, reads every <code>*.semanticdb</code> file, and extracts:</p>
+   <ul>
+    <li><strong>own packages</strong> — packages defined in the analyzed sources</li>
+    <li><strong>package edges</strong> — for every symbol reference, an edge <code>own package -&gt; referenced package</code></li>
+    <li><strong>stats</strong> — per package: number of source files and number of class-like types (classes, objects, traits)</li>
+   </ul>
+   <h2 id="generating-semanticdb-files">Generating SemanticDB files<a href="#generating-semanticdb-files" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>With scala-cli:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">scala-cli compile --server=false --semanticdb -d classes src/
+</code></pre>
+   <p>This writes one <code>.semanticdb</code> file per source file under <code>classes/META-INF/semanticdb/</code>.</p>
+   <p>Other ways to get SemanticDB output:</p>
+   <ul>
+    <li>scalac directly: add <code>-Xsemanticdb</code> (and optionally <code>-P:semanticdb:sourceroot:...</code>) to your compile flags</li>
+    <li>Maven / sbt: enable the <code>semanticdb</code> compiler plugin and check the generated files in the target dir</li>
+    <li>The codeps repo itself ships a checked-in example: <code>testFixtures/example1</code> is compiled by tests into <code>tmp/examples/example1/classes/META-INF/semanticdb</code></li>
+   </ul>
+   <h2 id="running-the-analysis">Running the analysis<a href="#running-the-analysis" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb &lt;dir-with-semanticdb&gt; -i com.example -f dot
+</code></pre>
+   <ul>
+    <li><code>&lt;dir-with-semanticdb&gt;</code> is a positional argument — the whole directory tree is walked for <code>.semanticdb</code> files</li>
+    <li><code>-i/--include</code> keeps only your packages (see <a href="#filtering">filtering</a>)</li>
+    <li><code>-f/--format</code> selects the output format: <code>dot</code>, <code>json</code> or <code>mermaid</code></li>
+   </ul>
+   <p>Example, using the fixture in this repo:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb tmp/examples/example1/classes/META-INF/semanticdb -i com.example -f dot
+</code></pre>
+   <pre><code class="language-dot">digraph deps {
+  "com.example.app" -&gt; "com.example.modules.module2";
+  "com.example.modules.module1" -&gt; "com.example.util";
+  "com.example.modules.module2" -&gt; "com.example.modules.module1";
+}
+</code></pre>
+   <p>The JSON format also includes per-package stats (<code>nodeInfo</code>), which the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> can display on nodes (file/class counts):</p>
+   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module1"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"nodeInfo"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"com.example.app"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+   <h2 id="filtering">Filtering<a href="#filtering" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>--include</code> and <code>--exclude</code> take package patterns: a pattern <code>com.example</code> matches the package itself and everything below it. Excludes win over includes.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">only com.example packages, no third-party or JDK noise</span>
+deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -f json
+<span class="hljs-meta prompt_">
+# </span><span class="language-bash">com.example.* minus internal helpers</span>
+deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f json
+</code></pre>
+   <h2 id="collapsing">Collapsing<a href="#collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Pattern</th>
+      <th>Effect</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>com.example.**</code></td>
+      <td>everything below <code>com.example</code> collapses into <code>com.example</code></td>
+     </tr>
+     <tr>
+      <td><code>org.lib.*</code></td>
+      <td>sub-packages collapse one level below the prefix (e.g. <code>org.lib.http</code>, <code>org.lib.json</code>)</td>
+     </tr>
+    </tbody>
+   </table>
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+</code></pre>
+   <p>When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.</p>
+   <div role="group">
+    <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps analysis ➡️</a>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+ </body>
+</html>
