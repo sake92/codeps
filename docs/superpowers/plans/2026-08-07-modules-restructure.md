@@ -176,7 +176,7 @@ local const testUtils = (baseModule) {
 - [ ] **Step 3: Verify module discovery**
 
 Run: `deder modules --format json`
-Expected: all 12 modules listed (core, parser-semanticdb, parser-jdeps, export, cli, test-utils + their 5 test modules) — ids unchanged.
+Expected: all 11 modules listed (core, parser-semanticdb, parser-jdeps, export, cli, test-utils + their 5 test modules — test-utils has no test module) — ids unchanged.
 
 - [ ] **Step 4: Run the test suite**
 
