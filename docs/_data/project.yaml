@@ -15,5 +15,7 @@ references:
     url: "/reference/cli.html"
   - label: "Export formats"
     url: "/reference/export-formats.html"
+  - label: "JSON input format"
+    url: "/reference/json-input.html"
   - label: "Architecture"
     url: "/reference/architecture.html"

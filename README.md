@@ -2,7 +2,8 @@
 
 Code package dependency analyzer.
 
-Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` output
+Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html), `jdeps` output,
+or a [common JSON input format](https://sake92.github.io/codeps/reference/json-input.html)
 and produces a package-level dependency graph, exportable as DOT, JSON or Mermaid.
 
 - [Documentation and interactive demo](https://sake92.github.io/codeps/)
@@ -28,6 +29,18 @@ jdeps -verbose:package -filter:none -cp classes classes > jdeps.txt
 java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
 java -jar codeps.jar jdeps jdeps.txt -i com.example -f dot
 ```
+
+### Other languages
+
+For any other ecosystem, produce the [JSON input format](https://sake92.github.io/codeps/reference/json-input.html)
+with a tool of your choice (madge, pydeps, `go list`, ...) and pipe it into the `json` subcommand —
+codeps never parses that source code itself:
+
+```shell
+madge --json src | jq '...' | java -jar codeps.jar json - -i src -f mermaid
+```
+
+You can also round-trip an existing analysis: `codeps semdb ... -f raw` emits the same JSON.
 
 ## Development
 

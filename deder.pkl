@@ -21,6 +21,7 @@ local const coreModules = new CreateScalaModules {
   template = (baseModule) {
     deps {
       "org.jgrapht:jgrapht-core:1.5.3"
+      "ba.sake::tupson:0.20.0"
     }
   }
   testTemplate = (template.asTest()) {
@@ -79,6 +80,26 @@ local const parserJdepsModules = new CreateScalaModules {
   }
 }.get
 
+local const parserJsonModules = new CreateScalaModules {
+  root = "modules/parser-json"
+  id = "parser-json"
+  template = (baseModule) {
+    moduleDeps { coreModules.main }
+    deps {
+      "ba.sake::tupson:0.20.0"
+    }
+  }
+  testTemplate = (template.asTest()) {
+    junitXmlReport {
+      enabled = true
+    }
+    moduleDeps { testUtils }
+    deps {
+      "org.scalameta::munit:1.3.4"
+    }
+  }
+}.get
+
 local const exportModules = new CreateScalaModules {
   root = "modules/export"
   id = "export"
@@ -103,6 +124,7 @@ local const cliModules = new CreateScalaModules {
       coreModules.main
       parserSemanticdbModules.main
       parserJdepsModules.main
+      parserJsonModules.main
       exportModules.main
     }
     deps {
@@ -126,6 +148,7 @@ modules {
   ...coreModules.all
   ...parserSemanticdbModules.all
   ...parserJdepsModules.all
+  ...parserJsonModules.all
   ...exportModules.all
   ...cliModules.all
   testUtils

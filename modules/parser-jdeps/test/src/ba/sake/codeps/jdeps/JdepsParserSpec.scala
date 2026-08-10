@@ -19,26 +19,26 @@ class JdepsParserSpec extends munit.FunSuite:
                  |""".stripMargin
 
   test("parses indented package lines, skips summary lines") {
-    val (own, edges, counts) = JdepsParser.parse(sample)
+    val deps = JdepsParser.parse(sample)
     assertEquals(
-      own,
+      deps.own,
       Set("com.example.modules.module1", "com.example.modules.module2", "com.example.util")
     )
-    assert(edges.contains(PackageEdge("com.example.modules.module1", "com.example.util")))
-    assert(edges.contains(PackageEdge("com.example.modules.module2", "com.example.modules.module1")))
-    assert(!edges.exists(e => e.source == "classes"))
-    assertEquals(counts, Map.empty[String, PkgStats])
+    assert(deps.edges.contains(PackageEdge("com.example.modules.module1", "com.example.util")))
+    assert(deps.edges.contains(PackageEdge("com.example.modules.module2", "com.example.modules.module1")))
+    assert(!deps.edges.exists(e => e.source == "classes"))
+    assertEquals(deps.stats, Map.empty[String, PkgStats])
   }
 
   test("parses real jdeps output of compiled fixtures") {
-    val (own, edges, _) = JdepsParser.parse(os.read(FixtureCompiler.jdepsFile))
-    assert(own.contains("com.example.modules.module2"))
-    assert(edges.contains(PackageEdge("com.example.modules.module2", "org.thirdparty")))
-    assert(!edges.exists(e => e.source == "classes"))
+    val deps = JdepsParser.parse(os.read(FixtureCompiler.jdepsFile))
+    assert(deps.own.contains("com.example.modules.module2"))
+    assert(deps.edges.contains(PackageEdge("com.example.modules.module2", "org.thirdparty")))
+    assert(!deps.edges.exists(e => e.source == "classes"))
   }
 
   test("malformed lines are skipped") {
-    val (own, edges, _) = JdepsParser.parse("garbage line\nnot an arrow\n   a.b -> \n   -> b.c\n")
-    assertEquals(own, Set.empty[String])
-    assertEquals(edges, Set.empty[PackageEdge])
+    val deps = JdepsParser.parse("garbage line\nnot an arrow\n   a.b -> \n   -> b.c\n")
+    assertEquals(deps.own, Set.empty[String])
+    assertEquals(deps.edges, Set.empty[PackageEdge])
   }

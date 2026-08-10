@@ -1,6 +1,6 @@
 package ba.sake.codeps.semanticdb
 
-import ba.sake.codeps.model.*
+import ba.sake.codeps.model.{PackageDeps, PackageEdge, PkgStats}
 import scala.meta.internal.semanticdb.{TextDocument, TextDocuments}
 
 object SemanticDbParser:
@@ -12,7 +12,7 @@ object SemanticDbParser:
     * a symbol with package info), and per-package stats (file count = number of
     * documents, class count = class-like symbols: CLASS, OBJECT or TRAIT).
     */
-  def parse(bytes: Array[Byte]): Either[String, (Set[String], Set[PackageEdge], Map[String, PkgStats])] =
+  def parse(bytes: Array[Byte]): Either[String, PackageDeps] =
     try
       val docs = TextDocuments.parseFrom(bytes)
       var own    = Set.empty[String]
@@ -33,7 +33,7 @@ object SemanticDbParser:
               if ref != pkg then edges += PackageEdge(pkg, ref)
             }
         }
-      Right((own, edges, counts))
+      Right(PackageDeps(own, edges, counts))
     catch
       case e: Exception => Left(s"failed to parse semanticdb: ${e.getMessage}")
 

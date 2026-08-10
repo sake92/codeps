@@ -13,6 +13,7 @@ It is organized as small modules with a clear data flow:
 flowchart LR
   A[parser-semanticdb] --> C[core]
   B[parser-jdeps] --> C
+  B2[parser-json] --> C
   C --> D[export]
   C --> E[cli]
   D --> E
@@ -22,7 +23,8 @@ flowchart LR
 compiler output ──► parser ──► graph (core) ──► exporter ──► stdout / file
    .semanticdb       semdb        filter            dot
    jdeps.txt         jdeps        collapse          json
-                                                     mermaid
+   deps.json         json                          mermaid
+                                                   raw
 ```
 
 ## Modules
@@ -33,6 +35,8 @@ The graph model and processing pipeline:
 
 - `model/PackageEdge` — a directed `(source, target)` package dependency
 - `model/PkgStats` — per-package `fileCount` / `classCount` (aggregatable)
+- `model/PackageDeps` — the parser contract: `own` packages, `edges`, `stats`
+  (also the JSON input format; derives `JsonRW` via tupson)
 - `model/CollapseRule` — collapse rules: `Wild` (`prefix.**`) and `SingleLevel` (`prefix.*`)
 - `graph/Filter` — applies include/exclude patterns; universe = matching own packages,
   edges kept only when both endpoints are in the universe
@@ -59,17 +63,31 @@ via `semanticdb-shared`:
 indented detail lines (`   pkg.a -> pkg.b   archive`) become edges;
 non-indented summary lines are skipped. No stats.
 
+### parser-json
+
+`JsonParser` reads the [common JSON input format](/reference/json-input.html) —
+a serialization of `PackageDeps` (`own`/`edges`/`stats`) — using
+[tupson](https://github.com/sake92/tupson). This is how codeps consumes dependency
+info produced by external tools (madge, pydeps, `go list`, ...) without parsing
+their source code. Missing `own`/`edges` default to empty; unknown keys are ignored.
+
+The parser contract is the `PackageDeps` case class (core): all three parsers
+return it, and `RawJsonExporter` serializes it back (`-f raw`), giving a lossless
+round-trip between `semdb`/`jdeps` and `json`.
+
 ### export
 
 - `DotExporter` — Graphviz `digraph`
 - `JsonExporter` — `{nodes, edges, nodeInfo}` (stats when available)
 - `MermaidExporter` — `flowchart LR` with aliased node ids
+- `RawJsonExporter` — serializes `PackageDeps` into the common JSON input format
 
-See [Export formats](/reference/export-formats.html) for details.
+See [Export formats](/reference/export-formats.html) and
+[JSON input format](/reference/json-input.html) for details.
 
 ### cli
 
-`Main` (mainargs-based) with `semdb` and `jdeps` subcommands: resolves inputs,
+`Main` (mainargs-based) with `semdb`, `jdeps` and `json` subcommands: resolves inputs,
 runs the pipeline (parse → filter → collapse → build graph → export) and writes
 stdout or `-o` file. See the [CLI reference](/reference/cli.html).
 

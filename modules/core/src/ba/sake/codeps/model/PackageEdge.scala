@@ -1,3 +1,5 @@
 package ba.sake.codeps.model
 
-case class PackageEdge(source: String, target: String)
+import ba.sake.tupson.JsonRW
+
+case class PackageEdge(source: String, target: String) derives JsonRW
