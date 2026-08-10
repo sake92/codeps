@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="the common JSON input format consumed by the codeps json subcommand">
+  <title> JSON input format | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#json-input-format">JSON input format</a>
+         <ul>
+          <li><a href="#schema">Schema</a></li>
+          <li><a href="#producing-it">Producing it</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="json-input-format">JSON input format<a href="#json-input-format" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>The <code>json</code> subcommand reads package-level dependency info from a JSON document. It is the only input format codeps consumes that you produce yourself — with any tool you like, in any language. Codeps applies its usual pipeline (filter, collapse, export) on top.</p>
+   <p>The format is also what <code>-f raw</code> emits from the <code>semdb</code>/<code>jdeps</code> subcommands, so analyses can be saved and re-run.</p>
+   <h2 id="schema">Schema<a href="#schema" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"own"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"stats"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"com.example.a"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"fileCount"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classCount"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+   <table>
+    <thead>
+     <tr>
+      <th>Field</th>
+      <th>Type</th>
+      <th>Required</th>
+      <th>Meaning</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>own</code></td>
+      <td><code>string[]</code></td>
+      <td>no*</td>
+      <td>the project's own packages; the basis for include/exclude filtering</td>
+     </tr>
+     <tr>
+      <td><code>edges</code></td>
+      <td><code>[{source, target}]</code></td>
+      <td>no*</td>
+      <td>package-level dependency edges; endpoints may be outside <code>own</code></td>
+     </tr>
+     <tr>
+      <td><code>stats</code></td>
+      <td><code>{pkg: {fileCount, classCount}}</code></td>
+      <td>no</td>
+      <td>per-package metadata, shown as <code>nodeInfo</code> in JSON export; omit when your tool has no stats</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>* <code>own</code> and <code>edges</code> default to empty when missing. <code>fileCount</code> and <code>classCount</code> are required integers in every <code>stats</code> entry.</p>
+   <p>Unknown keys are ignored. Type errors and missing required fields fail with a helpful path, e.g.:</p>
+   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">error: failed to parse json: Key '$.edges' expected array, but got string
+</code></pre>
+   <h2 id="producing-it">Producing it<a href="#producing-it" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Codeps does not ship converters — the point is that <em>you</em> produce the JSON with the dependency tool of your ecosystem. The examples below are sketches; adapt them to your tool's output.</p>
+   <p>JavaScript/TypeScript (file-level deps from <a href="https://github.com/pahen/madge">madge</a> mapped to packages, e.g. by tsconfig <code>rootDir</code>):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '
+  to_entries
+  | { own: [.[].key | split("/")[0:2] | join(".")] }
+  ...
+' | java -jar codeps.jar json - -i src -f mermaid
+</code></pre>
+   <p>Python (module-level deps from <a href="https://github.com/thebjorn/pydeps">pydeps</a>):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">pydeps --json mypackage | jq '...' | java -jar codeps.jar json - -f dot
+</code></pre>
+   <p>Go (<code>go list</code> already emits package-level import deps):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">go list -json ./... | jq '...' | java -jar codeps.jar json - -f json
+</code></pre>
+   <p>The easiest way to see the exact shape is to round-trip an existing analysis:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f raw
+</code></pre>
+   <div role="group">
+    <a role="button" href="https://sake92.github.io/codeps/reference/export-formats.html">⬅️ Export formats</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/architecture.html">Architecture ➡️</a>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+ </body>
+</html>
