@@ -8,7 +8,7 @@ description: codeps Quickstart
 
 ## Prerequisites
 
-- JDK 11+ (Scala 3 projects need a recent JDK anyway)
+- JDK 11+
 
 ## Get the CLI
 
@@ -16,11 +16,11 @@ description: codeps Quickstart
 curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
 ```
 
-## Generate analysis input
+(`codeps` below is shorthand for `java -jar codeps.jar`.)
+
+## Export the graph
 
 codeps reads what your compiler already produced — no build integration required.
-Your normal local build already creates the inputs: `.semanticdb` files (if SemanticDB is enabled)
-and compiled `.class` files.
 
 **Scala** — compile with SemanticDB enabled (here with scala-cli):
 
@@ -29,53 +29,43 @@ scala-cli compile --server=false --semanticdb -d classes src/
 # -> classes/META-INF/semanticdb/**/*.semanticdb
 ```
 
-If your build tool already enables SemanticDB (e.g. sbt/Maven with the `semanticdb` compiler plugin),
-the `.semanticdb` files are already on disk — you only need to point codeps at the directory that contains them.
+Then export the graph to the common JSON format:
+
+```shell
+codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+```
+
+If your build tool already enables SemanticDB (sbt/Maven with the `semanticdb` compiler plugin),
+the `.semanticdb` files are already on disk — just point `export` at the directory that contains them.
 
 **Java or mixed** — use the JDK's own analyzer:
 
 ```shell
-jdeps -verbose:package -filter:none -cp classes classes > jdeps.txt
+jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
+codeps export --from jdeps jdeps.txt -o deps.json
 ```
 
-Your build already produced the `.class` files; `jdeps` ships with every JDK, so there is nothing extra to install.
-
-See [SemanticDB analysis](/howtos/semdb.html) and [jdeps analysis](/howtos/jdeps.html) for details.
+See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with jdeps](/howtos/jdeps.html) for details.
 
 ## Analyze
 
-Run the CLI:
+Render the graph at package granularity as Mermaid:
 
 ```shell
-# SemanticDB input: point at the directory containing *.semanticdb files
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
-
-# jdeps input: point at the jdeps output file
-java -jar codeps.jar jdeps jdeps.txt -i com.example -f dot
+codeps analyze -g package -f mermaid deps.json
 ```
 
-Both print the dependency graph to stdout. Example output:
-
-```dot
-digraph deps {
-  "com.example.app" -> "com.example.modules.module2";
-  "com.example.modules.module1" -> "com.example.util";
-  "com.example.modules.module2" -> "com.example.modules.module1";
-}
-```
-
-## Visualize
-
-Export as JSON and open it in the [interactive demo](/demo/cytoscape-graph.html):
+or pipe export straight into analyze:
 
 ```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g package -f mermaid -
 ```
 
-Then open the demo page and **drop `graph.json`** onto it (or use *Paste* / *Load*).
+For deeper views use `-g type` or `-g file` (and `-g member` on Scala data).
+DOT is equally easy — just swap `-f mermaid` for `-f dot`.
 
 ## What's next?
 
 - Filter and collapse packages: [CLI reference](/reference/cli.html)
-- Export to other formats: [Exporting graphs](/howtos/exporting.html)
+- Explore a graph interactively: drop `deps.json` onto the [demo](/demo/cytoscape-graph.html)
 - Understand the internals: [Architecture](/reference/architecture.html)

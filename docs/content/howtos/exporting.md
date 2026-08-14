@@ -1,25 +1,27 @@
 ---
 layout: howto.html
-title: Exporting graphs
-description: Exporting to DOT, JSON and Mermaid
+title: How to export the graph
+description: Exporting to DOT and Mermaid
 ---
 
-# Exporting graphs
+# How to export the graph
 
-Every `codeps` run ends with one of three export formats, selected with `-f/--format`:
+`codeps analyze` ends with one of two output formats, selected with `-f/--format`:
 
 | Format | Use case |
 |---|---|
 | `dot` | Graphviz rendering, static images, `dot -Tsvg` pipelines |
-| `json` | Programmatic consumption, the [interactive demo](/demo/cytoscape-graph.html) |
 | `mermaid` | Markdown documentation, Mermaid live editors, GitHub markdown |
 
+The graph is first produced in the [common JSON format](/reference/json-input.html) by
+`codeps export` — to a file, or to stdout for piping straight into `analyze`.
 Output goes to stdout by default; use `-o/--out` to write to a file.
 
 ## DOT
 
 ```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
+codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps analyze -g package -f dot -o graph.dot deps.json
 dot -Tsvg graph.dot -o graph.svg   # render with graphviz
 ```
 
@@ -33,42 +35,12 @@ digraph deps {
 
 Nodes that have no edges are emitted as standalone lines, so they are not lost.
 When the graph has cycles, a `// cycles: a -> b -> a` comment line is added
-right after the `digraph deps {` header (the same cycles also appear as a
-`%% cycles: ...` comment in Mermaid output and as the `cycles` field in JSON).
-
-## JSON
-
-```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
-```
-
-```json
-{
-  "nodes": ["com.example.app", "com.example.modules.module1", "com.example.modules.module2", "com.example.util"],
-  "edges": [["com.example.app", "com.example.modules.module2"], ["com.example.modules.module1", "com.example.util"], ["com.example.modules.module2", "com.example.modules.module1"]],
-  "cycles": [],
-  "nodeInfo": {
-    "com.example.app": {"files": 1, "classes": 1},
-    "com.example.modules.module1": {"files": 1, "classes": 1},
-    "com.example.modules.module2": {"files": 1, "classes": 1},
-    "com.example.util": {"files": 1, "classes": 1}
-  }
-}
-```
-
-- `nodes` — package names (sorted)
-- `edges` — pairs `[source, target]` (sorted)
-- `cycles` — circular dependencies, each as a closed loop in actual dependency
-  order (e.g. `["a", "c", "b", "a"]` means `a -> c -> b -> a`); always present,
-  `[]` when the graph is acyclic
-- `nodeInfo` — per-package `{files, classes}` stats; only present for SemanticDB input (jdeps has no stats)
-
-This is the format the [interactive demo](/demo/cytoscape-graph.html) consumes — export, then drop the file on the page.
+right after the `digraph deps {` header.
 
 ## Mermaid
 
 ```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f mermaid
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g package -f mermaid -
 ```
 
 ```mermaid
@@ -82,8 +54,10 @@ flowchart LR
   N2 --> N1
 ```
 
-Node ids are aliased to `N0`, `N1`, ... because Mermaid ids break on dots. Paste the output
-into any Mermaid renderer (e.g. [mermaid.live](https://mermaid.live)) or a Markdown file:
+Node ids are aliased to `N0`, `N1`, ... because Mermaid ids break on dots. When the
+graph has cycles, a `%% cycles: a -> b -> a` comment lists them right after the
+`flowchart LR` header. Paste the output into any Mermaid renderer (e.g.
+[mermaid.live](https://mermaid.live)) or a Markdown file:
 
 ````markdown
 ```mermaid
@@ -92,4 +66,16 @@ flowchart LR
 ```
 ````
 
-See [Export formats](/reference/export-formats.html) for format details.
+## Keeping large graphs readable
+
+- `-i`/`-e` filter packages in and out (e.g. `-i com.example -e com.example.internal`)
+- `-c` collapse rules merge whole subtrees into a single node — `com.example.**` collapses
+  everything below `com.example`, `org.lib.*` one level below the prefix — so big graphs
+  stay readable; loops created by collapsing are dropped
+
+```shell
+codeps analyze -g package -f dot -i com.example -c com.example.modules.** deps.json
+```
+
+See [Export formats](/reference/export-formats.html) for format details and
+[CLI reference](/reference/cli.html) for filtering and collapsing.

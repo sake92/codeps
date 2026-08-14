@@ -3,11 +3,11 @@ tutorials:
     url: "/tutorials/quickstart.html"
 
 howtos:
-  - label: "SemanticDB analysis"
+  - label: "Export & analyze Scala/SemanticDB projects"
     url: "/howtos/semdb.html"
-  - label: "jdeps analysis"
+  - label: "Export & analyze Java/JVM projects with jdeps"
     url: "/howtos/jdeps.html"
-  - label: "Exporting graphs"
+  - label: "How to export the graph"
     url: "/howtos/exporting.html"
 
 references:
@@ -15,7 +15,7 @@ references:
     url: "/reference/cli.html"
   - label: "Export formats"
     url: "/reference/export-formats.html"
-  - label: "JSON input format"
+  - label: "Common JSON format"
     url: "/reference/json-input.html"
   - label: "Architecture"
     url: "/reference/architecture.html"

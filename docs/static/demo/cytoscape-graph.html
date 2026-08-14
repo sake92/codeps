@@ -451,8 +451,8 @@
   <label class="chk" title="Dim matching packages instead of removing them"><input type="checkbox" id="dim-check" /> Dim</label>
   <label class="chk" title="Hide packages with no edges"><input type="checkbox" id="isolated-check" /> Hide isolated</label>
   <label class="chk" title="Show incoming/outgoing dependency counts on nodes, e.g. 2/5"><input type="checkbox" id="io-check" /> in/out</label>
-  <label class="chk" title="Show file counts on nodes (from semdb), e.g. 12f"><input type="checkbox" id="files-check" /> files</label>
-  <label class="chk" title="Show class counts on nodes (from semdb), e.g. 7c"><input type="checkbox" id="classes-check" /> classes</label>
+  <label class="chk" title="Show file counts on nodes (when the graph provides them), e.g. 12f"><input type="checkbox" id="files-check" /> files</label>
+  <label class="chk" title="Show class counts on nodes (when the graph provides them), e.g. 7c"><input type="checkbox" id="classes-check" /> classes</label>
 
   <span class="slider" title="Hide packages with fewer edges than this">
     <span id="degree-label">deg ≥ 0</span>
@@ -480,7 +480,7 @@
     <div class="hero-card">
       <h1>Package dependency graph</h1>
       <p>
-        Load a graph JSON (as exported by the codeps CLI with <code>-f json</code>):
+        Load a graph JSON (as produced by the codeps CLI with <code>codeps export</code>):
         drop a file anywhere, pick one, or paste the JSON. Then filter, focus and
         rearrange the graph.
       </p>
@@ -500,10 +500,10 @@
       <span class="hint grow">Ctrl/Cmd+Enter to render</span>
       <button class="close-btn" id="paste-close" title="Close">×</button>
     </div>
-    <textarea id="paste-input" placeholder='{"nodes": ["com.example.a", "com.example.b"], "edges": [["com.example.a", "com.example.b"]]}' spellcheck="false"></textarea>
+    <textarea id="paste-input" placeholder='{"nodes": [{"id": "com.example.a", "kind": "package"}, {"id": "com.example.b", "kind": "package"}], "edges": [{"source": "com.example.a", "target": "com.example.b"}]}' spellcheck="false"></textarea>
     <div class="panel-row">
       <button id="paste-render" style="background:#0c4a6e;border-color:#0e7490;color:#e0f2fe;">Render</button>
-      <span class="hint">JSON: <code>{"nodes": ["a"], "edges": [["a", "b"]]}</code></span>
+      <span class="hint">JSON: <code>{"nodes": [{"id": "com.example.a", "kind": "package"}], "edges": [{"source": "com.example.a", "target": "com.example.b"}]}</code></span>
     </div>
   </div>
 
@@ -590,7 +590,7 @@
    * ================================================================ */
   var state = {
     graph: null,          // { ids: Set, edges: [{source, target}] } — deduped master graph
-    nodeInfo: new Map(),  // id -> { name, degree, inDeg, outDeg, hubScore, benefit, files, classes }
+    meta: new Map(),  // id -> { name, degree, inDeg, outDeg, hubScore, benefit, files, classes }
     maxDegree: 0,
     maxHub: 0,            // max hubScore (in × out) across the graph
     search: '',
@@ -608,53 +608,60 @@
   var cy = null;
 
   /* ================================================================
-   * Sample graph (packages with a couple of cycles + one isolated)
+   * Sample graph (common JSON format: nodes with id+kind, edges as
+   * {source, target}; packages with a couple of cycles + one isolated)
    * ================================================================ */
   var SAMPLE = {
     nodes: [
-      'com.example.core', 'com.example.util', 'com.example.config', 'com.example.events',
-      'com.example.api', 'com.example.auth', 'com.example.metrics', 'com.example.db',
-      'com.example.cache', 'com.example.storage', 'com.example.service', 'com.example.messaging',
-      'com.example.web', 'com.example.cli', 'com.example.parser', 'com.example.compiler',
-      'com.example.repl', 'com.example.legacy'
+      { id: 'com.example.core', kind: 'package' }, { id: 'com.example.util', kind: 'package' },
+      { id: 'com.example.config', kind: 'package' }, { id: 'com.example.events', kind: 'package' },
+      { id: 'com.example.api', kind: 'package' }, { id: 'com.example.auth', kind: 'package' },
+      { id: 'com.example.metrics', kind: 'package' }, { id: 'com.example.db', kind: 'package' },
+      { id: 'com.example.cache', kind: 'package' }, { id: 'com.example.storage', kind: 'package' },
+      { id: 'com.example.service', kind: 'package' }, { id: 'com.example.messaging', kind: 'package' },
+      { id: 'com.example.web', kind: 'package' }, { id: 'com.example.cli', kind: 'package' },
+      { id: 'com.example.parser', kind: 'package' }, { id: 'com.example.compiler', kind: 'package' },
+      { id: 'com.example.repl', kind: 'package' }, { id: 'com.example.legacy', kind: 'package' }
     ],
     edges: [
-      ['com.example.core', 'com.example.util'],
-      ['com.example.core', 'com.example.config'],
-      ['com.example.util', 'com.example.config'],
-      ['com.example.util', 'com.example.events'],
-      ['com.example.events', 'com.example.core'],
-      ['com.example.config', 'com.example.core'],
-      ['com.example.api', 'com.example.core'],
-      ['com.example.api', 'com.example.auth'],
-      ['com.example.api', 'com.example.metrics'],
-      ['com.example.service', 'com.example.api'],
-      ['com.example.service', 'com.example.db'],
-      ['com.example.service', 'com.example.cache'],
-      ['com.example.service', 'com.example.events'],
-      ['com.example.service', 'com.example.messaging'],
-      ['com.example.db', 'com.example.storage'],
-      ['com.example.db', 'com.example.config'],
-      ['com.example.cache', 'com.example.storage'],
-      ['com.example.auth', 'com.example.core'],
-      ['com.example.auth', 'com.example.db'],
-      ['com.example.metrics', 'com.example.events'],
-      ['com.example.messaging', 'com.example.metrics'],
-      ['com.example.storage', 'com.example.metrics'],
-      ['com.example.web', 'com.example.service'],
-      ['com.example.web', 'com.example.api'],
-      ['com.example.web', 'com.example.auth'],
-      ['com.example.cli', 'com.example.web'],
-      ['com.example.cli', 'com.example.service'],
-      ['com.example.cli', 'com.example.parser'],
-      ['com.example.parser', 'com.example.util'],
-      ['com.example.parser', 'com.example.compiler'],
-      ['com.example.compiler', 'com.example.parser'],
-      ['com.example.compiler', 'com.example.core'],
-      ['com.example.repl', 'com.example.compiler'],
-      ['com.example.repl', 'com.example.cli']
+      { source: 'com.example.core', target: 'com.example.util' },
+      { source: 'com.example.core', target: 'com.example.config' },
+      { source: 'com.example.util', target: 'com.example.config' },
+      { source: 'com.example.util', target: 'com.example.events' },
+      { source: 'com.example.events', target: 'com.example.core' },
+      { source: 'com.example.config', target: 'com.example.core' },
+      { source: 'com.example.api', target: 'com.example.core' },
+      { source: 'com.example.api', target: 'com.example.auth' },
+      { source: 'com.example.api', target: 'com.example.metrics' },
+      { source: 'com.example.service', target: 'com.example.api' },
+      { source: 'com.example.service', target: 'com.example.db' },
+      { source: 'com.example.service', target: 'com.example.cache' },
+      { source: 'com.example.service', target: 'com.example.events' },
+      { source: 'com.example.service', target: 'com.example.messaging' },
+      { source: 'com.example.db', target: 'com.example.storage' },
+      { source: 'com.example.db', target: 'com.example.config' },
+      { source: 'com.example.cache', target: 'com.example.storage' },
+      { source: 'com.example.auth', target: 'com.example.core' },
+      { source: 'com.example.auth', target: 'com.example.db' },
+      { source: 'com.example.metrics', target: 'com.example.events' },
+      { source: 'com.example.messaging', target: 'com.example.metrics' },
+      { source: 'com.example.storage', target: 'com.example.metrics' },
+      { source: 'com.example.web', target: 'com.example.service' },
+      { source: 'com.example.web', target: 'com.example.api' },
+      { source: 'com.example.web', target: 'com.example.auth' },
+      { source: 'com.example.cli', target: 'com.example.web' },
+      { source: 'com.example.cli', target: 'com.example.service' },
+      { source: 'com.example.cli', target: 'com.example.parser' },
+      { source: 'com.example.parser', target: 'com.example.util' },
+      { source: 'com.example.parser', target: 'com.example.compiler' },
+      { source: 'com.example.compiler', target: 'com.example.parser' },
+      { source: 'com.example.compiler', target: 'com.example.core' },
+      { source: 'com.example.repl', target: 'com.example.compiler' },
+      { source: 'com.example.repl', target: 'com.example.cli' }
     ],
-    nodeInfo: {
+    // optional per-package metadata understood by this page (not part of the
+    // common JSON format) — drives the "files"/"classes" node labels
+    meta: {
       'com.example.core': { files: 8, classes: 15 },
       'com.example.util': { files: 5, classes: 9 },
       'com.example.config': { files: 4, classes: 6 },
@@ -714,28 +721,29 @@
       if (!seen.has(key)) { seen.add(key); edges.push({ source: s, target: t }); }
     }
 
-    // optional per-package metadata, e.g. {"com.example.a": {"files": 12, "classes": 7}}
-    var nodeInfo = {};
-    if (obj.nodeInfo && typeof obj.nodeInfo === 'object' && !Array.isArray(obj.nodeInfo)) {
-      Object.keys(obj.nodeInfo).forEach(function (id) {
-        var v = obj.nodeInfo[id];
+    // optional per-package metadata ("meta" key; not part of the common JSON
+    // format, but understood by this page), e.g. {"com.example.a": {"files": 12, "classes": 7}}
+    var meta = {};
+    if (obj.meta && typeof obj.meta === 'object' && !Array.isArray(obj.meta)) {
+      Object.keys(obj.meta).forEach(function (id) {
+        var v = obj.meta[id];
         if (v && typeof v === 'object') {
           var num = function (x) { return typeof x === 'number' && isFinite(x) ? x : 0; };
-          nodeInfo[id] = { files: num(v.files), classes: num(v.classes) };
+          meta[id] = { files: num(v.files), classes: num(v.classes) };
         }
       });
     }
-    return { ids: ids, edges: edges, nodeInfo: nodeInfo };
+    return { ids: ids, edges: edges, meta: meta };
   }
 
-  function computeNodeInfo(ids, edges, nodeInfo) {
+  function computeMeta(ids, edges, meta) {
     var info = new Map();
     ids.forEach(function (id) {
-      var ni = nodeInfo[id];
+      var ni = meta[id];
       info.set(id, {
         name: id, degree: 0, inDeg: 0, outDeg: 0,
         hubScore: 0, benefit: 0,
-        files: ni ? ni.files : null,   // null = unknown (no nodeInfo for this package)
+        files: ni ? ni.files : null,   // null = unknown (no meta for this package)
         classes: ni ? ni.classes : null
       });
     });
@@ -773,7 +781,7 @@
   }
 
   function labelFor(id) {
-    var info = state.nodeInfo.get(id);
+    var info = state.meta.get(id);
     if (!info) return id;
     var parts = [];
     if (state.showInOut) parts.push(info.inDeg + '/' + info.outDeg);
@@ -783,7 +791,7 @@
   }
 
   function pkgMeta(id) {
-    var info = state.nodeInfo.get(id);
+    var info = state.meta.get(id);
     if (!info) return '';
     var parts = [info.inDeg + '/' + info.outDeg];
     if (info.files !== null) parts.push(info.files + 'f');
@@ -859,7 +867,7 @@
   function isVisible(id) {
     if (state.manualHidden.has(id)) return false;
     if (state.subtreeHidden.has(id)) return false;
-    var info = state.nodeInfo.get(id);
+    var info = state.meta.get(id);
     if (!info) return false;
     if (info.degree < state.minDegree) return false;
     if (state.hideIsolated && info.degree === 0) return false;
@@ -868,7 +876,7 @@
 
   function computeVisibleIds() {
     var visible = new Set();
-    state.nodeInfo.forEach(function (_, id) {
+    state.meta.forEach(function (_, id) {
       if (isVisible(id)) visible.add(id);
     });
     return visible;
@@ -902,7 +910,7 @@
   function buildElements(visibleIds) {
     var elements = [];
     visibleIds.forEach(function (id) {
-      var info = state.nodeInfo.get(id);
+      var info = state.meta.get(id);
       elements.push({
         data: {
           id: id,
@@ -1122,7 +1130,7 @@
 
   function allIds() {
     var set = new Set();
-    state.nodeInfo.forEach(function (_, id) { set.add(id); });
+    state.meta.forEach(function (_, id) { set.add(id); });
     return set;
   }
 
@@ -1147,7 +1155,7 @@
 
   function updateStats(visible) {
     if (!state.graph) { $('#stats').textContent = ''; return; }
-    var total = state.nodeInfo.size;
+    var total = state.meta.size;
     var edgeCount = state.graph.edges.length;
     var parts = [total + ' packages', edgeCount + ' deps'];
     if (visible && visible.size !== total) parts.push(total - visible.size + ' hidden');
@@ -1175,7 +1183,7 @@
   function buildPackagePanel() {
     var list = $('#pkg-list');
     list.textContent = '';
-    var ids = Array.from(state.nodeInfo.keys()).sort();
+    var ids = Array.from(state.meta.keys()).sort();
     ids.forEach(function (id) {
       var item = document.createElement('label');
       item.className = 'pkg-item';
@@ -1214,16 +1222,16 @@
    * ================================================================ */
   function rankSuggestions() {
     var knots = [], easy = [];
-    state.nodeInfo.forEach(function (info, id) {
+    state.meta.forEach(function (info, id) {
       if (info.hubScore > 0) knots.push(id);      // both heavily used AND heavily using
       if (info.outDeg > 0) easy.push(id);         // depends on many things
     });
     knots.sort(function (a, b) {
-      return state.nodeInfo.get(b).hubScore - state.nodeInfo.get(a).hubScore;
+      return state.meta.get(b).hubScore - state.meta.get(a).hubScore;
     });
     // easy wins: most outgoing deps first, fewest dependents as tiebreak
     easy.sort(function (a, b) {
-      var ia = state.nodeInfo.get(a), ib = state.nodeInfo.get(b);
+      var ia = state.meta.get(a), ib = state.meta.get(b);
       return (ib.outDeg - ia.outDeg) || (ia.inDeg - ib.inDeg);
     });
     return { knots: knots.slice(0, 5), easy: easy.slice(0, 5) };
@@ -1253,7 +1261,7 @@
       list.appendChild(el);
     };
     var addItem = function (id) {
-      var info = state.nodeInfo.get(id);
+      var info = state.meta.get(id);
       var item = document.createElement('div');
       item.className = 'suggest-item';
       var dot = document.createElement('span');
@@ -1285,9 +1293,9 @@
    * ================================================================ */
   function loadGraph(obj, label) {
     var parsed = parseGraph(obj);
-    var computed = computeNodeInfo(parsed.ids, parsed.edges, parsed.nodeInfo);
+    var computed = computeMeta(parsed.ids, parsed.edges, parsed.meta);
     state.graph = { ids: parsed.ids, edges: parsed.edges };
-    state.nodeInfo = computed.info;
+    state.meta = computed.info;
     state.maxDegree = computed.max;
     state.maxHub = computed.maxHub;
 
@@ -1308,7 +1316,7 @@
     $('#io-check').checked = false;
     $('#files-check').checked = false;
     $('#classes-check').checked = false;
-    var hasCounts = Object.keys(parsed.nodeInfo).length > 0;
+    var hasCounts = Object.keys(parsed.meta).length > 0;
     $('#files-check').disabled = !hasCounts;
     $('#classes-check').disabled = !hasCounts;
     $('#degree-slider').max = String(Math.max(1, state.maxDegree));
@@ -1384,7 +1392,7 @@
    * Tooltip
    * ================================================================ */
   function tooltipHtml(id) {
-    var info = state.nodeInfo.get(id);
+    var info = state.meta.get(id);
     if (!info) return '';
     var color = hubColorFor(info);
     var rows = [];
@@ -1581,7 +1589,7 @@
     });
     $('#pkg-all').addEventListener('click', function () { state.manualHidden.clear(); render(); });
     $('#pkg-none').addEventListener('click', function () {
-      state.nodeInfo.forEach(function (_, id) { state.manualHidden.add(id); });
+      state.meta.forEach(function (_, id) { state.manualHidden.add(id); });
       render();
     });
     $('#focus-clear').addEventListener('click', clearFocus);

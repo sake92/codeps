@@ -1,80 +1,95 @@
 ---
 layout: reference.html
-title: JSON input format
-description: the common JSON input format consumed by the codeps json subcommand
+title: Common JSON format
+description: the common JSON graph format produced by codeps export and consumed by codeps analyze
 ---
 
-# JSON input format
+# Common JSON format
 
-The `json` subcommand reads package-level dependency info from a JSON document.
-It is the only input format codeps consumes that you produce yourself — with any
-tool you like, in any language. Codeps applies its usual pipeline
-(filter, collapse, export) on top.
-
-The format is also what `-f raw` emits from the `semdb`/`jdeps` subcommands, so
-analyses can be saved and re-run.
-
-## Schema
+The common JSON format is the contract between the two codeps steps: `codeps export`
+*produces* it, `codeps analyze` *consumes* it. It is a self-contained dependency
+graph with `package`/`file`/`type`/`member` nodes and directed edges between node ids.
 
 ```json
 {
-  "own": ["com.example.a", "com.example.b"],
-  "edges": [
-    {"source": "com.example.a", "target": "com.example.b"}
+  "nodes": [
+    {"id": "com.example.a", "kind": "package"},
+    {"id": "src/com/example/a/Foo.scala", "kind": "file"},
+    {"id": "com.example.a.Foo", "kind": "type", "parentId": "com.example.a", "file": "src/com/example/a/Foo.scala"},
+    {"id": "com.example.a.Foo#doWork", "kind": "member", "parentId": "com.example.a.Foo", "file": "src/com/example/a/Foo.scala"},
+    {"id": "com.example.a.topLevelHelper", "kind": "member", "parentId": "com.example.a"}
   ],
-  "stats": {
-    "com.example.a": {"fileCount": 3, "classCount": 5}
-  }
+  "edges": [
+    {"source": "com.example.a.Foo#doWork", "target": "com.example.a.topLevelHelper"}
+  ]
 }
 ```
 
-| Field | Type | Required | Meaning |
-|---|---|---|---|
-| `own` | `string[]` | no* | the project's own packages; the basis for include/exclude filtering |
-| `edges` | `[{source, target}]` | no* | package-level dependency edges; endpoints may be outside `own` |
-| `stats` | `{pkg: {fileCount, classCount}}` | no | per-package metadata, shown as `nodeInfo` in JSON export; omit when your tool has no stats |
+## Schema
 
-\* `own` and `edges` default to empty when missing. `fileCount` and `classCount`
-are required integers in every `stats` entry.
+| Field | Type | Meaning |
+|---|---|---|
+| `nodes` | `[{id, kind, parentId?, file?}]` | the graph's nodes; a set, so each `id` appears once |
+| `edges` | `[{source, target}]` | directed dependency edges between node ids; a set (deduplicated) |
 
-Unknown keys are ignored. Type errors and missing required fields fail with a
-helpful path, e.g.:
+Node fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | string | hierarchical id, unique within the graph |
+| `kind` | string | `package`, `file`, `type` or `member` (lowercase) |
+| `parentId` | string (optional) | nearest enclosing node; `package` and `file` nodes are standalone (no `parentId`) |
+| `file` | string (optional) | on `type`/`member` nodes: the id of their source `file` node |
+
+### Id rules
+
+- **package** — dotted name: `com.example.a`. Standalone (no `parentId`).
+- **file** — workspace-relative path: `src/com/example/a/Foo.scala`. Standalone (no `parentId`).
+- **type** — `com.example.a.Foo`; nested types use `#`: `com.example.a.Outer#Inner`.
+  `parentId` is the enclosing type or the package.
+- **member** — `com.example.a.Foo#doWork` (a type member; `parentId` = the type) or
+  `com.example.a.topLevelHelper` (a package member; `parentId` = the package, no `#`).
+
+The hierarchy is only package → type → member, plus member → package directly.
+Edges can go between nodes of any kinds, e.g. a member of one type referencing a
+member of another.
+
+Only the project's own symbols appear: references to external symbols are dropped
+by the producers. The format has no `own` array, no `stats` and no version field;
+unknown node kinds or fields are rejected with a helpful parse error, e.g.:
 
 ```text
-error: failed to parse json: Key '$.edges' expected array, but got string
+error: failed to parse json: ...
 ```
 
 ## Producing it
 
-Codeps does not ship converters — the point is that *you* produce the JSON with
-the dependency tool of your ecosystem. The examples below are sketches; adapt
-them to your tool's output.
-
-JavaScript/TypeScript (file-level deps from [madge](https://github.com/pahen/madge)
-mapped to packages, e.g. by tsconfig `rootDir`):
+The easiest way to see the exact shape is to run the exporter:
 
 ```shell
-madge --json src | jq '
-  to_entries
-  | { own: [.[].key | split("/")[0:2] | join(".")] }
-  ...
-' | java -jar codeps.jar json - -i src -f mermaid
+codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+```
+
+External tools can emit nodes+edges JSON directly (matching the schema above)
+and pipe it into `codeps analyze ... -`. The examples below are sketches; adapt
+them to your tool's output. The key points: give every node a unique `id` and a
+valid `kind`, and reference only existing ids in `edges`.
+
+JavaScript/TypeScript (file-level deps from [madge](https://github.com/pahen/madge)
+mapped to file/package nodes, e.g. by tsconfig `rootDir`):
+
+```shell
+madge --json src | jq '...' | codeps analyze -g file -f mermaid -
 ```
 
 Python (module-level deps from [pydeps](https://github.com/thebjorn/pydeps)):
 
 ```shell
-pydeps --json mypackage | jq '...' | java -jar codeps.jar json - -f dot
+pydeps --json mypackage | jq '...' | codeps analyze -g package -f dot -
 ```
 
 Go (`go list` already emits package-level import deps):
 
 ```shell
-go list -json ./... | jq '...' | java -jar codeps.jar json - -f json
-```
-
-The easiest way to see the exact shape is to round-trip an existing analysis:
-
-```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f raw
+go list -json ./... | jq '...' | codeps analyze -g package -f dot -
 ```

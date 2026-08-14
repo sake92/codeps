@@ -7,31 +7,35 @@ pagination:
 
 # codeps
 
-codeps is a **code package dependency analyzer** for JVM projects (Java and Scala).
-It parses existing compiler output — [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` — and produces a
-**package-level dependency graph**, which you can export as [DOT](/howtos/exporting.html), [JSON](/howtos/exporting.html) or [Mermaid](/howtos/exporting.html).
+codeps is a **code dependency analyzer** for JVM projects (Java and Scala).
+It works in two steps: `codeps export` parses existing compiler output —
+[SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` —
+into a [common JSON graph format](/reference/json-input.html), and `codeps analyze`
+renders it as [DOT or Mermaid](/reference/export-formats.html) at any granularity
+(package, file, type or member).
 
 No build-system integration needed: your local build tools already produce the inputs —
 `.semanticdb` files from a Scala compiler with SemanticDB enabled, and `.class` files for the JDK's `jdeps` —
 codeps just reads them.
 
 > **New here?** Start with the [Quickstart](/tutorials/quickstart.html).
-> Want to explore a graph interactively? Try the [interactive demo](/demo/cytoscape-graph.html) — it loads graphs exported with `-f json`.
+> Want to explore a graph interactively? Try the [interactive demo](/demo/cytoscape-graph.html) — it loads graphs produced by `codeps export`.
 
 ## Features
 
 - **Two input formats:**
-  - [SemanticDB](/howtos/semdb.html) — detailed, from Scala compiler output (`.semanticdb` files), with per-package file/class stats
-  - [jdeps](/howtos/jdeps.html) — from the JDK's own `jdeps -verbose:package` output, no extra tooling needed
-- **Filtering** — keep only packages matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`)
-- **Collapsing** — merge whole package subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
-- **Three export formats** — [DOT, JSON, Mermaid](/reference/export-formats.html)
+  - [SemanticDB](/howtos/semdb.html) — detailed, from Scala compiler output (`.semanticdb` files): package/file/type/member nodes
+  - [jdeps](/howtos/jdeps.html) — from the JDK's own `jdeps -verbose:class` output, no extra tooling needed
+- **Four granularities** — render the graph at `package`, `file`, `type` or `member` level with `-g`
+- **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`)
+- **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
+- **Two output formats** — [DOT and Mermaid](/reference/export-formats.html)
 - **Interactive demo** — a standalone [graph viewer](/demo/cytoscape-graph.html): layouts, filtering, degree analysis, package suggestions
 
 ## Quick example
 
 ```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g package -f dot -
 ```
 
 ```dot
@@ -55,4 +59,4 @@ digraph deps {
 
 ## Demo
 
-[Open the interactive graph demo](/demo/cytoscape-graph.html) — drop a JSON graph (as exported by `-f json`) onto the page, then filter, focus and analyze packages.
+[Open the interactive graph demo](/demo/cytoscape-graph.html) — drop a graph JSON (as produced by `codeps export`) onto the page, then filter, focus and analyze packages.

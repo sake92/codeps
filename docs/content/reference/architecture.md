@@ -7,24 +7,28 @@ description: codeps module architecture
 # Architecture
 
 codeps is a Scala 3 project built with [deder](https://sake92.github.io/deder) (during development; end users run the prebuilt jar).
-It is organized as small modules with a clear data flow:
+It is organized as small modules with a clear, two-step data flow — *producers* emit a
+[common JSON graph format](/reference/json-input.html), the *analyzer* consumes it:
 
 ```diagram:mermaid
 flowchart LR
   A[parser-semanticdb] --> C[core]
   B[parser-jdeps] --> C
-  B2[parser-json] --> C
   C --> D[export]
   C --> E[cli]
   D --> E
+  A --> E
+  B --> E
 ```
 
 ```text
-compiler output ──► parser ──► graph (core) ──► exporter ──► stdout / file
-   .semanticdb       semdb        filter            dot
-   jdeps.txt         jdeps        collapse          json
-   deps.json         json                          mermaid
-                                                   raw
+┌── producer ─────────────────────┐   ┌── analyzer ──────────────────────────────┐
+│ codeps export --from semanticdb │   │ codeps analyze -g <level> -f dot|mermaid │
+│ codeps export --from jdeps      │   │                                          │
+│                                │   │                                          │
+│ parse ──► common JSON graph ────┼──►│ filter ─► aggregate -g ─► collapse ─►    │
+│ (DepsGraph, core)               │   │ graph ─► cycles ─► dot / mermaid         │
+└─────────────────────────────────┘   └──────────────────────────────────────────┘
 ```
 
 ## Modules
@@ -33,15 +37,22 @@ compiler output ──► parser ──► graph (core) ──► exporter ─�
 
 The graph model and processing pipeline:
 
-- `model/PackageEdge` — a directed `(source, target)` package dependency
-- `model/PkgStats` — per-package `fileCount` / `classCount` (aggregatable)
-- `model/PackageDeps` — the parser contract: `own` packages, `edges`, `stats`
-  (also the JSON input format; derives `JsonRW` via tupson)
+- `model/NodeKind` — node kinds: `package`, `file`, `type`, `member` (lowercase enum)
+- `model/Node` — `id`, `kind`, optional `parentId` (nearest enclosing node) and `file`
+  (the source file node's id, on `type`/`member` nodes); walks `parentId` chains to
+  find a node's root package
+- `model/Edge` — a directed `(source, target)` edge between node ids
+- `model/DepsGraph` — the parser contract and the common JSON format:
+  `{nodes: Set[Node], edges: Set[Edge]}`; `merge` combines graphs, `withoutDanglingEdges`
+  drops edges whose endpoints are not both in the graph's nodes (derives `JsonRW` via tupson)
 - `model/CollapseRule` — collapse rules: `Wild` (`prefix.**`) and `SingleLevel` (`prefix.*`)
-- `graph/Filter` — applies include/exclude patterns; universe = matching own packages,
-  edges kept only when both endpoints are in the universe
+- `graph/Filter` — applies include/exclude patterns against each node's root package;
+  universe = matching nodes, edges kept only when both endpoints are in the universe
+- `graph/Aggregator` — maps a `DepsGraph` to a coarser granularity level
+  (`member`/`type`/`file`/`package`), lifting nodes to their nearest ancestor at that
+  level and lifting edges through the same mapping
 - `graph/Collapser` — maps nodes/edges through collapse rules (longest prefix wins),
-  drops loops, merges stats
+  drops loops
 - `graph/GraphBuilder` — builds a `jgrapht` `DefaultDirectedGraph[String, DefaultEdge]`,
   keeping isolated vertices
 - `graph/CycleDetector` — finds cycles via jgrapht's
@@ -55,52 +66,52 @@ Graph storage uses [jgrapht](https://jgrapht.org/).
 ### parser-semanticdb
 
 `SemanticDbParser` reads `.semanticdb` files ([protobuf `TextDocuments`](https://scalameta.org/docs/semanticdb/specification.html))
-via `semanticdb-shared`:
+via `semanticdb-shared` and emits a `DepsGraph`:
 
-- **own packages** — from each document's defined symbols (fallback: the source URI path)
-- **edges** — from every symbol occurrence referencing a symbol in another package
-  (package = everything before the last `/`, `/` → `.`)
-- **stats** — per package: number of documents (files) and class-like symbols (class/object/trait)
+- nodes — one `file` node per document (id = source URI relative to `--root`), and
+  `type`/`member`/`package` nodes for the document's defined symbols (constructors
+  and local symbols are skipped)
+- edges — for each symbol occurrence, the innermost defined symbol whose range
+  contains the occurrence → the referenced symbol; self-edges skipped
+- external references are dropped: only own symbols are materialized (dangling-edge
+  prune after merge via `withoutDanglingEdges`)
 
 ### parser-jdeps
 
-`JdepsParser` parses `jdeps -verbose:package` text output:
-indented detail lines (`   pkg.a -> pkg.b   archive`) become edges;
-non-indented summary lines are skipped. No stats.
-
-### parser-json
-
-`JsonParser` reads the [common JSON input format](/reference/json-input.html) —
-a serialization of `PackageDeps` (`own`/`edges`/`stats`) — using
-[tupson](https://github.com/sake92/tupson). This is how codeps consumes dependency
-info produced by external tools (madge, pydeps, `go list`, ...) without parsing
-their source code. Missing `own`/`edges` default to empty; unknown keys are ignored.
-
-The parser contract is the `PackageDeps` case class (core): all three parsers
-return it, and `RawJsonExporter` serializes it back (`-f raw`), giving a lossless
-round-trip between `semdb`/`jdeps` and `json`.
+`JdepsParser` parses `jdeps -verbose:class` text output and emits a `DepsGraph`:
+indented detail lines (`   com.example.Foo -> java.lang.String   java.base`) become
+type-level nodes and edges; non-indented summary lines are skipped. Own classes are
+the sources of detail lines, and edges are kept only when the target is an own class
+too. No file/member nodes (jdeps has no such info).
 
 ### export
 
 - `DotExporter` — Graphviz `digraph` (+ `// cycles:` comment when the graph has cycles)
-- `JsonExporter` — `{nodes, edges, cycles, nodeInfo}` (stats when available)
 - `MermaidExporter` — `flowchart LR` with aliased node ids (+ `%% cycles:` comment when the graph has cycles)
-- `RawJsonExporter` — serializes `PackageDeps` into the common JSON input format
+
+The `OutputFormat` enum is `dot`/`mermaid` only — JSON is not an output format of the
+analyzer; the JSON graph is the *input*, produced by `export`.
 
 See [Export formats](/reference/export-formats.html) and
-[JSON input format](/reference/json-input.html) for details.
+[Common JSON format](/reference/json-input.html) for details.
 
 ### cli
 
-`Main` (mainargs-based) with `semdb`, `jdeps` and `json` subcommands: resolves inputs,
-runs the pipeline (parse → filter → collapse → build graph → export) and writes
-stdout or `-o` file. See the [CLI reference](/reference/cli.html).
+`Main` (mainargs-based) with two subcommands:
+
+- `export` — resolves inputs, runs the producers (`semanticdb`/`jdeps`), merges
+  the resulting `DepsGraph`s and writes the common JSON to stdout or `-o`
+- `analyze` — reads the common JSON (file or stdin), runs the pipeline
+  (filter → aggregate to `-g` → collapse → build graph → detect cycles → export)
+  and writes dot/mermaid to stdout or `-o`
+
+See the [CLI reference](/reference/cli.html).
 
 ### test-utils
 
 `FixtureCompiler` compiles the checked-in `testFixtures/example1` sources once into
-`tmp/examples/example1` (using scala-cli with `--semanticdb` and `jdeps`), thread-safe
-and cached across test runs.
+`tmp/examples/example1` (using scala-cli with `--semanticdb` and `jdeps -verbose:class`),
+thread-safe and cached across test runs.
 
 ## Testing
 

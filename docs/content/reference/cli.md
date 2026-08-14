@@ -6,9 +6,14 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with three subcommands:
-[`semdb`](#semdb) for SemanticDB input, [`jdeps`](#jdeps) for jdeps input and
-[`json`](#json) for the [common JSON input format](/reference/json-input.html).
+`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with two subcommands
+that form a two-step pipeline:
+
+1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
+   emits the [common JSON graph format](/reference/json-input.html). No analysis.
+2. [`analyze`](#analyze) — the *analyzer*: consumes that JSON (a file or stdin) and renders
+   dot or mermaid at any granularity.
+
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
 ```shell
@@ -16,122 +21,152 @@ curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/co
 java -jar codeps.jar <subcommand> [options] <inputs...>
 ```
 
-## Common options
+The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 
-All subcommands share these options:
-
-| Short | Long | Description |
-|---|---|---|
-| `-i` | `--include` | Package pattern; keep only packages matching it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
-| `-e` | `--exclude` | Package pattern; drop matching packages. Excludes win over includes. Repeatable. |
-| `-c` | `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
-| `-f` | `--format` | Output format: `dot`, `json`, `mermaid` or `raw`. Required. |
-| `-o` | `--out` | Write output to this file instead of stdout. |
-
-Positional inputs (directories for `semdb`, files for `jdeps`, one file or `-` for `json`) are required.
-
-## semdb
+The two steps pipe together — `export` writes the graph to stdout, `analyze` reads it from stdin (`-`):
 
 ```shell
-java -jar codeps.jar semdb [-i include] [-e exclude] [-c collapse] -f format [-o out] <dir...>
+codeps export --from jdeps jdeps.txt | codeps analyze -g type -f dot -
 ```
 
-Walks each given directory (recursively) for `*.semanticdb` files, parses them,
-and builds the package graph. Requires at least one directory; errors out if a path
-does not exist or no `.semanticdb` files are found.
-
-Also extracts per-package stats (file and class counts) — these appear as `nodeInfo` in JSON output.
+## export
 
 ```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json
+codeps export --from semanticdb|jdeps [--root <dir>] [-o out] <inputs...>
 ```
 
-## jdeps
+Pure producer: parses the raw input and emits the common JSON graph
+(`{"nodes": [...], "edges": [...]}`) to stdout, or to the `-o` file.
+There are no include/exclude/collapse flags here — filtering and aggregation are
+the analyzer's job.
+
+| Option | Description |
+|---|---|
+| `--from` (`-f`) | Input format: `semanticdb` or `jdeps`. Required. |
+| `--root` | semanticdb only. Makes source URIs relative to this directory (default: the current working directory). |
+| `-o` / `--out` | Write the JSON to this file instead of stdout. |
+
+Inputs:
+
+- `semanticdb` — **directories**, walked recursively for `*.semanticdb` files.
+- `jdeps` — **files** containing `jdeps -verbose:class` text output.
 
 ```shell
-java -jar codeps.jar jdeps [-i include] [-e exclude] [-c collapse] -f format [-o out] <file...>
+codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps export --from jdeps jdeps.txt
 ```
 
-Parses `jdeps -verbose:package` text output (one or more files). Requires at least one file.
-Indented detail lines (`pkg.a -> pkg.b archive`) become edges; non-indented summary lines are ignored.
-
-No stats are available for jdeps input, so JSON `nodeInfo` is omitted.
-
-```shell
-java -jar codeps.jar jdeps jdeps.txt -i com.example -e java.** -f dot
-```
-
-Both `semdb` and `jdeps` also support `-f raw`, which emits the parsed dependency
-info (own packages, edges, stats) in the [common JSON input format](/reference/json-input.html)
-— after filtering, before collapsing. This is how you round-trip an analysis into
-the `json` subcommand or save an intermediate result:
-
-```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f raw -o deps.json
-java -jar codeps.jar json deps.json -i com.example -f mermaid
-```
-
-## json
-
-```shell
-java -jar codeps.jar json [-i include] [-e exclude] [-c collapse] -f format [-o out] <file|->
-```
-
-Reads the [common JSON input format](/reference/json-input.html): a JSON document
-describing own packages, package-level edges and optional stats. This is how codeps
-consumes dependency info produced by any other tool (madge, pydeps, `go list`, ...) —
-codeps itself never parses source code for these inputs.
-
-Pass `-` to read from stdin, so output of other tools can be piped straight in:
-
-```shell
-madge --json src | jq '...' | java -jar codeps.jar json - -i src -f mermaid
-```
-
-Exactly one input is required. Malformed or type-invalid JSON is a hard error (exit 1),
-not a warning:
+Errors (exit 1): `at least one input is required`, `input path does not exist: <path>`,
+`not a directory: <path>` (semanticdb), `not a file: <path>` (jdeps),
+`no .semanticdb files found`. Per-file parse failures are warnings on stderr and
+the run continues:
 
 ```text
-error: failed to parse json: Key '$.own' is missing
+warning: failed to parse semanticdb: ...
 ```
+
+## analyze
+
+```shell
+codeps analyze -g <package|file|type|member> -f <dot|mermaid> [-i inc] [-e exc] [-c collapse] [-o out] <file|->
+```
+
+Pure analyzer: reads the common JSON graph (a file, or stdin via `-`) and renders it
+in the requested format at the requested granularity. Pipeline:
+parse → filter → aggregate to `-g` → collapse → build graph → cycle detection → render.
+
+`-g` is required — there is no default granularity.
+
+| Option | Description |
+|---|---|
+| `-g` / `--granularity` | Aggregation level: `package`, `file`, `type` or `member`. Required. |
+| `-f` / `--format` | Output format: `dot` or `mermaid`. Required. |
+| `-i` / `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
+| `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
+| `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
+| `-o` / `--out` | Write output to this file instead of stdout. |
+
+Exactly one input is required — a JSON file, or `-` for stdin, so `export` output
+can be piped straight into `analyze`:
+
+```shell
+codeps analyze -g package -f dot deps.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g type -f mermaid -
+codeps export --from jdeps jdeps.txt | codeps analyze -g type -f dot -
+```
+
+### Granularity
+
+The `-g` level says what the graph's nodes are after aggregation. Finer-grained
+nodes are lifted to their nearest ancestor at that level; when the data has no
+nodes at the requested level (or above it), the level falls back:
+
+| `-g` | semanticdb data | jdeps data |
+|---|---|---|
+| `member` | identity (types, members, packages, files) | identity (types only) |
+| `type` | members → their type (package members → the package); files dropped | identity |
+| `file` | types/members → their `file` attribute; fallback: root package | root package (jdeps has no files) |
+| `package` | everything → root package; files dropped | everything → root package |
+
+jdeps data has no file or member nodes, so on jdeps data `-g member` and `-g type`
+are the identity and `-g file` behaves like `-g package`.
+
+Errors (exit 1): `exactly one input is required (a json file, or '-' for stdin)`,
+`expected exactly one input (a json file, or '-' for stdin)`,
+`input path does not exist: <path>`, `no nodes remain after filtering`, invalid
+collapse rules, unknown granularity/format values — and malformed or type-invalid
+JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
 
 ## Include / exclude patterns
 
-A pattern matches a package if the package equals the pattern or starts with `pattern + "."`.
-Include/exclude applies to the **own packages** found in the input; an edge is kept only
-when **both** its endpoints are in the resulting universe (self-edges are dropped).
+A pattern matches a package if the package equals the pattern or starts with
+`pattern + "."`. Include/exclude applies to each node's **root package** — the
+topmost package ancestor found by walking `parentId` chains (for a package node,
+that is the package itself). A node is kept when it has no include patterns or
+its root package matches one, and its root package matches no exclude pattern
+(excludes win). An edge is kept only when **both** its endpoints are in the
+resulting universe (self-edges are dropped). With no `-i`, all nodes are kept.
 
 ```shell
 # keep only com.example and subpackages, minus internal helpers
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f dot
+codeps analyze -g package -f dot -i com.example -e com.example.internal deps.json
 ```
 
 ## Collapse rules
 
-Collapse rules merge packages into a single node, making large graphs readable.
+Collapse rules merge nodes into a single node, making large graphs readable.
 Only trailing wildcards are supported:
 
 | Rule | Effect |
 |---|---|
 | `com.example.**` | everything equal to or below `com.example` collapses into `com.example` |
-| `org.lib.*` | packages directly below `org.lib` collapse into `org.lib.<level>` (one level only) |
+| `org.lib.*` | nodes directly below `org.lib` collapse into `org.lib.<level>` (one level only) |
 
-When multiple rules match a package, the **longest prefix wins** (ties: first rule in the sequence).
+Rules match node ids by prefix, kind-agnostically — they apply to whatever ids
+exist after aggregation (packages, files, types or members). When multiple rules
+match a node, the **longest prefix wins** (ties: first rule in the sequence).
 Loops created by collapsing are dropped; edges are deduplicated.
 
 ```shell
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+codeps analyze -g package -f dot -i com.example -c com.example.modules.** deps.json
 ```
 
 ## Exit codes and errors
 
 - `0` — success
-- `1` — usage errors (missing input, unknown format/rule, no packages left after filtering) or parse warnings
+- `1` — usage errors, input errors (missing/nonexistent paths, empty input) or JSON parse errors
 
-Unparseable input files produce a warning on stderr and are skipped, so a partial run still succeeds:
+For `export`, unparseable input files produce a warning on stderr and are skipped,
+so a partial run still succeeds:
 
 ```text
 warning: failed to parse semanticdb: ...
+```
+
+For `analyze`, malformed or type-invalid JSON input is a hard error (exit 1):
+
+```text
+error: failed to parse json: ...
 ```
 
 ## Building from source
@@ -140,5 +175,6 @@ For developing codeps itself, the repo is built with [deder](https://sake92.gith
 see the [README](https://github.com/sake92/codeps#development):
 
 ```shell
-deder exec -t run -m cli semdb <dir> -i com.example -f dot
+deder exec -t run -m cli export --from semanticdb <dir> -o deps.json
+deder exec -t run -m cli analyze -g package -f dot deps.json
 ```
