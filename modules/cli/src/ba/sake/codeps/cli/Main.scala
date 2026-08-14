@@ -1,7 +1,7 @@
 package ba.sake.codeps.cli
 
 import ba.sake.codeps.exporting.{DotExporter, JsonExporter, MermaidExporter, OutputFormat, RawJsonExporter}
-import ba.sake.codeps.graph.{Collapser, Filter, GraphBuilder}
+import ba.sake.codeps.graph.{Collapser, CycleDetector, Filter, GraphBuilder}
 import ba.sake.codeps.model.{CollapseRule, PackageDeps}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.json.JsonParser
@@ -194,10 +194,11 @@ object Main:
           val (collapsedNodes, collapsedEdges, collapsedCounts) =
             Collapser.collapse(universe, filteredEdges, filteredCounts, rules)
           val graph = GraphBuilder.build(collapsedNodes, collapsedEdges)
+          val cycles = CycleDetector.detect(graph)
           val content = format match
-            case OutputFormat.Dot     => DotExporter.render(graph)
-            case OutputFormat.Json    => JsonExporter.render(graph, collapsedCounts)
-            case OutputFormat.Mermaid => MermaidExporter.render(graph)
+            case OutputFormat.Dot     => DotExporter.render(graph, cycles)
+            case OutputFormat.Json    => JsonExporter.render(graph, collapsedCounts, cycles)
+            case OutputFormat.Mermaid => MermaidExporter.render(graph, cycles)
             case OutputFormat.Raw     => "" // handled above
           writeOutput(content, out)
           0

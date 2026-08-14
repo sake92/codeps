@@ -100,6 +100,36 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("\"com.example.b\""))
   }
 
+  test("json subcommand reports cycles in all formats") {
+    val input = os.pwd / "tmp" / "cli-test" / "cycle-input.json"
+    os.makeDir.all(input / os.up)
+    os.write.over(
+      input,
+      """{"own": ["com.example.a", "com.example.b"],
+        | "edges": [
+        |   {"source": "com.example.a", "target": "com.example.b"},
+        |   {"source": "com.example.b", "target": "com.example.a"}
+        | ]}""".stripMargin
+    )
+    val jsonOut = os.pwd / "tmp" / "cli-test" / "out-cycle.json"
+    os.remove.all(jsonOut)
+    val res1 = runCli("json", input.toString, "--include", "com.example", "-f", "json", "-o", jsonOut.toString)
+    assertEquals(res1.exitCode, 0)
+    assert(os.read(jsonOut).contains("\"cycles\": [[\"com.example.a\", \"com.example.b\", \"com.example.a\"]]"))
+
+    val mermaidOut = os.pwd / "tmp" / "cli-test" / "out-cycle.mmd"
+    os.remove.all(mermaidOut)
+    val res2 = runCli("json", input.toString, "--include", "com.example", "-f", "mermaid", "-o", mermaidOut.toString)
+    assertEquals(res2.exitCode, 0)
+    assert(os.read(mermaidOut).contains("%% cycles: com.example.a -> com.example.b -> com.example.a"))
+
+    val dotOut = os.pwd / "tmp" / "cli-test" / "out-cycle.dot"
+    os.remove.all(dotOut)
+    val res3 = runCli("json", input.toString, "--include", "com.example", "-f", "dot", "-o", dotOut.toString)
+    assertEquals(res3.exitCode, 0)
+    assert(os.read(dotOut).contains("// cycles: com.example.a -> com.example.b -> com.example.a"))
+  }
+
   test("json subcommand round-trips semdb raw output") {
     val rawFile  = os.pwd / "tmp" / "cli-test" / "deps-raw.json"
     val viaJson  = os.pwd / "tmp" / "cli-test" / "out-via-json.json"

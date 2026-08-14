@@ -32,6 +32,9 @@ digraph deps {
 ```
 
 Nodes that have no edges are emitted as standalone lines, so they are not lost.
+When the graph has cycles, a `// cycles: a -> b -> a` comment line is added
+right after the `digraph deps {` header (the same cycles also appear as a
+`%% cycles: ...` comment in Mermaid output and as the `cycles` field in JSON).
 
 ## JSON
 
@@ -43,6 +46,7 @@ java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o
 {
   "nodes": ["com.example.app", "com.example.modules.module1", "com.example.modules.module2", "com.example.util"],
   "edges": [["com.example.app", "com.example.modules.module2"], ["com.example.modules.module1", "com.example.util"], ["com.example.modules.module2", "com.example.modules.module1"]],
+  "cycles": [],
   "nodeInfo": {
     "com.example.app": {"files": 1, "classes": 1},
     "com.example.modules.module1": {"files": 1, "classes": 1},
@@ -54,6 +58,9 @@ java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o
 
 - `nodes` — package names (sorted)
 - `edges` — pairs `[source, target]` (sorted)
+- `cycles` — circular dependencies, each as a closed loop in actual dependency
+  order (e.g. `["a", "c", "b", "a"]` means `a -> c -> b -> a`); always present,
+  `[]` when the graph is acyclic
 - `nodeInfo` — per-package `{files, classes}` stats; only present for SemanticDB input (jdeps has no stats)
 
 This is the format the [interactive demo](/demo/cytoscape-graph.html) consumes — export, then drop the file on the page.

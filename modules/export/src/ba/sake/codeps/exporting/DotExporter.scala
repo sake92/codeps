@@ -4,9 +4,13 @@ import org.jgrapht.graph.{DefaultDirectedGraph, DefaultEdge}
 import scala.jdk.CollectionConverters.*
 
 object DotExporter:
-  def render(g: DefaultDirectedGraph[String, DefaultEdge]): String =
+  def render(g: DefaultDirectedGraph[String, DefaultEdge], cycles: Seq[Seq[String]] = Seq.empty): String =
     val sb = new StringBuilder
     sb.append("digraph deps {\n")
+    if cycles.nonEmpty then
+      sb.append("  // cycles: ")
+      sb.append(cycles.map(_.mkString(" -> ")).mkString(", "))
+      sb.append("\n")
     for e <- g.edgeSet().asScala.toSeq.sortBy(e => (g.getEdgeSource(e), g.getEdgeTarget(e))) do
       sb.append(s"""  "${escape(g.getEdgeSource(e))}" -> "${escape(g.getEdgeTarget(e))}";\n""")
     val endpoints = g.edgeSet().asScala.flatMap(e => Seq(g.getEdgeSource(e), g.getEdgeTarget(e))).toSet

@@ -44,6 +44,11 @@ The graph model and processing pipeline:
   drops loops, merges stats
 - `graph/GraphBuilder` — builds a `jgrapht` `DefaultDirectedGraph[String, DefaultEdge]`,
   keeping isolated vertices
+- `graph/CycleDetector` — finds cycles via jgrapht's
+  `KosarajuStrongConnectivityInspector`; extracts one representative elementary
+  cycle per strongly connected component of size ≥ 2 (self-loops are dropped
+  earlier), in true dependency order and deterministic (rotated to start from
+  the smallest member)
 
 Graph storage uses [jgrapht](https://jgrapht.org/).
 
@@ -77,9 +82,9 @@ round-trip between `semdb`/`jdeps` and `json`.
 
 ### export
 
-- `DotExporter` — Graphviz `digraph`
-- `JsonExporter` — `{nodes, edges, nodeInfo}` (stats when available)
-- `MermaidExporter` — `flowchart LR` with aliased node ids
+- `DotExporter` — Graphviz `digraph` (+ `// cycles:` comment when the graph has cycles)
+- `JsonExporter` — `{nodes, edges, cycles, nodeInfo}` (stats when available)
+- `MermaidExporter` — `flowchart LR` with aliased node ids (+ `%% cycles:` comment when the graph has cycles)
 - `RawJsonExporter` — serializes `PackageDeps` into the common JSON input format
 
 See [Export formats](/reference/export-formats.html) and

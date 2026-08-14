@@ -65,11 +65,17 @@ The JSON format also includes per-package stats (`nodeInfo`), which the
 {
   "nodes": ["com.example.app", "com.example.modules.module1"],
   "edges": [["com.example.app", "com.example.modules.module2"]],
+  "cycles": [],
   "nodeInfo": {
     "com.example.app": {"files": 1, "classes": 1}
   }
 }
 ```
+
+Circular dependencies show up in the `cycles` field as closed loops in actual
+dependency order (e.g. `["a", "c", "b", "a"]` means `a -> c -> b -> a`; `[]` when
+the graph is acyclic) and as `// cycles:` / `%% cycles:` comments in DOT and
+Mermaid output.
 
 ## Filtering
 

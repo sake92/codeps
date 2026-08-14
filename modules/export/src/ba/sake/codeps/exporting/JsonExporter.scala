@@ -5,13 +5,18 @@ import org.jgrapht.graph.{DefaultDirectedGraph, DefaultEdge}
 import scala.jdk.CollectionConverters.*
 
 object JsonExporter:
-  def render(g: DefaultDirectedGraph[String, DefaultEdge], counts: Map[String, PkgStats] = Map.empty): String =
+  def render(
+      g: DefaultDirectedGraph[String, DefaultEdge],
+      counts: Map[String, PkgStats] = Map.empty,
+      cycles: Seq[Seq[String]] = Seq.empty
+  ): String =
     val nodes = g.vertexSet().asScala.toSeq.sorted
     val edges = g.edgeSet().asScala.toSeq
       .map(e => Seq(g.getEdgeSource(e), g.getEdgeTarget(e)))
       .sortBy(_.mkString)
-    val nodesJson = nodes.map(n => s""""$n"""").mkString(", ")
-    val edgesJson = edges.map(pair => pair.map(p => s""""$p"""").mkString(", ")).map(p => s"[$p]").mkString(", ")
+    val nodesJson  = nodes.map(n => s""""$n"""").mkString(", ")
+    val edgesJson  = edges.map(pair => pair.map(p => s""""$p"""").mkString(", ")).map(p => s"[$p]").mkString(", ")
+    val cyclesJson = cycles.map(c => c.map(p => s""""$p"""").mkString(", ")).map(c => s"[$c]").mkString(", ")
     val infoJson =
       if counts.isEmpty then ""
       else
@@ -22,6 +27,7 @@ object JsonExporter:
         if entries.isEmpty then "" else ",\n  \"nodeInfo\": {\n" + entries.mkString(",\n") + "\n  }"
     s"""{
        |  "nodes": [$nodesJson],
-       |  "edges": [$edgesJson]$infoJson
+       |  "edges": [$edgesJson],
+       |  "cycles": [$cyclesJson]$infoJson
        |}
        |""".stripMargin
