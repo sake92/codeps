@@ -21,15 +21,16 @@ class AggregatorSpec extends munit.FunSuite:
     assertEquals(Aggregator.aggregate(graph, Level.Member), (graph.nodes.map(_.id), graph.edges))
   }
 
-  test("type level lifts members to their parent, drops files") {
+  test("type level lifts members to their parent, drops files and standalone packages") {
     val (nodes, edges) = Aggregator.aggregate(graph, Level.Type)
+    // com.example.a survives only because topLevelHelper (a package member) falls back to it
     assertEquals(nodes, Set("com.example.a", "com.example.a.Foo"))
     assertEquals(edges, Set(Edge("com.example.a.Foo", "com.example.a")))
   }
 
-  test("file level lifts types and members to their file attribute") {
+  test("file level lifts types and members to their file attribute, drops packages") {
     val (nodes, edges) = Aggregator.aggregate(graph, Level.File)
-    assertEquals(nodes, Set("com.example.a", "src/a/Foo.scala", "src/a/Helpers.scala"))
+    assertEquals(nodes, Set("src/a/Foo.scala", "src/a/Helpers.scala"))
     assertEquals(edges, Set(Edge("src/a/Foo.scala", "src/a/Helpers.scala")))
   }
 
@@ -40,7 +41,7 @@ class AggregatorSpec extends munit.FunSuite:
     )
     val (nodes, edges) = Aggregator.aggregate(g, Level.File)
     assertEquals(nodes, Set("com.example.a"))
-    assertEquals(edges, Set.empty[Edge]) // self-loop dropped
+    assertEquals(edges, Set.empty[Edge]) // package endpoint dropped at file level
   }
 
   test("package level lifts everything to root packages, dropping files") {
@@ -66,7 +67,7 @@ class AggregatorSpec extends munit.FunSuite:
     )
     // type level: member without parentId is dropped
     val (typeNodes, typeEdges) = Aggregator.aggregate(g, Level.Type)
-    assertEquals(typeNodes, Set("com.example.a", "com.example.a.Broken", "com.example.a.Foo"))
+    assertEquals(typeNodes, Set("com.example.a.Broken", "com.example.a.Foo"))
     assertEquals(typeEdges, Set(Edge("com.example.a.Broken", "com.example.a.Foo")))
     // package level: member whose parent chain references a missing node is dropped
     val (pkgNodes, pkgEdges) = Aggregator.aggregate(g, Level.Package)
@@ -98,4 +99,28 @@ class AggregatorSpec extends munit.FunSuite:
     assert(!nodes2.contains("a.b.X"))
     assert(!nodes2.contains("a.b.Y"))
     assertEquals(edges2, Set.empty[Edge])
+  }
+
+  test("package nodes are dropped at file and type levels, kept at member level") {
+    val g = DepsGraph(
+      Set(
+        Node("com.example.a", NodeKind.`package`),
+        Node("com.example.b", NodeKind.`package`),
+        Node("src/b/Bar.scala", NodeKind.file),
+        Node("com.example.a.Foo", NodeKind.`type`, Some("com.example.a"), Some("src/a/Foo.scala")),
+        Node("com.example.a.Foo#m", NodeKind.member, Some("com.example.a.Foo"), Some("src/a/Foo.scala"))
+      ),
+      Set(
+        Edge("com.example.a.Foo#m", "com.example.b"), // edge INTO a package
+        Edge("com.example.b", "com.example.a.Foo")     // edge OUT of a package
+      )
+    )
+    val (fileNodes, fileEdges) = Aggregator.aggregate(g, Level.File)
+    assertEquals(fileNodes, Set("src/a/Foo.scala", "src/b/Bar.scala"))
+    assertEquals(fileEdges, Set.empty[Edge]) // both edges lose their package endpoint
+    val (typeNodes, typeEdges) = Aggregator.aggregate(g, Level.Type)
+    assertEquals(typeNodes, Set("com.example.a.Foo"))
+    assertEquals(typeEdges, Set.empty[Edge]) // both edges lose their package endpoint
+    val (memberNodes, _) = Aggregator.aggregate(g, Level.Member)
+    assertEquals(memberNodes, g.nodes.map(_.id)) // member level is identity, packages kept
   }

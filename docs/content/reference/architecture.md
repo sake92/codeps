@@ -48,9 +48,12 @@ The graph model and processing pipeline:
 - `model/CollapseRule` — collapse rules: `Wild` (`prefix.**`) and `SingleLevel` (`prefix.*`)
 - `graph/Filter` — applies include/exclude patterns against each node's root package;
   universe = matching nodes, edges kept only when both endpoints are in the universe
-- `graph/Aggregator` — maps a `DepsGraph` to a coarser granularity level
+- `graph/Aggregator` — maps a `DepsGraph` to a granularity level
   (`member`/`type`/`file`/`package`), lifting nodes to their nearest ancestor at that
-  level and lifting edges through the same mapping
+  level and lifting edges through the same mapping; nodes coarser than the level
+  (packages at `type`/`file`, files at `type`/`package`) are dropped, unless a finer
+  node falls back to them (package-parented members at `type` level, file-less nodes
+  at `file` level)
 - `graph/Collapser` — maps nodes/edges through collapse rules (longest prefix wins),
   drops loops
 - `graph/GraphBuilder` — builds a `jgrapht` `DefaultDirectedGraph[String, DefaultEdge]`,

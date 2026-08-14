@@ -104,12 +104,16 @@ nodes at the requested level (or above it), the level falls back:
 | `-g` | semanticdb data | jdeps data |
 |---|---|---|
 | `member` | identity (types, members, packages, files) | identity (types only) |
-| `type` | members → their type (package members → the package); files dropped | identity |
-| `file` | types/members → their `file` attribute; fallback: root package | root package (jdeps has no files) |
+| `type` | members → their type (package members → the package); files and package nodes dropped | types only (package nodes dropped) |
+| `file` | types/members → their `file` attribute; fallback: root package; package nodes dropped | root package (jdeps has no files) |
 | `package` | everything → root package; files dropped | everything → root package |
 
-jdeps data has no file or member nodes, so on jdeps data `-g member` and `-g type`
-are the identity and `-g file` behaves like `-g package`.
+Nodes coarser than the requested level are dropped: file nodes at `type`/`package`,
+package nodes at `type`/`file`. A package can still appear at a finer level as a
+fallback — members whose parent is a package map to that package at `-g type`, and
+file-less nodes map to their root package at `-g file` (jdeps data has no file or
+member nodes, so on jdeps data `-g member` is the identity, `-g type` keeps the
+types, and `-g file` behaves like `-g package`).
 
 Errors (exit 1): `exactly one input is required (a json file, or '-' for stdin)`,
 `expected exactly one input (a json file, or '-' for stdin)`,

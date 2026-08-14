@@ -54,13 +54,16 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("\"com.example.modules.module1\" -> \"com.example.util\";"))
   }
 
-  test("analyze -g type shows type nodes") {
+  test("analyze -g type shows type nodes, no package nodes") {
     val out = os.pwd / "tmp" / "cli-test" / "out-types.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val res = runCli("analyze", "-g", "type", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
-    assert(os.read(out).contains("\"com.example.modules.module1.Service1\""))
+    val content = os.read(out)
+    assert(content.contains("\"com.example.modules.module1.Service1\""))
+    assert(!content.contains("\"com.example.modules.module1\"")) // packages dropped at type level
+    assert(!content.contains("\"org.thirdparty\""))
   }
 
   test("analyze accepts long-form flags with values after positionals") {
@@ -77,13 +80,16 @@ class MainSpec extends munit.FunSuite:
     assert(os.read(out).contains("\"com.example.modules.module1.Service1\""))
   }
 
-  test("analyze -g file shows file nodes") {
+  test("analyze -g file shows file nodes, no package nodes") {
     val out = os.pwd / "tmp" / "cli-test" / "out-files.mmd"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val res = runCli("analyze", "-g", "file", "-f", "mermaid", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
-    assert(os.read(out).contains(".scala"))
+    val content = os.read(out)
+    assert(content.contains(".scala"))
+    assert(!content.contains("\"com.example.modules.module1\"")) // packages dropped at file level
+    assert(!content.contains("\"org.thirdparty\""))
   }
 
   test("analyze collapses packages") {

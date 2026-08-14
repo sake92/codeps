@@ -12,8 +12,10 @@ object Aggregator:
   /**
     * Maps every node to its nearest ancestor at `level` (or itself if it is at that level),
     * falling back to the nearest coarser ancestor when the requested level is absent
-    * (e.g. jdeps data has no file/member nodes). File nodes are standalone, so they are
-    * dropped at `type` and `package` levels. Edges are lifted through the same mapping;
+    * (e.g. jdeps data has no file/member nodes). Nodes coarser than the requested level are
+    * dropped: file nodes at `type`/`package` levels, package nodes at `type`/`file` levels
+    * (unless a finer node falls back to them: package-parented members at `type` level,
+    * file-less types at `file` level). Edges are lifted through the same mapping;
     * self-loops and edges with dropped endpoints are removed.
     */
   def aggregate(graph: DepsGraph, level: Level): (Set[String], Set[Edge]) =
@@ -22,13 +24,15 @@ object Aggregator:
       case Level.Member => Some(n.id)
       case Level.Type =>
         n.kind match
-          case NodeKind.`package` | NodeKind.`type` => Some(n.id)
-          case NodeKind.member                      => n.parentId
-          case NodeKind.file                        => None
+          case NodeKind.`package` => None
+          case NodeKind.`type`    => Some(n.id)
+          case NodeKind.member    => n.parentId
+          case NodeKind.file      => None
       case Level.File =>
         n.kind match
-          case NodeKind.`package` | NodeKind.file => Some(n.id)
-          case _                                  => n.file.orElse(n.rootPackageId(nodesById))
+          case NodeKind.`package` => None
+          case NodeKind.file      => Some(n.id)
+          case _                  => n.file.orElse(n.rootPackageId(nodesById))
       case Level.Package =>
         n.kind match
           case NodeKind.`package` => Some(n.id)
