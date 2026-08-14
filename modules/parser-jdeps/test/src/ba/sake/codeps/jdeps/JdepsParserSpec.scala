@@ -1,7 +1,7 @@
 package ba.sake.codeps.jdeps
 
 import ba.sake.codeps.testing.FixtureCompiler
-import ba.sake.codeps.model.{PackageEdge, PkgStats}
+import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
 
 class JdepsParserSpec extends munit.FunSuite:
 
@@ -9,36 +9,56 @@ class JdepsParserSpec extends munit.FunSuite:
 
   val sample = """classes -> java.base
                  |classes -> not found
-                 |   com.example.modules.module1                        -> com.example.util                                   classes
-                 |   com.example.modules.module1                        -> java.lang                                          java.base
-                 |   com.example.modules.module2                        -> com.example.modules.module1                        classes
-                 |   com.example.modules.module2                        -> java.lang                                          java.base
-                 |   com.example.modules.module2                        -> scala                                              not found
-                 |   com.example.util                                   -> java.lang                                          java.base
-                 |
+                 |   com.example.app.Main$                        -> com.example.modules.module2.Service2   classes
+                 |   com.example.app.Main$                        -> java.lang.Object                        java.base
+                 |   com.example.modules.module1.Service1         -> com.example.util.Helper                 classes
+                 |   com.example.modules.module1.Service1         -> java.lang.Object                        java.base
+                 |   com.example.modules.module2.Service2         -> com.example.modules.module1.Service1    classes
+                 |   com.example.modules.module2.Service2         -> org.thirdparty.Ext$                     classes
+                 |   com.example.modules.module2.Service2         -> java.lang.String                        java.base
+                 |   com.example.util.Helper                      -> java.lang.String                        java.base
+                 |   org.thirdparty.Ext$                          -> java.lang.String                        java.base
                  |""".stripMargin
 
-  test("parses indented package lines, skips summary lines") {
+  test("parses class-level detail lines, skips summary lines and externals") {
     val deps = JdepsParser.parse(sample)
-    assertEquals(
-      deps.own,
-      Set("com.example.modules.module1", "com.example.modules.module2", "com.example.util")
-    )
-    assert(deps.edges.contains(PackageEdge("com.example.modules.module1", "com.example.util")))
-    assert(deps.edges.contains(PackageEdge("com.example.modules.module2", "com.example.modules.module1")))
-    assert(!deps.edges.exists(e => e.source == "classes"))
-    assertEquals(deps.stats, Map.empty[String, PkgStats])
+    // Scala object classes lose their trailing `$`
+    assert(deps.nodes.contains(Node("com.example.app.Main", NodeKind.`type`, Some("com.example.app"))))
+    assert(deps.nodes.contains(Node("org.thirdparty.Ext", NodeKind.`type`, Some("org.thirdparty"))))
+    // package nodes come from the FQCN prefixes
+    assert(deps.nodes.contains(Node("com.example.modules.module1", NodeKind.`package`)))
+    // internal class edges kept
+    assert(deps.edges.contains(Edge("com.example.modules.module2.Service2", "org.thirdparty.Ext")))
+    assert(deps.edges.contains(Edge("com.example.modules.module1.Service1", "com.example.util.Helper")))
+    // external (java.*) targets dropped; summary lines ignored
+    assert(!deps.edges.exists(_.target.startsWith("java.")))
+    assert(!deps.nodes.exists(_.id == "classes"))
+  }
+
+  test("inner classes map `$` to `#` with parent chains") {
+    val sample = """classes -> java.base
+                   |   com.example.app.Outer$Inner              -> com.example.app.Outer        classes
+                   |   com.example.app.Outer                    -> java.lang.Object             java.base
+                   |   com.example.app.Outer$Inner$             -> java.lang.Object             java.base
+                   |""".stripMargin
+    val deps = JdepsParser.parse(sample)
+    assert(deps.nodes.contains(Node("com.example.app.Outer#Inner", NodeKind.`type`, Some("com.example.app.Outer"))))
+    assert(deps.nodes.contains(Node("com.example.app.Outer", NodeKind.`type`, Some("com.example.app"))))
+    // the Outer$Inner$ source maps to the same node id; its java.lang.Object target is dropped
+    assert(deps.edges.contains(Edge("com.example.app.Outer#Inner", "com.example.app.Outer")))
+    assertEquals(deps.edges.size, 1)
   }
 
   test("parses real jdeps output of compiled fixtures") {
     val deps = JdepsParser.parse(os.read(FixtureCompiler.jdepsFile))
-    assert(deps.own.contains("com.example.modules.module2"))
-    assert(deps.edges.contains(PackageEdge("com.example.modules.module2", "org.thirdparty")))
-    assert(!deps.edges.exists(e => e.source == "classes"))
+    assert(deps.nodes.contains(Node("com.example.modules.module2.Service2", NodeKind.`type`, Some("com.example.modules.module2"))))
+    assert(deps.edges.contains(Edge("com.example.modules.module2.Service2", "org.thirdparty.Ext")))
+    // self-edges are deliberately kept (Main -> Main$, Ext -> Ext$ collapse); dropped downstream
+    assert(deps.edges.contains(Edge("com.example.app.Main", "com.example.app.Main")))
+    assert(deps.edges.contains(Edge("org.thirdparty.Ext", "org.thirdparty.Ext")))
   }
 
   test("malformed lines are skipped") {
     val deps = JdepsParser.parse("garbage line\nnot an arrow\n   a.b -> \n   -> b.c\n")
-    assertEquals(deps.own, Set.empty[String])
-    assertEquals(deps.edges, Set.empty[PackageEdge])
+    assertEquals(deps, DepsGraph.empty)
   }
