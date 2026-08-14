@@ -8,172 +8,144 @@ class MainSpec extends munit.FunSuite:
 
   val semdbDir = FixtureCompiler.classesDir / "META-INF" / "semanticdb"
 
-  /** Runs the real CLI as a subprocess (os.call equivalent in os-lib 0.11). */
   private def runCli(args: String*): os.CommandResult =
     val cmd: Seq[os.Shellable] =
       Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
         args.map(s => s: os.Shellable)
     os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe)
 
-  test("semdb subcommand produces dot output file") {
+  private def exportJson(name: String): os.Path =
+    val out = os.pwd / "tmp" / "cli-test" / name
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("export", "--from", "semanticdb", semdbDir.toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    out
+
+  test("export --from semanticdb emits the common json format") {
+    val content = os.read(exportJson("deps.json"))
+    assert(content.contains("\"kind\": \"package\""))
+    assert(content.contains("\"kind\": \"type\""))
+    assert(content.contains("\"kind\": \"member\""))
+    assert(content.contains("\"kind\": \"file\""))
+    assert(content.contains("\"com.example.modules.module1.Service1\""))
+  }
+
+  test("export --from jdeps emits type-level json") {
+    val out = os.pwd / "tmp" / "cli-test" / "deps-jdeps.json"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("export", "--from", "jdeps", FixtureCompiler.jdepsFile.toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.contains("\"com.example.modules.module2.Service2\""))
+    assert(!content.contains("\"kind\": \"member\""))
+    assert(!content.contains("\"kind\": \"file\""))
+  }
+
+  test("analyze -g package produces package-level dot") {
     val out = os.pwd / "tmp" / "cli-test" / "out.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "dot", "-o", out.toString)
+    val res = runCli("analyze", "-g", "package", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.startsWith("digraph deps {"))
     assert(content.contains("\"com.example.modules.module1\" -> \"com.example.util\";"))
   }
 
-  test("semdb subcommand collapses packages") {
+  test("analyze -g type shows type nodes") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-types.dot"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("analyze", "-g", "type", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    assert(os.read(out).contains("\"com.example.modules.module1.Service1\""))
+  }
+
+  test("analyze accepts long-form flags with values after positionals") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-long.mmd"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    // reorder moves the positional json after all named args, so this must behave
+    // like the short-form calls even though the positional follows named flags
+    val res = runCli(
+      "analyze", "--granularity", "type", "--format", "mermaid", "--include", "com.example",
+      exportJson("deps.json").toString, "-o", out.toString
+    )
+    assertEquals(res.exitCode, 0)
+    assert(os.read(out).contains("\"com.example.modules.module1.Service1\""))
+  }
+
+  test("analyze -g file shows file nodes") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-files.mmd"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("analyze", "-g", "file", "-f", "mermaid", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    assert(os.read(out).contains(".scala"))
+  }
+
+  test("analyze collapses packages") {
     val out = os.pwd / "tmp" / "cli-test" / "out-collapsed.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val res = runCli(
-      "semdb", semdbDir.toString,
-      "--include", "com.example",
-      "--collapse", "com.example.modules.**",
-      "-f", "dot", "-o", out.toString
+      "analyze", "-g", "package", "-f", "dot", "-c", "com.example.modules.**",
+      exportJson("deps.json").toString, "-o", out.toString
     )
     assertEquals(res.exitCode, 0)
-    val content = os.read(out)
-    assert(content.contains("\"com.example.modules\" -> \"com.example.util\";"))
+    assert(os.read(out).contains("\"com.example.modules\" -> \"com.example.util\";"))
   }
 
-  test("jdeps subcommand works") {
-    val out = os.pwd / "tmp" / "cli-test" / "out-jdeps.json"
+  test("analyze reads from stdin with '-'") {
+    val json = os.read(exportJson("deps.json"))
+    val out = os.pwd / "tmp" / "cli-test" / "out-stdin.mmd"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("jdeps", FixtureCompiler.jdepsFile.toString, "--include", "com.example", "-f", "json", "-o", out.toString)
+    val cmd: Seq[os.Shellable] =
+      Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
+        Seq[os.Shellable]("analyze", "-g", "package", "-f", "mermaid", "-", "-o", out.toString)
+    val res = os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe, stdin = json)
     assertEquals(res.exitCode, 0)
-    val content = os.read(out)
-    assert(content.contains("\"com.example.modules.module1\""))
-    // jdeps carries no per-package file/class info
-    assert(!content.contains("nodeInfo"))
-  }
-
-  test("semdb json output includes nodeInfo with file/class counts") {
-    val out = os.pwd / "tmp" / "cli-test" / "out-nodeinfo.json"
-    os.makeDir.all(out / os.up)
-    os.remove.all(out)
-    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "json", "-o", out.toString)
-    assertEquals(res.exitCode, 0)
-    val content = os.read(out)
-    assert(content.contains("\"nodeInfo\""))
-    assert(content.contains("\"com.example.util\": {\"files\": 1, \"classes\": 1}"))
+    assert(os.read(out).contains("\"com.example.util\""))
   }
 
   test("empty result exits 1") {
-    val res = runCli("semdb", semdbDir.toString, "--include", "no.such.pkg", "-f", "dot")
+    val res = runCli("analyze", "-g", "package", "-f", "dot", "-i", "no.such.pkg", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 1)
-    assert(res.err.text().contains("no packages remain after filtering"))
+    assert(res.err.text().contains("no nodes remain after filtering"))
   }
 
-  test("json subcommand produces dot output") {
-    val input = os.pwd / "tmp" / "cli-test" / "input.json"
-    val out   = os.pwd / "tmp" / "cli-test" / "out-json.dot"
-    os.makeDir.all(out / os.up)
-    os.write.over(
-      input,
-      """{"own": ["com.example.a", "com.example.b"], "edges": [{"source": "com.example.a", "target": "com.example.b"}]}"""
-    )
-    os.remove.all(out)
-    val res = runCli("json", input.toString, "--include", "com.example", "-f", "dot", "-o", out.toString)
-    assertEquals(res.exitCode, 0)
-    val content = os.read(out)
-    assert(content.contains("\"com.example.a\" -> \"com.example.b\";"))
-  }
-
-  test("json subcommand reads from stdin with '-'") {
-    val out = os.pwd / "tmp" / "cli-test" / "out-stdin.json"
-    os.makeDir.all(out / os.up)
-    os.remove.all(out)
-    val input = """{"own": ["com.example.a", "com.example.b"], "edges": [{"source": "com.example.a", "target": "com.example.b"}]}"""
-    val cmd: Seq[os.Shellable] =
-      Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
-        Seq[os.Shellable]("json", "-", "--include", "com.example", "-f", "json", "-o", out.toString)
-    val res = os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe, stdin = input)
-    assertEquals(res.exitCode, 0)
-    val content = os.read(out)
-    assert(content.contains("\"com.example.a\""))
-    assert(content.contains("\"com.example.b\""))
-  }
-
-  test("json subcommand reports cycles in all formats") {
-    val input = os.pwd / "tmp" / "cli-test" / "cycle-input.json"
-    os.makeDir.all(input / os.up)
-    os.write.over(
-      input,
-      """{"own": ["com.example.a", "com.example.b"],
-        | "edges": [
-        |   {"source": "com.example.a", "target": "com.example.b"},
-        |   {"source": "com.example.b", "target": "com.example.a"}
-        | ]}""".stripMargin
-    )
-    val jsonOut = os.pwd / "tmp" / "cli-test" / "out-cycle.json"
-    os.remove.all(jsonOut)
-    val res1 = runCli("json", input.toString, "--include", "com.example", "-f", "json", "-o", jsonOut.toString)
-    assertEquals(res1.exitCode, 0)
-    assert(os.read(jsonOut).contains("\"cycles\": [[\"com.example.a\", \"com.example.b\", \"com.example.a\"]]"))
-
-    val mermaidOut = os.pwd / "tmp" / "cli-test" / "out-cycle.mmd"
-    os.remove.all(mermaidOut)
-    val res2 = runCli("json", input.toString, "--include", "com.example", "-f", "mermaid", "-o", mermaidOut.toString)
-    assertEquals(res2.exitCode, 0)
-    assert(os.read(mermaidOut).contains("%% cycles: com.example.a -> com.example.b -> com.example.a"))
-
-    val dotOut = os.pwd / "tmp" / "cli-test" / "out-cycle.dot"
-    os.remove.all(dotOut)
-    val res3 = runCli("json", input.toString, "--include", "com.example", "-f", "dot", "-o", dotOut.toString)
-    assertEquals(res3.exitCode, 0)
-    assert(os.read(dotOut).contains("// cycles: com.example.a -> com.example.b -> com.example.a"))
-  }
-
-  test("json subcommand round-trips semdb raw output") {
-    val rawFile  = os.pwd / "tmp" / "cli-test" / "deps-raw.json"
-    val viaJson  = os.pwd / "tmp" / "cli-test" / "out-via-json.json"
-    val direct   = os.pwd / "tmp" / "cli-test" / "out-direct.json"
-    os.makeDir.all(rawFile / os.up)
-    os.remove.all(rawFile)
-    os.remove.all(viaJson)
-    os.remove.all(direct)
-    val rawRes = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "raw", "-o", rawFile.toString)
-    assertEquals(rawRes.exitCode, 0)
-    val rawContent = os.read(rawFile)
-    assert(rawContent.contains("\"own\""))
-    assert(rawContent.contains("\"edges\""))
-    assert(rawContent.contains("\"stats\""))
-    val viaJsonRes = runCli("json", rawFile.toString, "--include", "com.example", "-f", "json", "-o", viaJson.toString)
-    assertEquals(viaJsonRes.exitCode, 0)
-    val directRes = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "json", "-o", direct.toString)
-    assertEquals(directRes.exitCode, 0)
-    assertEquals(os.read(viaJson), os.read(direct))
-  }
-
-  test("malformed json input exits 1 with error") {
+  test("malformed json input exits 1") {
     val input = os.pwd / "tmp" / "cli-test" / "bad.json"
     os.makeDir.all(input / os.up)
-    os.write.over(input, """{"own": "not-an-array"}""")
-    val res = runCli("json", input.toString, "--include", "com.example", "-f", "dot")
+    os.write.over(input, """{"nodes": "not-an-array"}""")
+    val res = runCli("analyze", "-g", "package", "-f", "dot", input.toString)
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("failed to parse json"))
   }
 
-  test("nonexistent input exits 1 with clean error") {
-    val res = runCli("semdb", "/nonexistent/path", "--include", "com.example", "-f", "dot")
-    assertEquals(res.exitCode, 1)
-    assert(res.err.text().contains("input path does not exist"))
+  test("bad granularity exits non-zero") {
+    val res = runCli("analyze", "-g", "bogus", "-f", "dot", exportJson("deps.json").toString)
+    assert(res.exitCode != 0)
+    assert(res.err.text().contains("unknown granularity: bogus"))
   }
 
   test("bad format exits non-zero") {
-    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "-f", "bogus")
+    val res = runCli("analyze", "-g", "package", "-f", "bogus", exportJson("deps.json").toString)
     assert(res.exitCode != 0)
     assert(res.err.text().contains("unknown format: bogus"))
   }
 
+  test("nonexistent input exits 1") {
+    val res = runCli("export", "--from", "semanticdb", "/nonexistent/path")
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("input path does not exist"))
+  }
+
   test("bad collapse rule exits 1") {
-    val res = runCli("semdb", semdbDir.toString, "--include", "com.example", "--collapse", "a.b.c", "-f", "dot")
+    val res = runCli("analyze", "-g", "package", "-f", "dot", "-c", "a.b.c", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("collapse rule must end with '**' or '*'"))
   }

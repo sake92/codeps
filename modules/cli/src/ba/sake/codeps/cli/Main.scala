@@ -1,15 +1,15 @@
 package ba.sake.codeps.cli
 
-import ba.sake.codeps.exporting.{DotExporter, JsonExporter, MermaidExporter, OutputFormat, RawJsonExporter}
-import ba.sake.codeps.graph.{Collapser, CycleDetector, Filter, GraphBuilder}
-import ba.sake.codeps.model.{CollapseRule, PackageDeps}
+import ba.sake.codeps.exporting.{DotExporter, MermaidExporter, OutputFormat}
+import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder}
+import ba.sake.codeps.model.{CollapseRule, DepsGraph}
 import ba.sake.codeps.jdeps.JdepsParser
-import ba.sake.codeps.json.JsonParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
+import ba.sake.tupson.{*, given}
 import mainargs.{arg, main, Leftover, ParserForMethods, TokensReader}
 
 object Main:
- 
+
   def main(args: Array[String]): Unit = sys.exit(run(args))
 
   /** Testable entry point: returns the process exit code. */
@@ -28,7 +28,8 @@ object Main:
     else args(0) +: reorderRest(args.drop(1))
 
   private def reorderRest(rest: Seq[String]): Seq[String] =
-    val valueFlags = Set("-i", "--include", "-e", "--exclude", "-c", "--collapse", "-f", "--format", "-o", "--out")
+    val valueFlags = Set("-i", "--include", "-e", "--exclude", "-c", "--collapse", "-f", "--format",
+      "-g", "--granularity", "-o", "--out", "--from", "--root")
     val named    = Seq.newBuilder[String]
     val leftover = Seq.newBuilder[String]
     var i = 0
@@ -44,164 +45,147 @@ object Main:
       i += 1
     named.result() ++ leftover.result()
 
+  enum InputFormat:
+    case Semanticdb, Jdeps
+
+  given TokensReader.Simple[InputFormat] with
+    def shortName: String = "from"
+    def read(strs: Seq[String]): Either[String, InputFormat] =
+      strs match
+        case Seq("semanticdb") => Right(InputFormat.Semanticdb)
+        case Seq("jdeps")      => Right(InputFormat.Jdeps)
+        case Seq(other)        => Left(s"unknown input format: $other (expected semanticdb or jdeps)")
+        case _                 => Left("expected exactly one input format")
+
+  given TokensReader.Simple[Aggregator.Level] with
+    def shortName: String = "granularity"
+    def read(strs: Seq[String]): Either[String, Aggregator.Level] =
+      strs match
+        case Seq("package") => Right(Aggregator.Level.Package)
+        case Seq("file")    => Right(Aggregator.Level.File)
+        case Seq("type")    => Right(Aggregator.Level.Type)
+        case Seq("member")  => Right(Aggregator.Level.Member)
+        case Seq(other)     => Left(s"unknown granularity: $other (expected package, file, type or member)")
+        case _              => Left("expected exactly one granularity")
+
   given TokensReader.Simple[OutputFormat] with
     def shortName: String = "format"
     def read(strs: Seq[String]): Either[String, OutputFormat] =
       strs match
         case Seq("dot")     => Right(OutputFormat.Dot)
-        case Seq("json")    => Right(OutputFormat.Json)
         case Seq("mermaid") => Right(OutputFormat.Mermaid)
-        case Seq("raw")     => Right(OutputFormat.Raw)
-        case Seq(other)     => Left(s"unknown format: $other (expected dot, json, mermaid or raw)")
+        case Seq(other)     => Left(s"unknown format: $other (expected dot or mermaid)")
         case _              => Left("expected exactly one format")
 
   @main
-  def semdb(
-      @arg(short = 'i') include: Seq[String],
-      @arg(short = 'e') exclude: Seq[String],
-      @arg(short = 'c') collapse: Seq[String],
-      @arg(short = 'f') format: OutputFormat,
-      @arg(short = 'o') out: Option[String],
-      leftover: Leftover[String]
-  ): Int =
-    val dirs = leftover.value
-    if dirs.isEmpty then
-      System.err.println("error: at least one directory is required")
-      1
-    else
-      dirs.map(d => os.Path(d, os.pwd)).find(!os.exists(_)) match
-        case Some(missing) =>
-          System.err.println(s"error: input path does not exist: $missing")
-          1
-        case None =>
-          val files = dirs.flatMap(d => os.walk(os.Path(d, os.pwd)).filter(_.ext == "semanticdb").toSeq)
-          analyze(files, SemanticDbParser.parse, include, exclude, collapse, format, out)
-
-  @main
-  def jdeps(
-      @arg(short = 'i') include: Seq[String],
-      @arg(short = 'e') exclude: Seq[String],
-      @arg(short = 'c') collapse: Seq[String],
-      @arg(short = 'f') format: OutputFormat,
-      @arg(short = 'o') out: Option[String],
-      leftover: Leftover[String]
-  ): Int =
-    val files = leftover.value
-    if files.isEmpty then
-      System.err.println("error: at least one file is required")
-      1
-    else
-      val paths = files.map(f => os.Path(f, os.pwd))
-      analyze(paths, bytes => Right(JdepsParser.parse(new String(bytes))), include, exclude, collapse, format, out)
-
-  @main
-  def json(
-      @arg(short = 'i') include: Seq[String],
-      @arg(short = 'e') exclude: Seq[String],
-      @arg(short = 'c') collapse: Seq[String],
-      @arg(short = 'f') format: OutputFormat,
+  def `export`(
+      @arg(short = 'f', name = "from") from: InputFormat,
+      @arg(name = "root") root: Option[String],
       @arg(short = 'o') out: Option[String],
       leftover: Leftover[String]
   ): Int =
     val inputs = leftover.value
     if inputs.isEmpty then
-      System.err.println("error: at least one input is required (a json file, or '-' for stdin)")
+      System.err.println("error: at least one input is required")
+      1
+    else
+      val paths = inputs.map(p => os.Path(p, os.pwd))
+      paths.find(!os.exists(_)) match
+        case Some(missing) =>
+          System.err.println(s"error: input path does not exist: $missing")
+          1
+        case None =>
+          from match
+            case InputFormat.Semanticdb =>
+              paths.find(!os.isDir(_)) match
+                case Some(notDir) =>
+                  System.err.println(s"error: not a directory: $notDir")
+                  1
+                case None =>
+                  var deps = DepsGraph.empty
+                  val workspaceRoot = root.map(r => os.Path(r, os.pwd)).getOrElse(os.pwd)
+                  val files = paths.flatMap(d => os.walk(d).filter(_.ext == "semanticdb").toSeq)
+                  if files.isEmpty then
+                    System.err.println("error: no .semanticdb files found")
+                    1
+                  else
+                    for f <- files do
+                      SemanticDbParser.parse(os.read.bytes(f), workspaceRoot.toNIO) match
+                        case Right(d)  => deps = deps.merge(d)
+                        case Left(err) => System.err.println(s"warning: $err")
+                    writeOutput(deps.withoutDanglingEdges.toJson(spaces = 2, sort = true), out)
+                    0
+            case InputFormat.Jdeps =>
+              paths.find(!os.isFile(_)) match
+                case Some(notFile) =>
+                  System.err.println(s"error: not a file: $notFile")
+                  1
+                case None =>
+                  var deps = DepsGraph.empty
+                  for f <- paths do
+                    deps = deps.merge(JdepsParser.parse(os.read(f)))
+                  writeOutput(deps.toJson(spaces = 2, sort = true), out)
+                  0
+
+  @main
+  def analyze(
+      @arg(short = 'g') granularity: Aggregator.Level,
+      @arg(short = 'f') format: OutputFormat,
+      @arg(short = 'i') include: Seq[String],
+      @arg(short = 'e') exclude: Seq[String],
+      @arg(short = 'c') collapse: Seq[String],
+      @arg(short = 'o') out: Option[String],
+      leftover: Leftover[String]
+  ): Int =
+    val inputs = leftover.value
+    if inputs.isEmpty then
+      System.err.println("error: exactly one input is required (a json file, or '-' for stdin)")
       1
     else if inputs.size > 1 then
       System.err.println("error: expected exactly one input (a json file, or '-' for stdin)")
       1
     else
       val input = inputs.head
-      if input == "-" then
-        parseJsonInput(new String(System.in.readAllBytes()), include, exclude, collapse, format, out)
-      else
-        val path = os.Path(input, os.pwd)
-        if !os.exists(path) then
-          System.err.println(s"error: input path does not exist: $path")
+      val text =
+        if input == "-" then
+          new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+        else
+          val path = os.Path(input, os.pwd)
+          if !os.exists(path) then
+            System.err.println(s"error: input path does not exist: $path")
+            return 1
+          os.read(path)
+      try
+        val graph = text.parseJson[DepsGraph]
+        val filtered = Filter(graph, include, exclude)
+        if filtered.nodes.isEmpty then
+          System.err.println("error: no nodes remain after filtering")
           1
         else
-          parseJsonInput(os.read(path), include, exclude, collapse, format, out)
-
-  private def parseJsonInput(
-      text: String,
-      include: Seq[String],
-      exclude: Seq[String],
-      collapse: Seq[String],
-      format: OutputFormat,
-      out: Option[String]
-  ): Int =
-    JsonParser.parse(text) match
-      case Left(err) =>
-        System.err.println(s"error: $err")
-        1
-      case Right(deps) =>
-        process(deps, include, exclude, collapse, format, out)
-
-  private def analyze(
-      files: Seq[os.Path],
-      parse: Array[Byte] => Either[String, PackageDeps],
-      include: Seq[String],
-      exclude: Seq[String],
-      collapse: Seq[String],
-      format: OutputFormat,
-      out: Option[String]
-  ): Int =
-    if files.isEmpty then
-      System.err.println("error: no files found")
-      1
-    else
-      files.find(f => !os.exists(f)) match
-        case Some(f) =>
-          System.err.println(s"error: input path does not exist: $f")
+          val rulesResult = collapse.foldLeft(Right(Nil): Either[String, Seq[CollapseRule]]) { (acc, pattern) =>
+            for
+              rules <- acc
+              rule  <- CollapseRule.parse(pattern)
+            yield rules :+ rule
+          }
+          rulesResult match
+            case Left(err) =>
+              System.err.println(s"error: $err")
+              1
+            case Right(rules) =>
+              val (nodes, edges) = Aggregator.aggregate(filtered, granularity)
+              val (collapsedNodes, collapsedEdges) = Collapser.collapse(nodes, edges, rules)
+              val g = GraphBuilder.build(collapsedNodes, collapsedEdges)
+              val cycles = CycleDetector.detect(g)
+              val content = format match
+                case OutputFormat.Dot     => DotExporter.render(g, cycles)
+                case OutputFormat.Mermaid => MermaidExporter.render(g, cycles)
+              writeOutput(content, out)
+              0
+      catch
+        case e: ba.sake.tupson.TupsonException =>
+          System.err.println(s"error: failed to parse json: ${e.getMessage}")
           1
-        case None =>
-          var deps = PackageDeps.empty
-          for f <- files do
-            parse(os.read.bytes(f)) match
-              case Right(d)  => deps = deps.merge(d)
-              case Left(err) => System.err.println(s"warning: $err")
-          process(deps, include, exclude, collapse, format, out)
-
-  private def process(
-      deps: PackageDeps,
-      include: Seq[String],
-      exclude: Seq[String],
-      collapse: Seq[String],
-      format: OutputFormat,
-      out: Option[String]
-  ): Int =
-    val rulesResult = collapse.foldLeft(Right(Nil): Either[String, Seq[CollapseRule]]) { (acc, pattern) =>
-      for
-        rules <- acc
-        rule  <- CollapseRule.parse(pattern)
-      yield rules :+ rule
-    }
-    rulesResult match
-      case Left(err) =>
-        System.err.println(s"error: $err")
-        1
-      case Right(rules) =>
-        val (universe, filteredEdges, filteredCounts) = Filter(deps.own, deps.edges, deps.stats, include, exclude)
-        if universe.isEmpty then
-          System.err.println("error: no packages remain after filtering")
-          1
-        else if format == OutputFormat.Raw then
-          // raw = the common JSON input format, emitted after filtering but before collapsing
-          // (collapsing would destroy the edges needed for further passes)
-          writeOutput(RawJsonExporter.render(PackageDeps(universe, filteredEdges, filteredCounts)), out)
-          0
-        else
-          val (collapsedNodes, collapsedEdges, collapsedCounts) =
-            Collapser.collapse(universe, filteredEdges, filteredCounts, rules)
-          val graph = GraphBuilder.build(collapsedNodes, collapsedEdges)
-          val cycles = CycleDetector.detect(graph)
-          val content = format match
-            case OutputFormat.Dot     => DotExporter.render(graph, cycles)
-            case OutputFormat.Json    => JsonExporter.render(graph, collapsedCounts, cycles)
-            case OutputFormat.Mermaid => MermaidExporter.render(graph, cycles)
-            case OutputFormat.Raw     => "" // handled above
-          writeOutput(content, out)
-          0
 
   private def writeOutput(content: String, out: Option[String]): Unit =
     out match
