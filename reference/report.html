@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="the codeps report JSON format, cycle grades and suggestions">
+  <title> Cycle analysis report | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#cycle-analysis-report">Cycle analysis report</a>
+         <ul>
+          <li><a href="#structure">Structure</a></li>
+          <li><a href="#cycles-and-grades">Cycles and grades</a></li>
+          <li><a href="#suggestions">Suggestions</a></li>
+          <li><a href="#private-symbols">Private symbols</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="cycle-analysis-report">Cycle analysis report<a href="#cycle-analysis-report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p><code>codeps report</code> runs the analysis pipeline at every granularity in one pass and emits a single, self-contained JSON document: per-level graphs, cycle grades, metrics and suggestions. It is the input for the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a>'s report mode, and is shaped for agents to consume directly — no further computation needed.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps report - &gt; report.json
+</code></pre>
+   <h2 id="structure">Structure<a href="#structure" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"levels"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"package"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">"graph"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"metrics"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"cycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"suggestions"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"file"</span><span class="hljs-punctuation">:</span>    <span class="hljs-punctuation">{</span> <span class="hljs-attr">"graph"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"metrics"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"cycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"suggestions"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"type"</span><span class="hljs-punctuation">:</span>    <span class="hljs-punctuation">{</span> <span class="hljs-attr">"graph"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"metrics"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"cycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"suggestions"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"member"</span><span class="hljs-punctuation">:</span>  <span class="hljs-punctuation">{</span> <span class="hljs-attr">"graph"</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">null</span></span><span class="hljs-punctuation">,</span>  <span class="hljs-attr">"metrics"</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">null</span></span><span class="hljs-punctuation">,</span>  <span class="hljs-attr">"cycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>...<span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"suggestions"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>...<span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+   <ul>
+    <li><strong><code>graph</code></strong> — the nodes/edges of the level (same shape as the common JSON format), embedded for package/file/type. The member-level graph is too large to embed usefully (<code>null</code>); its cycles are still reported.</li>
+    <li><strong><code>metrics</code></strong> — per-node <code>{in, out, hub}</code> counts (<code>hub = in × out</code>), package/file/type only.</li>
+    <li><strong><code>cycles</code></strong> — see below.</li>
+    <li><strong><code>suggestions</code></strong> — see below.</li>
+   </ul>
+   <h2 id="cycles-and-grades">Cycles and grades<a href="#cycles-and-grades" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Each cycle:</p>
+   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"members"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span>   <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"severity"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"bad"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"breakCandidate"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+   <ul>
+    <li><code>members</code> — the cycle in true dependency order (last = first).</li>
+    <li><code>edges</code> — the cycle's edges, consecutive pairs of <code>members</code>.</li>
+    <li><code>severity</code> — one of: | Grade | Meaning | Applies to | |---|---|---| | <code>bad</code> | should be broken | package cycles | | <code>meh</code> | worth a look | file cycles; type/member cycles that cross files or whose file is unknown (jdeps input) | | <code>fine</code> | normal, leave it | type/member cycles entirely within one file |</li>
+    <li><code>breakCandidate</code> — the cycle member with the lowest degree in the graph: the least costly one to detach if you want to break the cycle.</li>
+   </ul>
+   <p>Cycles are detected as strongly connected components of size ≥ 2; one representative elementary cycle is reported per component (direct self-recursion is not a cycle).</p>
+   <h2 id="suggestions">Suggestions<a href="#suggestions" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"breakEdges"</span><span class="hljs-punctuation">:</span>  <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span><span class="hljs-attr">"edge"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"breaks"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"hardestKnots"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"easyWins"</span><span class="hljs-punctuation">:</span>     <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">]</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+   <ul>
+    <li><code>breakEdges</code> — every edge that participates in a reported cycle, ranked by how many cycles it breaks (with one representative cycle per component this is usually <code>1</code>) — the concrete cut list.</li>
+    <li><code>hardestKnots</code> — packages that are both heavily used and heavily using (highest <code>in × out</code>), top 5. Package level only.</li>
+    <li><code>easyWins</code> — packages with the most outgoing dependencies, fewest dependents as tiebreak, top 5. Package level only.</li>
+   </ul>
+   <h2 id="private-symbols">Private symbols<a href="#private-symbols" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>codeps export --from semanticdb</code> skips class-scoped private symbols (<code>private</code>, <code>private[this]</code>): they can never create cross-package dependencies, so they only add noise at the type/member levels. References inside them are attributed to the nearest non-private ancestor (enclosing type, else file/package), so package- and file-level results are unaffected. Package-private (<code>private[pkg]</code>) and <code>protected</code> symbols are kept.</p>
+   <div role="group">
+    <a role="button" href="https://sake92.github.io/codeps/reference/cli.html">⬅️ CLI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats ➡️</a>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+ </body>
+</html>

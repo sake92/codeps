@@ -48,9 +48,8 @@
          <ul>
           <li><a href="#prerequisites">Prerequisites</a></li>
           <li><a href="#get-the-cli">Get the CLI</a></li>
-          <li><a href="#generate-analysis-input">Generate analysis input</a></li>
+          <li><a href="#export-the-graph">Export the graph</a></li>
           <li><a href="#analyze">Analyze</a></li>
-          <li><a href="#visualize">Visualize</a></li>
           <li><a href="#whats-next">What's next?</a></li>
          </ul></li>
        </ul>
@@ -64,47 +63,39 @@
    <h1 id="quickstart">Quickstart<a href="#quickstart" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <h2 id="prerequisites">Prerequisites<a href="#prerequisites" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
-    <li>JDK 11+ (Scala 3 projects need a recent JDK anyway)</li>
+    <li>JDK 11+</li>
    </ul>
    <h2 id="get-the-cli">Get the CLI<a href="#get-the-cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
 </code></pre>
-   <h2 id="generate-analysis-input">Generate analysis input<a href="#generate-analysis-input" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>codeps reads what your compiler already produced — no build integration required. Your normal local build already creates the inputs: <code>.semanticdb</code> files (if SemanticDB is enabled) and compiled <code>.class</code> files.</p>
+   <p>(<code>codeps</code> below is shorthand for <code>java -jar codeps.jar</code>.)</p>
+   <h2 id="export-the-graph">Export the graph<a href="#export-the-graph" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>codeps reads what your compiler already produced — no build integration required.</p>
    <p><strong>Scala</strong> — compile with SemanticDB enabled (here with scala-cli):</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">scala-cli compile --server=false --semanticdb -d classes src/
 <span class="hljs-meta prompt_"># </span><span class="language-bash">-&gt; classes/META-INF/semanticdb/**/*.semanticdb</span>
 </code></pre>
-   <p>If your build tool already enables SemanticDB (e.g. sbt/Maven with the <code>semanticdb</code> compiler plugin), the <code>.semanticdb</code> files are already on disk — you only need to point codeps at the directory that contains them.</p>
+   <p>Then export the graph to the common JSON format:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+</code></pre>
+   <p>If your build tool already enables SemanticDB (sbt/Maven with the <code>semanticdb</code> compiler plugin), the <code>.semanticdb</code> files are already on disk — just point <code>export</code> at the directory that contains them.</p>
    <p><strong>Java or mixed</strong> — use the JDK's own analyzer:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:package -filter:none -cp classes classes &gt; jdeps.txt
+   <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:class -filter:none -cp classes classes &gt; jdeps.txt
+codeps export --from jdeps jdeps.txt -o deps.json
 </code></pre>
-   <p>Your build already produced the <code>.class</code> files; <code>jdeps</code> ships with every JDK, so there is nothing extra to install.</p>
-   <p>See <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB analysis</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps analysis</a> for details.</p>
+   <p>See <a href="https://sake92.github.io/codeps/howtos/semdb.html">Scala/SemanticDB projects</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">Java/JVM projects with jdeps</a> for details.</p>
    <h2 id="analyze">Analyze<a href="#analyze" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Run the CLI:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">SemanticDB input: point at the directory containing *.semanticdb files</span>
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
-<span class="hljs-meta prompt_">
-# </span><span class="language-bash">jdeps input: point at the jdeps output file</span>
-java -jar codeps.jar jdeps jdeps.txt -i com.example -f dot
+   <p>Render the graph at package granularity as Mermaid:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f mermaid deps.json
 </code></pre>
-   <p>Both print the dependency graph to stdout. Example output:</p>
-   <pre><code class="language-dot">digraph deps {
-  "com.example.app" -&gt; "com.example.modules.module2";
-  "com.example.modules.module1" -&gt; "com.example.util";
-  "com.example.modules.module2" -&gt; "com.example.modules.module1";
-}
+   <p>or pipe export straight into draw:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f mermaid -
 </code></pre>
-   <h2 id="visualize">Visualize<a href="#visualize" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Export as JSON and open it in the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a>:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json -o graph.json
-</code></pre>
-   <p>Then open the demo page and <strong>drop <code>graph.json</code></strong> onto it (or use <em>Paste</em> / <em>Load</em>).</p>
+   <p>For deeper views use <code>-g type</code> or <code>-g file</code> (and <code>-g member</code> on Scala data). DOT is equally easy — just swap <code>-f mermaid</code> for <code>-f dot</code>.</p>
    <h2 id="whats-next">What's next?<a href="#whats-next" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li>Filter and collapse packages: <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a></li>
-    <li>Export to other formats: <a href="https://sake92.github.io/codeps/howtos/exporting.html">Exporting graphs</a></li>
+    <li>Explore a graph interactively: drop <code>deps.json</code> onto the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">demo</a></li>
     <li>Understand the internals: <a href="https://sake92.github.io/codeps/reference/architecture.html">Architecture</a></li>
    </ul>
   </main>

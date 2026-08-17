@@ -60,25 +60,33 @@
     <div></div>
    </div>
    <h1 id="codeps">codeps<a href="#codeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>codeps is a <strong>code package dependency analyzer</strong> for JVM projects (Java and Scala). It parses existing compiler output — <a href="https://scalameta.org/docs/semanticdb/specification.html">SemanticDB</a> or <code>jdeps</code> — and produces a <strong>package-level dependency graph</strong>, which you can export as <a href="https://sake92.github.io/codeps/howtos/exporting.html">DOT</a>, <a href="https://sake92.github.io/codeps/howtos/exporting.html">JSON</a> or <a href="https://sake92.github.io/codeps/howtos/exporting.html">Mermaid</a>.</p>
+   <p>codeps is a <strong>code dependency analyzer</strong> for JVM projects (Java and Scala). It works in two steps: <code>codeps export</code> parses existing compiler output — <a href="https://scalameta.org/docs/semanticdb/specification.html">SemanticDB</a> or <code>jdeps</code> — into a <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON graph format</a>; then <code>codeps draw</code> renders it as <a href="https://sake92.github.io/codeps/reference/export-formats.html">DOT or Mermaid</a> at any granularity (package, file, type or member), and <code>codeps report</code> emits a multi-level <a href="https://sake92.github.io/codeps/reference/report.html">cycle analysis report</a> with grades and suggestions.</p>
    <p>No build-system integration needed: your local build tools already produce the inputs — <code>.semanticdb</code> files from a Scala compiler with SemanticDB enabled, and <code>.class</code> files for the JDK's <code>jdeps</code> — codeps just reads them.</p>
    <blockquote>
-    <p><strong>New here?</strong> Start with the <a href="https://sake92.github.io/codeps/tutorials/quickstart.html">Quickstart</a>. Want to explore a graph interactively? Try the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> — it loads graphs exported with <code>-f json</code>.</p>
+    <p><strong>New here?</strong> Start with the <a href="https://sake92.github.io/codeps/tutorials/quickstart.html">Quickstart</a>. Want to explore a graph interactively? Try the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> — it loads graphs produced by <code>codeps export</code> and analysis reports from <code>codeps report</code>.</p>
    </blockquote>
    <h2 id="features">Features<a href="#features" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li><strong>Two input formats:</strong>
      <ul>
-      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB</a> — detailed, from Scala compiler output (<code>.semanticdb</code> files), with per-package file/class stats</li>
-      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps</a> — from the JDK's own <code>jdeps -verbose:package</code> output, no extra tooling needed</li>
+      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB</a> — detailed, from Scala compiler output (<code>.semanticdb</code> files): package/file/type/member nodes</li>
+      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps</a> — from the JDK's own <code>jdeps -verbose:class</code> output, no extra tooling needed</li>
      </ul></li>
-    <li><strong>Filtering</strong> — keep only packages matching <code>--include</code> patterns, drop noise with <code>--exclude</code> (e.g. <code>java.*</code>, <code>scala.*</code>)</li>
-    <li><strong>Collapsing</strong> — merge whole package subtrees with <code>--collapse</code> rules (<code>com.example.**</code>, <code>org.lib.*</code>)</li>
-    <li><strong>Three export formats</strong> — <a href="https://sake92.github.io/codeps/reference/export-formats.html">DOT, JSON, Mermaid</a></li>
-    <li><strong>Interactive demo</strong> — a standalone <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">graph viewer</a>: layouts, filtering, degree analysis, package suggestions</li>
+    <li><strong>Four granularities</strong> — render the graph at <code>package</code>, <code>file</code>, <code>type</code> or <code>member</code> level with <code>-g</code></li>
+    <li><strong>Cycle analysis</strong> — <code>codeps report</code> grades every cycle at every granularity (<code>bad</code> / <code>meh</code> / <code>fine</code>) with suggestions what to fix</li>
+    <li><strong>Filtering</strong> — keep only nodes matching <code>--include</code> patterns, drop noise with <code>--exclude</code> (e.g. <code>java.*</code>, <code>scala.*</code>)</li>
+    <li><strong>Collapsing</strong> — merge whole subtrees with <code>--collapse</code> rules (<code>com.example.**</code>, <code>org.lib.*</code>)</li>
+    <li><strong>Two output formats</strong> — <a href="https://sake92.github.io/codeps/reference/export-formats.html">DOT and Mermaid</a></li>
+    <li><strong>Interactive demo</strong> — a standalone <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">graph viewer</a>: layouts, filtering, degree analysis, cycle highlighting, package suggestions</li>
    </ul>
    <h2 id="quick-example">Quick example<a href="#quick-example" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f dot -
+</code></pre>
+   <pre><code class="language-dot">digraph deps {
+  "com.example.app" -&gt; "com.example.modules.module2";
+  "com.example.modules.module1" -&gt; "com.example.util";
+  "com.example.modules.module2" -&gt; "com.example.modules.module1";
+}
 </code></pre>
    <pre><code class="language-dot">digraph deps {
   "com.example.app" -&gt; "com.example.modules.module2";
@@ -97,23 +105,24 @@
     <li>
      <p><a href="https://sake92.github.io/codeps/howtos">How Tos</a> — goal-oriented recipes for specific tasks</p>
      <ul>
-      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB analysis</a></li>
-      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps analysis</a></li>
-      <li><a href="https://sake92.github.io/codeps/howtos/exporting.html">Exporting graphs</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">Export &amp; analyze Scala/SemanticDB projects</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">Export &amp; analyze Java/JVM projects with jdeps</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/exporting.html">How to export the graph</a></li>
      </ul>
     </li>
     <li>
      <p><a href="https://sake92.github.io/codeps/reference">Reference</a> — complete descriptions of commands, config, and internals</p>
      <ul>
       <li><a href="https://sake92.github.io/codeps/reference/cli.html">CLI</a></li>
+      <li><a href="https://sake92.github.io/codeps/reference/report.html">Cycle analysis report</a></li>
       <li><a href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats</a></li>
-      <li><a href="https://sake92.github.io/codeps/reference/json-input.html">JSON input format</a></li>
+      <li><a href="https://sake92.github.io/codeps/reference/json-input.html">Common JSON format</a></li>
       <li><a href="https://sake92.github.io/codeps/reference/architecture.html">Architecture</a></li>
      </ul>
     </li>
    </ul>
    <h2 id="demo">Demo<a href="#demo" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">Open the interactive graph demo</a> — drop a JSON graph (as exported by <code>-f json</code>) onto the page, then filter, focus and analyze packages.</p>
+   <p><a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">Open the interactive graph demo</a> — drop a graph JSON (as produced by <code>codeps export</code>) or an analysis report (from <code>codeps report</code>) onto the page, then filter, focus and analyze packages; report mode highlights cycle edges, grades them and lists suggestions.</p>
   </main>
   <footer class="pico container">codeps | Code package dependency analyzer</footer>
  </body>

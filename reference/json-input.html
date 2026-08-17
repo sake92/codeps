@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="the common JSON input format consumed by the codeps json subcommand">
-  <title> JSON input format | codeps </title>
+  <meta name="description" content="the common JSON graph format produced by codeps export and consumed by codeps draw">
+  <title> Common JSON format | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
@@ -44,9 +44,12 @@
       <summary>Table of Contents</summary>
       <div>
        <ul>
-        <li><a href="#json-input-format">JSON input format</a>
+        <li><a href="#common-json-format">Common JSON format</a>
          <ul>
-          <li><a href="#schema">Schema</a></li>
+          <li><a href="#schema">Schema</a>
+           <ul>
+            <li><a href="#id-rules">Id rules</a></li>
+           </ul></li>
           <li><a href="#producing-it">Producing it</a></li>
          </ul></li>
        </ul>
@@ -57,71 +60,99 @@
     <div></div>
     <div></div>
    </div>
-   <h1 id="json-input-format">JSON input format<a href="#json-input-format" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>The <code>json</code> subcommand reads package-level dependency info from a JSON document. It is the only input format codeps consumes that you produce yourself — with any tool you like, in any language. Codeps applies its usual pipeline (filter, collapse, export) on top.</p>
-   <p>The format is also what <code>-f raw</code> emits from the <code>semdb</code>/<code>jdeps</code> subcommands, so analyses can be saved and re-run.</p>
-   <h2 id="schema">Schema<a href="#schema" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <h1 id="common-json-format">Common JSON format<a href="#common-json-format" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>The common JSON format is the contract between the two codeps steps: <code>codeps export</code> <em>produces</em> it, <code>codeps draw</code> <em>consumes</em> it. It is a self-contained dependency graph with <code>package</code>/<code>file</code>/<code>type</code>/<code>member</code> nodes and directed edges between node ids.</p>
    <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"own"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">}</span>
+  <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"package"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"file"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"type"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"parentId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"file"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo#doWork"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"member"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"parentId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"file"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.topLevelHelper"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"member"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"parentId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"stats"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">"com.example.a"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"fileCount"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classCount"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">}</span>
+  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo#doWork"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.topLevelHelper"</span><span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">]</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
+   <h2 id="schema">Schema<a href="#schema" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <table>
     <thead>
      <tr>
       <th>Field</th>
       <th>Type</th>
-      <th>Required</th>
       <th>Meaning</th>
      </tr>
     </thead>
     <tbody>
      <tr>
-      <td><code>own</code></td>
-      <td><code>string[]</code></td>
-      <td>no*</td>
-      <td>the project's own packages; the basis for include/exclude filtering</td>
+      <td><code>nodes</code></td>
+      <td><code>[{id, kind, parentId?, file?}]</code></td>
+      <td>the graph's nodes; a set, so each <code>id</code> appears once</td>
      </tr>
      <tr>
       <td><code>edges</code></td>
       <td><code>[{source, target}]</code></td>
-      <td>no*</td>
-      <td>package-level dependency edges; endpoints may be outside <code>own</code></td>
-     </tr>
-     <tr>
-      <td><code>stats</code></td>
-      <td><code>{pkg: {fileCount, classCount}}</code></td>
-      <td>no</td>
-      <td>per-package metadata, shown as <code>nodeInfo</code> in JSON export; omit when your tool has no stats</td>
+      <td>directed dependency edges between node ids; a set (deduplicated)</td>
      </tr>
     </tbody>
    </table>
-   <p>* <code>own</code> and <code>edges</code> default to empty when missing. <code>fileCount</code> and <code>classCount</code> are required integers in every <code>stats</code> entry.</p>
-   <p>Unknown keys are ignored. Type errors and missing required fields fail with a helpful path, e.g.:</p>
-   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">error: failed to parse json: Key '$.edges' expected array, but got string
+   <p>Node fields:</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Field</th>
+      <th>Type</th>
+      <th>Meaning</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>id</code></td>
+      <td>string</td>
+      <td>hierarchical id, unique within the graph</td>
+     </tr>
+     <tr>
+      <td><code>kind</code></td>
+      <td>string</td>
+      <td><code>package</code>, <code>file</code>, <code>type</code> or <code>member</code> (lowercase)</td>
+     </tr>
+     <tr>
+      <td><code>parentId</code></td>
+      <td>string (optional)</td>
+      <td>nearest enclosing node; <code>package</code> and <code>file</code> nodes are standalone (no <code>parentId</code>)</td>
+     </tr>
+     <tr>
+      <td><code>file</code></td>
+      <td>string (optional)</td>
+      <td>on <code>type</code>/<code>member</code> nodes: the id of their source <code>file</code> node</td>
+     </tr>
+    </tbody>
+   </table>
+   <h3 id="id-rules">Id rules<a href="#id-rules" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h3>
+   <ul>
+    <li><strong>package</strong> — dotted name: <code>com.example.a</code>. Standalone (no <code>parentId</code>).</li>
+    <li><strong>file</strong> — workspace-relative path: <code>src/com/example/a/Foo.scala</code>. Standalone (no <code>parentId</code>).</li>
+    <li><strong>type</strong> — <code>com.example.a.Foo</code>; nested types use <code>#</code>: <code>com.example.a.Outer#Inner</code>. <code>parentId</code> is the enclosing type or the package.</li>
+    <li><strong>member</strong> — <code>com.example.a.Foo#doWork</code> (a type member; <code>parentId</code> = the type) or <code>com.example.a.topLevelHelper</code> (a package member; <code>parentId</code> = the package, no <code>#</code>).</li>
+   </ul>
+   <p>The hierarchy is only package → type → member, plus member → package directly. Edges can go between nodes of any kinds, e.g. a member of one type referencing a member of another.</p>
+   <p>Only the project's own symbols appear: references to external symbols are dropped by the producers. The format has no <code>own</code> array, no <code>stats</code> and no version field; unknown node kinds or fields are rejected with a helpful parse error, e.g.:</p>
+   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">error: failed to parse json: ...
 </code></pre>
    <h2 id="producing-it">Producing it<a href="#producing-it" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Codeps does not ship converters — the point is that <em>you</em> produce the JSON with the dependency tool of your ecosystem. The examples below are sketches; adapt them to your tool's output.</p>
-   <p>JavaScript/TypeScript (file-level deps from <a href="https://github.com/pahen/madge">madge</a> mapped to packages, e.g. by tsconfig <code>rootDir</code>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '
-  to_entries
-  | { own: [.[].key | split("/")[0:2] | join(".")] }
-  ...
-' | java -jar codeps.jar json - -i src -f mermaid
+   <p>The easiest way to see the exact shape is to run the exporter:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+</code></pre>
+   <p>External tools can emit nodes+edges JSON directly (matching the schema above) and pipe it into <code>codeps draw ... -</code>. The examples below are sketches; adapt them to your tool's output. The key points: give every node a unique <code>id</code> and a valid <code>kind</code>, and reference only existing ids in <code>edges</code>.</p>
+   <p>JavaScript/TypeScript (file-level deps from <a href="https://github.com/pahen/madge">madge</a> mapped to file/package nodes, e.g. by tsconfig <code>rootDir</code>):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '...' | codeps draw -g file -f mermaid -
 </code></pre>
    <p>Python (module-level deps from <a href="https://github.com/thebjorn/pydeps">pydeps</a>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">pydeps --json mypackage | jq '...' | java -jar codeps.jar json - -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">pydeps --json mypackage | jq '...' | codeps draw -g package -f dot -
 </code></pre>
    <p>Go (<code>go list</code> already emits package-level import deps):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">go list -json ./... | jq '...' | java -jar codeps.jar json - -f json
-</code></pre>
-   <p>The easiest way to see the exact shape is to round-trip an existing analysis:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f raw
+   <pre><code class="language-shell hljs" data-highlighted="yes">go list -json ./... | jq '...' | codeps draw -g package -f dot -
 </code></pre>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/reference/export-formats.html">⬅️ Export formats</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/architecture.html">Architecture ➡️</a>

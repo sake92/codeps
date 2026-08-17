@@ -46,12 +46,14 @@
        <ul>
         <li><a href="#cli">CLI</a>
          <ul>
-          <li><a href="#common-options">Common options</a></li>
-          <li><a href="#semdb">semdb</a></li>
-          <li><a href="#jdeps">jdeps</a></li>
-          <li><a href="#json">json</a></li>
+          <li><a href="#export">export</a></li>
+          <li><a href="#draw">draw</a>
+           <ul>
+            <li><a href="#granularity">Granularity</a></li>
+           </ul></li>
           <li><a href="#include--exclude-patterns">Include / exclude patterns</a></li>
           <li><a href="#collapse-rules">Collapse rules</a></li>
+          <li><a href="#report">report</a></li>
           <li><a href="#exit-codes-and-errors">Exit codes and errors</a></li>
           <li><a href="#building-from-source">Building from source</a></li>
          </ul></li>
@@ -64,84 +66,143 @@
     <div></div>
    </div>
    <h1 id="cli">CLI<a href="#cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>) with three subcommands: <a href="#semdb"><code>semdb</code></a> for SemanticDB input, <a href="#jdeps"><code>jdeps</code></a> for jdeps input and <a href="#json"><code>json</code></a> for the <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON input format</a>. Download the prebuilt jar (requires a JDK, 11+) and run it with <code>java -jar</code>:</p>
+   <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>) with three subcommands that form a two-step pipeline:</p>
+   <ol>
+    <li><a href="#export"><code>export</code></a> — the <em>producer</em>: parses raw input (<code>semanticdb</code> or <code>jdeps</code>) and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON graph format</a>. No analysis.</li>
+    <li><a href="#draw"><code>draw</code></a> — the <em>renderer</em>: consumes that JSON (a file or stdin) and renders dot or mermaid at any granularity.</li>
+    <li><a href="#report"><code>report</code></a> — the <em>analyzer</em>: consumes that JSON and emits a multi-level <a href="https://sake92.github.io/codeps/reference/report.html">cycle analysis report</a>.</li>
+   </ol>
+   <p>Download the prebuilt jar (requires a JDK, 11+) and run it with <code>java -jar</code>:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
 java -jar codeps.jar &lt;subcommand&gt; [options] &lt;inputs...&gt;
 </code></pre>
-   <h2 id="common-options">Common options<a href="#common-options" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>All subcommands share these options:</p>
+   <p>The examples below use <code>codeps</code> as shorthand for <code>java -jar codeps.jar</code>.</p>
+   <p>The steps pipe together — <code>export</code> writes the graph to stdout, <code>draw</code>/<code>report</code> read it from stdin (<code>-</code>):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
+</code></pre>
+   <h2 id="export">export<a href="#export" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb|jdeps [--root &lt;dir&gt;] [-o out] &lt;inputs...&gt;
+</code></pre>
+   <p>Pure producer: parses the raw input and emits the common JSON graph (<code>{"nodes": [...], "edges": [...]}</code>) to stdout, or to the <code>-o</code> file. There are no include/exclude/collapse flags here — filtering and aggregation are the analyzer's job.</p>
    <table>
     <thead>
      <tr>
-      <th>Short</th>
-      <th>Long</th>
+      <th>Option</th>
       <th>Description</th>
      </tr>
     </thead>
     <tbody>
      <tr>
-      <td><code>-i</code></td>
-      <td><code>--include</code></td>
-      <td>Package pattern; keep only packages matching it. Repeatable. A pattern <code>ba.sake</code> matches <code>ba.sake</code> and everything below it.</td>
+      <td><code>--from</code> (<code>-f</code>)</td>
+      <td>Input format: <code>semanticdb</code> or <code>jdeps</code>. Required.</td>
      </tr>
      <tr>
-      <td><code>-e</code></td>
-      <td><code>--exclude</code></td>
-      <td>Package pattern; drop matching packages. Excludes win over includes. Repeatable.</td>
+      <td><code>--root</code></td>
+      <td>semanticdb only. Makes source URIs relative to this directory (default: the current working directory).</td>
      </tr>
      <tr>
-      <td><code>-c</code></td>
-      <td><code>--collapse</code></td>
+      <td><code>-o</code> / <code>--out</code></td>
+      <td>Write the JSON to this file instead of stdout.</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Inputs:</p>
+   <ul>
+    <li><code>semanticdb</code> — <strong>directories</strong>, walked recursively for <code>*.semanticdb</code> files.</li>
+    <li><code>jdeps</code> — <strong>files</strong> containing <code>jdeps -verbose:class</code> text output.</li>
+   </ul>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps export --from jdeps jdeps.txt
+</code></pre>
+   <p>Errors (exit 1): <code>at least one input is required</code>, <code>input path does not exist: &lt;path&gt;</code>, <code>not a directory: &lt;path&gt;</code> (semanticdb), <code>not a file: &lt;path&gt;</code> (jdeps), <code>no .semanticdb files found</code>. Per-file parse failures are warnings on stderr and the run continues:</p>
+   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">warning: failed to parse semanticdb: ...
+</code></pre>
+   <h2 id="draw">draw<a href="#draw" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g &lt;package|file|type|member&gt; -f &lt;dot|mermaid&gt; [-i inc] [-e exc] [-c collapse] [-o out] &lt;file|-&gt;
+</code></pre>
+   <p>Pure renderer: reads the common JSON graph (a file, or stdin via <code>-</code>) and renders it in the requested format at the requested granularity. Pipeline: parse → filter → aggregate to <code>-g</code> → collapse → build graph → cycle detection → render.</p>
+   <p><code>-g</code> is required — there is no default granularity.</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Option</th>
+      <th>Description</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>-g</code> / <code>--granularity</code></td>
+      <td>Aggregation level: <code>package</code>, <code>file</code>, <code>type</code> or <code>member</code>. Required.</td>
+     </tr>
+     <tr>
+      <td><code>-f</code> / <code>--format</code></td>
+      <td>Output format: <code>dot</code> or <code>mermaid</code>. Required.</td>
+     </tr>
+     <tr>
+      <td><code>-i</code> / <code>--include</code></td>
+      <td>Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern <code>ba.sake</code> matches <code>ba.sake</code> and everything below it.</td>
+     </tr>
+     <tr>
+      <td><code>-e</code> / <code>--exclude</code></td>
+      <td>Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable.</td>
+     </tr>
+     <tr>
+      <td><code>-c</code> / <code>--collapse</code></td>
       <td>Collapse rule, e.g. <code>com.example.**</code>. Repeatable.</td>
      </tr>
      <tr>
-      <td><code>-f</code></td>
-      <td><code>--format</code></td>
-      <td>Output format: <code>dot</code>, <code>json</code>, <code>mermaid</code> or <code>raw</code>. Required.</td>
-     </tr>
-     <tr>
-      <td><code>-o</code></td>
-      <td><code>--out</code></td>
+      <td><code>-o</code> / <code>--out</code></td>
       <td>Write output to this file instead of stdout.</td>
      </tr>
     </tbody>
    </table>
-   <p>Positional inputs (directories for <code>semdb</code>, files for <code>jdeps</code>, one file or <code>-</code> for <code>json</code>) are required.</p>
-   <h2 id="semdb">semdb<a href="#semdb" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;dir...&gt;
+   <p>Exactly one input is required — a JSON file, or <code>-</code> for stdin, so <code>export</code> output can be piped straight into <code>draw</code>:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f dot deps.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g type -f mermaid -
+codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
 </code></pre>
-   <p>Walks each given directory (recursively) for <code>*.semanticdb</code> files, parses them, and builds the package graph. Requires at least one directory; errors out if a path does not exist or no <code>.semanticdb</code> files are found.</p>
-   <p>Also extracts per-package stats (file and class counts) — these appear as <code>nodeInfo</code> in JSON output.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f json
-</code></pre>
-   <h2 id="jdeps">jdeps<a href="#jdeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;file...&gt;
-</code></pre>
-   <p>Parses <code>jdeps -verbose:package</code> text output (one or more files). Requires at least one file. Indented detail lines (<code>pkg.a -&gt; pkg.b archive</code>) become edges; non-indented summary lines are ignored.</p>
-   <p>No stats are available for jdeps input, so JSON <code>nodeInfo</code> is omitted.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps jdeps.txt -i com.example -e java.** -f dot
-</code></pre>
-   <p>Both <code>semdb</code> and <code>jdeps</code> also support <code>-f raw</code>, which emits the parsed dependency info (own packages, edges, stats) in the <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON input format</a> — after filtering, before collapsing. This is how you round-trip an analysis into the <code>json</code> subcommand or save an intermediate result:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f raw -o deps.json
-java -jar codeps.jar json deps.json -i com.example -f mermaid
-</code></pre>
-   <h2 id="json">json<a href="#json" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar json [-i include] [-e exclude] [-c collapse] -f format [-o out] &lt;file|-&gt;
-</code></pre>
-   <p>Reads the <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON input format</a>: a JSON document describing own packages, package-level edges and optional stats. This is how codeps consumes dependency info produced by any other tool (madge, pydeps, <code>go list</code>, ...) — codeps itself never parses source code for these inputs.</p>
-   <p>Pass <code>-</code> to read from stdin, so output of other tools can be piped straight in:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '...' | java -jar codeps.jar json - -i src -f mermaid
-</code></pre>
-   <p>Exactly one input is required. Malformed or type-invalid JSON is a hard error (exit 1), not a warning:</p>
-   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">error: failed to parse json: Key '$.own' is missing
-</code></pre>
+   <h3 id="granularity">Granularity<a href="#granularity" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h3>
+   <p>The <code>-g</code> level says what the graph's nodes are after aggregation. Finer-grained nodes are lifted to their nearest ancestor at that level; when the data has no nodes at the requested level (or above it), the level falls back:</p>
+   <table>
+    <thead>
+     <tr>
+      <th><code>-g</code></th>
+      <th>semanticdb data</th>
+      <th>jdeps data</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>member</code></td>
+      <td>identity (types, members, packages, files)</td>
+      <td>identity (types only)</td>
+     </tr>
+     <tr>
+      <td><code>type</code></td>
+      <td>members → their type (package members → the package); files and package nodes dropped</td>
+      <td>types only (package nodes dropped)</td>
+     </tr>
+     <tr>
+      <td><code>file</code></td>
+      <td>types/members → their <code>file</code> attribute; fallback: root package; package nodes dropped</td>
+      <td>root package (jdeps has no files)</td>
+     </tr>
+     <tr>
+      <td><code>package</code></td>
+      <td>everything → root package; files dropped</td>
+      <td>everything → root package</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Nodes coarser than the requested level are dropped: file nodes at <code>type</code>/<code>package</code>, package nodes at <code>type</code>/<code>file</code>. A package can still appear at a finer level as a fallback — members whose parent is a package map to that package at <code>-g type</code>, and file-less nodes map to their root package at <code>-g file</code> (jdeps data has no file or member nodes, so on jdeps data <code>-g member</code> is the identity, <code>-g type</code> keeps the types, and <code>-g file</code> behaves like <code>-g package</code>).</p>
+   <p>Errors (exit 1): <code>exactly one input is required (a json file, or '-' for stdin)</code>, <code>expected exactly one input (a json file, or '-' for stdin)</code>, <code>input path does not exist: &lt;path&gt;</code>, <code>no nodes remain after filtering</code>, invalid collapse rules, unknown granularity/format values — and malformed or type-invalid JSON is a hard error, not a warning (see <a href="#exit-codes-and-errors">Exit codes</a>).</p>
    <h2 id="include--exclude-patterns">Include / exclude patterns<a href="#include--exclude-patterns" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to the <strong>own packages</strong> found in the input; an edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped).</p>
+   <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to each node's <strong>root package</strong> — the topmost package ancestor found by walking <code>parentId</code> chains (for a package node, that is the package itself). A node is kept when it has no include patterns or its root package matches one, and its root package matches no exclude pattern (excludes win). An edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped). With no <code>-i</code>, all nodes are kept.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">keep only com.example and subpackages, minus internal helpers</span>
-java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.example.internal -f dot
+codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
 </code></pre>
    <h2 id="collapse-rules">Collapse rules<a href="#collapse-rules" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Collapse rules merge packages into a single node, making large graphs readable. Only trailing wildcards are supported:</p>
+   <p>Collapse rules merge nodes into a single node, making large graphs readable. Only trailing wildcards are supported:</p>
    <table>
     <thead>
      <tr>
@@ -156,27 +217,66 @@ java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -e com.exa
      </tr>
      <tr>
       <td><code>org.lib.*</code></td>
-      <td>packages directly below <code>org.lib</code> collapse into <code>org.lib.&lt;level&gt;</code> (one level only)</td>
+      <td>nodes directly below <code>org.lib</code> collapse into <code>org.lib.&lt;level&gt;</code> (one level only)</td>
      </tr>
     </tbody>
    </table>
-   <p>When multiple rules match a package, the <strong>longest prefix wins</strong> (ties: first rule in the sequence). Loops created by collapsing are dropped; edges are deduplicated.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -c com.example.modules.** -f dot
+   <p>Rules match node ids by prefix, kind-agnostically — they apply to whatever ids exist after aggregation (packages, files, types or members). When multiple rules match a node, the <strong>longest prefix wins</strong> (ties: first rule in the sequence). Loops created by collapsing are dropped; edges are deduplicated.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
 </code></pre>
+   <h2 id="report">report<a href="#report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report [-i inc] [-e exc] [-c collapse] [-o out] &lt;file|-&gt;
+</code></pre>
+   <p>Pure analyzer: reads the common JSON graph (a file, or stdin via <code>-</code>) and runs the pipeline (filter → aggregate → collapse → build graph → cycle detection) at <strong>all four granularities in one pass</strong>, grading every cycle and computing metrics and suggestions. Emits one self-contained JSON document (see <a href="https://sake92.github.io/codeps/reference/report.html">Cycle analysis report</a>), always exits <code>0</code> on success.</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Option</th>
+      <th>Description</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>-i</code> / <code>--include</code></td>
+      <td>Same as <code>draw</code> — applied at every granularity.</td>
+     </tr>
+     <tr>
+      <td><code>-e</code> / <code>--exclude</code></td>
+      <td>Same as <code>draw</code>.</td>
+     </tr>
+     <tr>
+      <td><code>-c</code> / <code>--collapse</code></td>
+      <td>Same as <code>draw</code>.</td>
+     </tr>
+     <tr>
+      <td><code>-o</code> / <code>--out</code></td>
+      <td>Write the report JSON to this file instead of stdout.</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>There is no <code>-g</code>: the report covers package, file, type and member levels at once.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report deps.json -o report.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report - &gt; report.json
+</code></pre>
+   <p>The report JSON is the input for the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a>'s report mode (cycle highlighting, severity grades, suggestions) and is shaped for agents to consume directly.</p>
    <h2 id="exit-codes-and-errors">Exit codes and errors<a href="#exit-codes-and-errors" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li><code>0</code> — success</li>
-    <li><code>1</code> — usage errors (missing input, unknown format/rule, no packages left after filtering) or parse warnings</li>
+    <li><code>1</code> — usage errors, input errors (missing/nonexistent paths, empty input) or JSON parse errors</li>
    </ul>
-   <p>Unparseable input files produce a warning on stderr and are skipped, so a partial run still succeeds:</p>
+   <p>For <code>export</code>, unparseable input files produce a warning on stderr and are skipped, so a partial run still succeeds:</p>
    <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">warning: failed to parse semanticdb: ...
+</code></pre>
+   <p>For <code>draw</code>, malformed or type-invalid JSON input is a hard error (exit 1):</p>
+   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">error: failed to parse json: ...
 </code></pre>
    <h2 id="building-from-source">Building from source<a href="#building-from-source" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>For developing codeps itself, the repo is built with <a href="https://sake92.github.io/deder/">deder</a> — see the <a href="https://github.com/sake92/codeps#development">README</a>:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli semdb &lt;dir&gt; -i com.example -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli export --from semanticdb &lt;dir&gt; -o deps.json
+deder exec -t run -m cli draw -g package -f dot deps.json
 </code></pre>
    <div role="group">
-    <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats ➡️</a>
+    <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/report.html">Cycle analysis report ➡️</a>
    </div>
   </main>
   <footer class="pico container">codeps | Code package dependency analyzer</footer>

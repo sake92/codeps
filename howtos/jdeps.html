@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Analyzing dependencies with jdeps">
-  <title> jdeps analysis | codeps </title>
+  <meta name="description" content="Analyzing Java/JVM dependencies with jdeps">
+  <title> Export &amp; analyze Java/JVM projects with jdeps | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
@@ -44,10 +44,11 @@
       <summary>Table of Contents</summary>
       <div>
        <ul>
-        <li><a href="#jdeps-analysis">jdeps analysis</a>
+        <li><a href="#export--analyze-javajvm-projects-with-jdeps">Export &amp; analyze Java/JVM projects with jdeps</a>
          <ul>
           <li><a href="#generating-the-input">Generating the input</a></li>
-          <li><a href="#running-the-analysis">Running the analysis</a></li>
+          <li><a href="#exporting-the-graph">Exporting the graph</a></li>
+          <li><a href="#analyzing">Analyzing</a></li>
           <li><a href="#filtering-jdk-noise">Filtering JDK noise</a></li>
           <li><a href="#collapsing">Collapsing</a></li>
          </ul></li>
@@ -59,19 +60,29 @@
     <div></div>
     <div></div>
    </div>
-   <h1 id="jdeps-analysis">jdeps analysis<a href="#jdeps-analysis" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <h1 id="export--analyze-javajvm-projects-with-jdeps">Export &amp; analyze Java/JVM projects with jdeps<a href="#export--analyze-javajvm-projects-with-jdeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p><a href="https://docs.oracle.com/en/java/javase/21/docs/specs/man/jdeps.html">jdeps</a> is the JDK's own dependency analyzer. It ships with every JDK, so this workflow needs <strong>no extra tooling</strong> — great for Java projects or when you can't (or don't want to) enable SemanticDB. Your build already produced the <code>.class</code> files; the only extra step is piping <code>jdeps</code> output to a text file.</p>
-   <p>The <code>jdeps</code> subcommand parses <code>jdeps -verbose:package</code> <strong>text output</strong> and extracts package-to-package edges. Note that jdeps carries no per-package file/class info, so the JSON <code>nodeInfo</code> stats are omitted for this input.</p>
+   <p>jdeps data is type-level only: it has no file or member nodes, so on jdeps graphs <code>-g type</code> and <code>-g member</code> are the identity, <code>-g file</code> behaves like <code>-g package</code> (see the <a href="https://sake92.github.io/codeps/reference/cli.html#granularity">granularity table</a>).</p>
    <h2 id="generating-the-input">Generating the input<a href="#generating-the-input" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:package -filter:none -cp classes classes &gt; jdeps.txt
+   <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:class -filter:none -cp classes classes &gt; jdeps.txt
 </code></pre>
    <ul>
-    <li><code>-verbose:package</code> is required — codeps ignores summary lines and reads the indented detail lines</li>
-    <li><code>-filter:none</code> keeps all edges (otherwise JDK-internal noise like <code>java.*</code> is dropped; you can filter it later with <code>--exclude</code>)</li>
+    <li><code>-verbose:class</code> is required — codeps reads the indented per-class detail lines</li>
+    <li><code>-filter:none</code> keeps all edges (JDK-internal noise like <code>java.*</code> can be filtered later with <code>-e</code>)</li>
    </ul>
-   <h2 id="running-the-analysis">Running the analysis<a href="#running-the-analysis" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps jdeps.txt -i com.example -f dot
+   <h2 id="exporting-the-graph">Exporting the graph<a href="#exporting-the-graph" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>codeps export</code> parses the text file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON graph format</a> (<code>nodes</code> + <code>edges</code>):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps jdeps.txt -o deps.json
 </code></pre>
+   <p>Only the project's own classes appear — the exporter drops edges to external classes that are not themselves defined in the input.</p>
+   <h2 id="analyzing">Analyzing<a href="#analyzing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>codeps draw</code> renders the graph at the granularity you pick:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g type -f dot deps.json
+</code></pre>
+   <p>or in one pipe:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
+</code></pre>
+   <p>For cycle analysis at every granularity in one run, use <code>codeps report</code> — see the <a href="https://sake92.github.io/codeps/reference/report.html">Cycle analysis report</a>.</p>
    <p>Example output:</p>
    <pre><code class="language-dot">digraph deps {
   "com.example.app" -&gt; "com.example.modules.module2";
@@ -80,19 +91,19 @@
 }
 </code></pre>
    <h2 id="filtering-jdk-noise">Filtering JDK noise<a href="#filtering-jdk-noise" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>The raw <code>jdeps -verbose:package</code> output includes edges to <code>java.*</code>, <code>scala.*</code> and other platform packages. Exclude them to keep the graph focused on your code:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps jdeps.txt -i com.example -e java.** -e scala.** -f json
+   <p>The raw <code>jdeps -verbose:class</code> output includes edges to <code>java.*</code>, <code>scala.*</code> and other platform classes. Exclude them to keep the graph focused on your code:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g type -f dot -i com.example -e java.** -e scala.** deps.json
 </code></pre>
    <blockquote>
-    <p>Note: excludes are package patterns matched against the <em>source</em> package of each edge — <code>java.**</code> collapses everything under <code>java</code> (see <a href="https://sake92.github.io/codeps/reference/cli.html#collapse-rules">Collapse rules</a>).</p>
+    <p>Note: excludes are package patterns matched against each node's root package — <code>java.**</code> collapses everything under <code>java</code> (see <a href="https://sake92.github.io/codeps/reference/cli.html#collapse-rules">Collapse rules</a>).</p>
    </blockquote>
    <h2 id="collapsing">Collapsing<a href="#collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Just like with SemanticDB input, <code>-c/--collapse</code> rules apply:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar jdeps jdeps.txt -i com.example -c com.example.modules.** -f dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f dot -c com.example.modules.** deps.json
 </code></pre>
    <p>See <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for the full option list.</p>
    <div role="group">
-    <a role="button" href="https://sake92.github.io/codeps/howtos/semdb.html">⬅️ SemanticDB analysis</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/howtos/exporting.html">Exporting graphs ➡️</a>
+    <a role="button" href="https://sake92.github.io/codeps/howtos/semdb.html">⬅️ Export &amp; analyze Scala/SemanticDB projects</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/howtos/exporting.html">How to export the graph ➡️</a>
    </div>
   </main>
   <footer class="pico container">codeps | Code package dependency analyzer</footer>

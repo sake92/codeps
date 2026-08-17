@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="DOT, JSON and Mermaid export format details">
+  <meta name="description" content="DOT and Mermaid export format details">
   <title> Export formats | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
@@ -47,7 +47,6 @@
         <li><a href="#export-formats">Export formats</a>
          <ul>
           <li><a href="#dot">DOT</a></li>
-          <li><a href="#json">JSON</a></li>
           <li><a href="#mermaid">Mermaid</a></li>
          </ul></li>
        </ul>
@@ -59,7 +58,7 @@
     <div></div>
    </div>
    <h1 id="export-formats">Export formats<a href="#export-formats" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>All exporters receive the final graph: nodes = packages after <a href="https://sake92.github.io/codeps/reference/cli.html">filtering and collapsing</a>, edges = package dependencies (self-edges removed, deduplicated).</p>
+   <p><code>codeps draw</code> renders the final graph in two formats: <code>-f dot</code> and <code>-f mermaid</code>. The graph's nodes are whatever <code>-g</code> granularity produced, after <a href="https://sake92.github.io/codeps/reference/cli.html">filtering and collapsing</a>; edges are directed dependencies (self-loops removed, deduplicated).</p>
    <h2 id="dot">DOT<a href="#dot" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Rendered by <code>DotExporter</code>. Graphviz <code>digraph</code> with quoted node ids:</p>
    <pre><code class="language-dot">digraph deps {
@@ -70,28 +69,14 @@
    <ul>
     <li>edges are sorted by <code>(source, target)</code></li>
     <li>isolated vertices (no edges) are emitted as standalone lines</li>
-    <li>quotes and backslashes inside package names are escaped</li>
+    <li>quotes and backslashes inside ids are escaped</li>
+    <li>when the graph contains cycles, a comment line lists them right after the header: <code>// cycles: a -&gt; c -&gt; b -&gt; a</code> — each cycle is a closed loop in actual dependency order (the arrows are real edges); multiple cycles are comma-separated</li>
    </ul>
    <p>Render it with Graphviz:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar semdb classes/META-INF/semanticdb -i com.example -f dot -o graph.dot
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps draw -g package -f dot deps.json -o graph.dot
 dot -Tsvg graph.dot -o graph.svg
 </code></pre>
-   <h2 id="json">JSON<a href="#json" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Rendered by <code>JsonExporter</code>. Shape:</p>
-   <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module1"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">[</span><span class="hljs-string">"com.example.app"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"com.example.modules.module2"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"nodeInfo"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">"com.example.app"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"classes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">}</span>
-<span class="hljs-punctuation">}</span>
-</code></pre>
-   <ul>
-    <li><code>nodes</code> — sorted package names</li>
-    <li><code>edges</code> — <code>[source, target]</code> pairs, sorted</li>
-    <li><code>nodeInfo</code> — per-package <code>{files, classes}</code> stats; present only for SemanticDB input (jdeps output carries no file/class info), and only for nodes with known stats</li>
-   </ul>
-   <p>This is the input format of the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a>.</p>
    <h2 id="mermaid">Mermaid<a href="#mermaid" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Rendered by <code>MermaidExporter</code>. <code>flowchart LR</code> with <strong>aliased node ids</strong> (<code>N0</code>, <code>N1</code>, ...) because Mermaid ids break on dots:</p>
    <pre><code class="language-mermaid">flowchart LR
@@ -99,7 +84,7 @@ dot -Tsvg graph.dot -o graph.svg
   N1["com.example.modules.module1"]
   N0 --&gt; N1
 </code></pre>
-   <p>Nodes are listed first (sorted, each with its <code>N&lt;i&gt;</code> alias and quoted label), then edges as <code>N&lt;i&gt; --&gt; N&lt;j&gt;</code> (sorted by source/target).</p>
+   <p>Nodes are listed first (sorted, each with its <code>N&lt;i&gt;</code> alias and quoted label), then edges as <code>N&lt;i&gt; --&gt; N&lt;j&gt;</code> (sorted by source/target). When the graph contains cycles, a comment line lists them right after the header, e.g. <code>%% cycles: a -&gt; c -&gt; b -&gt; a</code>.</p>
    <p>Paste into any Mermaid renderer, or embed in Markdown:</p>
    <pre><code class="language-markdown hljs" data-highlighted="yes"><span class="hljs-code">```mermaid
 flowchart LR
@@ -107,7 +92,7 @@ flowchart LR
 ```</span>
 </code></pre>
    <div role="group">
-    <a role="button" href="https://sake92.github.io/codeps/reference/cli.html">⬅️ CLI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/json-input.html">JSON input format ➡️</a>
+    <a role="button" href="https://sake92.github.io/codeps/reference/report.html">⬅️ Cycle analysis report</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/json-input.html">Common JSON format ➡️</a>
    </div>
   </main>
   <footer class="pico container">codeps | Code package dependency analyzer</footer>
