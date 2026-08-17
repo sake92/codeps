@@ -16,7 +16,8 @@ object Aggregator:
     * dropped: file nodes at `type`/`package` levels, package nodes at `type`/`file` levels
     * (unless a finer node falls back to them: package-parented members at `type` level,
     * file-less types at `file` level). Edges are lifted through the same mapping;
-    * self-loops and edges with dropped endpoints are removed.
+    * self-loops and edges with dropped endpoints are removed. Edges that lift onto the
+    * same (source, target) pair are merged with summed weights.
     */
   def aggregate(graph: DepsGraph, level: Level): (Set[String], Set[Edge]) =
     val nodesById = graph.nodes.map(n => n.id -> n).toMap
@@ -39,11 +40,16 @@ object Aggregator:
           case NodeKind.file      => None
           case _                  => n.rootPackageId(nodesById)
     val ids = graph.nodes.flatMap(mapNode)
-    val edges = graph.edges.flatMap { e =>
-      for
-        s <- nodesById.get(e.source).flatMap(mapNode)
-        t <- nodesById.get(e.target).flatMap(mapNode)
-        if s != t
-      yield Edge(s, t)
-    }
+    // toSeq: Set would dedup identical ((s,t), weight) tuples before summing
+    val edges = graph.edges.toSeq
+      .flatMap { e =>
+        for
+          s <- nodesById.get(e.source).flatMap(mapNode)
+          t <- nodesById.get(e.target).flatMap(mapNode)
+          if s != t
+        yield ((s, t), e.weight)
+      }
+      .groupMapReduce(_._1)(_._2)(_ + _)
+      .map { case ((s, t), w) => Edge(s, t, w) }
+      .toSet
     (ids, edges)

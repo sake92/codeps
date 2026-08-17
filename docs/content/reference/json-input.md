@@ -20,7 +20,7 @@ graph with `package`/`file`/`type`/`member` nodes and directed edges between nod
     {"id": "com.example.a.topLevelHelper", "kind": "member", "parentId": "com.example.a"}
   ],
   "edges": [
-    {"source": "com.example.a.Foo#doWork", "target": "com.example.a.topLevelHelper"}
+    {"source": "com.example.a.Foo#doWork", "target": "com.example.a.topLevelHelper", "weight": 1}
   ]
 }
 ```
@@ -30,7 +30,7 @@ graph with `package`/`file`/`type`/`member` nodes and directed edges between nod
 | Field | Type | Meaning |
 |---|---|---|
 | `nodes` | `[{id, kind, parentId?, file?}]` | the graph's nodes; a set, so each `id` appears once |
-| `edges` | `[{source, target}]` | directed dependency edges between node ids; a set (deduplicated) |
+| `edges` | `[{source, target, weight}]` | directed dependency edges between node ids; a set (deduplicated); `weight` = number of finer-grained references merged into the edge |
 
 Node fields:
 
@@ -40,6 +40,14 @@ Node fields:
 | `kind` | string | `package`, `file`, `type` or `member` (lowercase) |
 | `parentId` | string (optional) | nearest enclosing node; `package` and `file` nodes are standalone (no `parentId`) |
 | `file` | string (optional) | on `type`/`member` nodes: the id of their source `file` node |
+
+Edge fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `source` | string | node id the dependency comes from |
+| `target` | string | node id the dependency goes to |
+| `weight` | number (optional) | number of finer-grained references this edge represents; 1 when absent (producers that don't emit it are accepted) |
 
 ### Id rules
 

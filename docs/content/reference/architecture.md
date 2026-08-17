@@ -41,7 +41,9 @@ The graph model and processing pipeline:
 - `model/Node` — `id`, `kind`, optional `parentId` (nearest enclosing node) and `file`
   (the source file node's id, on `type`/`member` nodes); walks `parentId` chains to
   find a node's root package
-- `model/Edge` — a directed `(source, target)` edge between node ids
+- `model/Edge` — a directed `(source, target)` edge between node ids, carrying a
+  `weight`: the number of finer-grained references it represents (1 from the
+  parsers, summed by aggregation/collapse)
 - `model/DepsGraph` — the parser contract and the common JSON format:
   `{nodes: Set[Node], edges: Set[Edge]}`; `merge` combines graphs, `withoutDanglingEdges`
   drops edges whose endpoints are not both in the graph's nodes (derives `JsonRW` via tupson)
@@ -53,9 +55,9 @@ The graph model and processing pipeline:
   level and lifting edges through the same mapping; nodes coarser than the level
   (packages at `type`/`file`, files at `type`/`package`) are dropped, unless a finer
   node falls back to them (package-parented members at `type` level, file-less nodes
-  at `file` level)
+  at `file` level); edges that lift onto the same pair are merged with summed weights
 - `graph/Collapser` — maps nodes/edges through collapse rules (longest prefix wins),
-  drops loops
+  drops loops, merges edges landing on the same pair with summed weights
 - `graph/GraphBuilder` — builds a `jgrapht` `DefaultDirectedGraph[String, DefaultEdge]`,
   keeping isolated vertices
 - `graph/CycleDetector` — finds cycles via jgrapht's

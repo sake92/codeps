@@ -642,9 +642,10 @@
    * State (single source of truth)
    * ================================================================ */
   var state = {
-    graph: null,          // { ids: Set, edges: [{source, target}] } — deduped master graph
+    graph: null,          // { ids: Set, edges: [{source, target, weight}] } — deduped master graph
     meta: new Map(),  // id -> { name, degree, inDeg, outDeg, hubScore, benefit, files, classes }
     maxDegree: 0,
+    maxWeight: 0,
     maxHub: 0,            // max hubScore (in × out) across the graph
     search: '',
     dim: false,           // dim instead of hide
@@ -762,22 +763,26 @@
     }
 
     var edges = [];
-    var seen = new Set();
+    var edgeByKey = new Map();
     for (var j = 0; j < obj.edges.length; j++) {
       var e = obj.edges[j];
-      var s, t;
+      var s, t, w;
       if (Array.isArray(e) && e.length >= 2 && typeof e[0] === 'string' && typeof e[1] === 'string') {
-        s = e[0]; t = e[1];
+        s = e[0]; t = e[1]; w = 1;
       } else if (e && typeof e === 'object' && typeof e.source === 'string' && typeof e.target === 'string') {
         s = e.source; t = e.target;
+        w = (typeof e.weight === 'number' && isFinite(e.weight) && e.weight > 0) ? e.weight : 1;
       } else {
         throw new Error('invalid edge entry at index ' + j + ': expected [source, target] or {source, target}');
       }
       ids.add(s); // tolerate endpoints not listed in "nodes"
       ids.add(t);
       var key = s + '\u0000' + t;
-      if (!seen.has(key)) { seen.add(key); edges.push({ source: s, target: t }); }
+      var prev = edgeByKey.get(key);
+      if (prev) prev.weight += w;
+      else edgeByKey.set(key, { source: s, target: t, weight: w });
     }
+    edges = Array.from(edgeByKey.values());
 
     // optional per-package metadata ("meta" key; not part of the common JSON
     // format, but understood by this page), e.g. {"com.example.a": {"files": 12, "classes": 7}}
@@ -810,14 +815,17 @@
       if (a) { a.degree++; a.outDeg++; }
       if (b) { b.degree++; b.inDeg++; }
     });
-    var max = 0, maxHub = 0;
+    var max = 0, maxHub = 0, maxWeight = 0;
     info.forEach(function (v) {
       if (v.degree > max) max = v.degree;
       v.hubScore = v.inDeg * v.outDeg;   // tangled hub: both heavily used AND heavily using
       v.benefit = v.outDeg - v.inDeg;    // easy win: much to untangle, little risk
       if (v.hubScore > maxHub) maxHub = v.hubScore;
     });
-    return { info: info, max: max, maxHub: maxHub };
+    edges.forEach(function (e) {
+      if (e.weight > maxWeight) maxWeight = e.weight;
+    });
+    return { info: info, max: max, maxHub: maxHub, maxWeight: maxWeight };
   }
 
   /* ================================================================
@@ -988,7 +996,7 @@
       seen.add(key);
       edgeId++;
       // cy.json() requires an explicit id on every element (incl. edges)
-      elements.push({ data: { id: 'e' + edgeId, source: e.source, target: e.target } });
+      elements.push({ data: { id: 'e' + edgeId, source: e.source, target: e.target, weight: e.weight } });
     });
     return elements;
   }
@@ -1026,7 +1034,7 @@
         selector: 'edge',
         style: {
           'curve-style': 'bezier',
-          'width': 1.4,
+          'width': 'mapData(weight, 1, ' + Math.max(1, state.maxWeight) + ', 1, 8)',
           'line-color': '#64748b',
           'line-opacity': 0.7,
           'target-arrow-shape': 'triangle',
@@ -1439,6 +1447,7 @@
     state.graph = { ids: parsed.ids, edges: parsed.edges };
     state.meta = computed.info;
     state.maxDegree = computed.max;
+    state.maxWeight = computed.maxWeight;
     state.maxHub = computed.maxHub;
 
     // reset per-graph filter state

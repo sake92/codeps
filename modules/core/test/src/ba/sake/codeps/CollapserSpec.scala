@@ -42,6 +42,18 @@ class CollapserSpec extends munit.FunSuite:
     assertEquals(e, Set(Edge("com.example.modules", "com.example")))
   }
 
+  test("edges collapsing onto the same pair are merged with summed weights") {
+    val nodes = Set("com.example.modules.m1", "com.example.modules.m2", "com.example.other")
+    val edges = Set(
+      Edge("com.example.modules.m1", "com.example.other"),
+      Edge("com.example.modules.m2", "com.example.other"),
+      Edge("com.example.modules.m1", "com.example.modules.m2") // becomes a loop
+    )
+    val (n, e) = Collapser.collapse(nodes, edges, Seq(CollapseRule.Wild("com.example.modules")))
+    assertEquals(n, Set("com.example.modules", "com.example.other"))
+    assertEquals(e, Set(Edge("com.example.modules", "com.example.other", 2)))
+  }
+
   test("collapse can create loops which are dropped") {
     val nodes = Set("a.b.c", "a.b.x")
     val edges = Set(Edge("a.b.c", "a.b.x"))

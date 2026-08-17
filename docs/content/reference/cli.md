@@ -151,7 +151,7 @@ Only trailing wildcards are supported:
 Rules match node ids by prefix, kind-agnostically — they apply to whatever ids
 exist after aggregation (packages, files, types or members). When multiple rules
 match a node, the **longest prefix wins** (ties: first rule in the sequence).
-Loops created by collapsing are dropped; edges are deduplicated.
+Loops created by collapsing are dropped; edges landing on the same pair are merged with summed weights.
 
 ```shell
 codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json

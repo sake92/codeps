@@ -30,7 +30,8 @@ codeps export --from semanticdb classes/META-INF/semanticdb | codeps report - > 
 
 - **`graph`** — the nodes/edges of the level (same shape as the common JSON format),
   embedded for package/file/type. The member-level graph is too large to embed usefully
-  (`null`); its cycles are still reported.
+  (`null`); its cycles are still reported. Edges carry a `weight`: the number of
+  finer-grained references merged into the edge (see the [common JSON format](/reference/json-input.html)).
 - **`metrics`** — per-node `{in, out, hub}` counts (`hub = in × out`), package/file/type only.
 - **`cycles`** — see below.
 - **`suggestions`** — see below.
@@ -42,8 +43,8 @@ Each cycle:
 ```json
 {
   "members": ["com.example.a", "com.example.b", "com.example.a"],
-  "edges":   [{"source": "com.example.a", "target": "com.example.b"},
-              {"source": "com.example.b", "target": "com.example.a"}],
+  "edges":   [{"source": "com.example.a", "target": "com.example.b", "weight": 1},
+              {"source": "com.example.b", "target": "com.example.a", "weight": 1}],
   "severity": "bad",
   "breakCandidate": "com.example.a"
 }
@@ -67,7 +68,7 @@ elementary cycle is reported per component (direct self-recursion is not a cycle
 
 ```json
 {
-  "breakEdges":  [{"edge": {"source": "com.example.a", "target": "com.example.b"}, "breaks": 1}],
+  "breakEdges":  [{"edge": {"source": "com.example.a", "target": "com.example.b", "weight": 1}, "breaks": 1}],
   "hardestKnots": ["com.example.modules.module2"],
   "easyWins":     ["com.example.modules.module2", "com.example.app"]
 }

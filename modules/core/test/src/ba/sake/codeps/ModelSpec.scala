@@ -20,6 +20,17 @@ class ModelSpec extends munit.FunSuite:
     assertEquals(graph.toJson(spaces = 2, sort = true).parseJson[DepsGraph], graph)
   }
 
+  test("edge weight defaults to 1 when missing in json") {
+    val json = """{"nodes": [], "edges": [{"source": "a", "target": "b"}]}"""
+    assertEquals(json.parseJson[DepsGraph].edges, Set(Edge("a", "b", 1)))
+  }
+
+  test("weighted edges round-trip through json") {
+    val weighted = graph.copy(edges = Set(Edge("com.example.a.Foo#doWork", "com.example.a.topLevelHelper", 3)))
+    assertEquals(weighted.toJson(spaces = 2, sort = true).parseJson[DepsGraph], weighted)
+    assert(weighted.toJson(spaces = 0, sort = false).contains("\"weight\":3"))
+  }
+
   test("kinds serialize as lowercase strings") {
     val json = graph.toJson(spaces = 0, sort = false)
     assert(json.contains("\"kind\":\"package\""))

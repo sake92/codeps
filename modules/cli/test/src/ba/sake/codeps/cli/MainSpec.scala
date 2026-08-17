@@ -1,6 +1,9 @@
 package ba.sake.codeps.cli
 
+import ba.sake.codeps.model.Edge
+import ba.sake.codeps.report.AnalysisReport
 import ba.sake.codeps.testing.FixtureCompiler
+import ba.sake.tupson.{*, given}
 
 class MainSpec extends munit.FunSuite:
 
@@ -171,6 +174,29 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("\"suggestions\""))
     assert(content.contains("\"hardestKnots\""))
     assert(content.contains("\"breakEdges\""))
+  }
+
+  test("report edges carry weights summed from member-level references") {
+    val out = os.pwd / "tmp" / "cli-test" / "report-weights.json"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("report", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val report = os.read(out).parseJson[AnalysisReport]
+    val pkgEdges = report.levels("package").graph.get.edges
+    assertEquals(pkgEdges, Set(
+      Edge("com.example.app", "com.example.modules.module2", 2),
+      Edge("com.example.modules.module1", "com.example.util", 2),
+      Edge("com.example.modules.module2", "com.example.modules.module1", 2),
+      Edge("com.example.modules.module2", "org.thirdparty", 2)
+    ))
+    val fileEdges = report.levels("file").graph.get.edges
+    assertEquals(fileEdges, Set(
+      Edge("src/com/example/app/Main.scala", "src/com/example/modules/module2/Service2.scala", 3),
+      Edge("src/com/example/modules/module1/Service1.scala", "src/com/example/util/Helper.scala", 3),
+      Edge("src/com/example/modules/module2/Service2.scala", "src/com/example/modules/module1/Service1.scala", 3),
+      Edge("src/com/example/modules/module2/Service2.scala", "src/org/thirdparty/Ext.scala", 3)
+    ))
   }
 
   test("report grades package cycles as bad and supports collapse") {

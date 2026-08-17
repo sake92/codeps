@@ -6,16 +6,21 @@ object Collapser:
   /**
     * Maps all nodes and edges through the collapse rules.
     * Longest prefix wins; on ties the first rule in the sequence wins.
-    * Loops created by collapsing are dropped; edges deduplicate via Set semantics.
+    * Loops created by collapsing are dropped; edges landing on the same
+    * pair are merged with summed weights.
     */
   def collapse(nodes: Set[String], edges: Set[Edge], rules: Seq[CollapseRule]): (Set[String], Set[Edge]) =
     if rules.isEmpty then (nodes, edges)
     else
       val resolve = resolveWith(rules)
       val newNodes = nodes.map(resolve)
-      val newEdges = edges
-        .map(e => Edge(resolve(e.source), resolve(e.target)))
-        .filter(e => e.source != e.target)
+      // toSeq: Set would dedup identical ((s,t), weight) tuples before summing
+      val newEdges = edges.toSeq
+        .map(e => ((resolve(e.source), resolve(e.target)), e.weight))
+        .filter { case ((s, t), _) => s != t }
+        .groupMapReduce(_._1)(_._2)(_ + _)
+        .map { case ((s, t), w) => Edge(s, t, w) }
+        .toSet
       (newNodes, newEdges)
 
   private def resolveWith(rules: Seq[CollapseRule]): String => String =

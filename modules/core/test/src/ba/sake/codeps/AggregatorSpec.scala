@@ -101,6 +101,27 @@ class AggregatorSpec extends munit.FunSuite:
     assertEquals(edges2, Set.empty[Edge])
   }
 
+  test("edges collapsing onto the same pair are merged with summed weights") {
+    val g = DepsGraph(
+      Set(
+        Node("com.example.a", NodeKind.`package`),
+        Node("com.example.b", NodeKind.`package`),
+        Node("com.example.a.Foo", NodeKind.`type`, Some("com.example.a")),
+        Node("com.example.a.Bar", NodeKind.`type`, Some("com.example.a")),
+        Node("com.example.b.Baz", NodeKind.`type`, Some("com.example.b")),
+        Node("com.example.b.Qux", NodeKind.`type`, Some("com.example.b"))
+      ),
+      Set(
+        Edge("com.example.a.Foo", "com.example.b.Baz"),
+        Edge("com.example.a.Foo", "com.example.b.Qux"),
+        Edge("com.example.a.Bar", "com.example.b.Baz")
+      )
+    )
+    val (nodes, edges) = Aggregator.aggregate(g, Level.Package)
+    assertEquals(nodes, Set("com.example.a", "com.example.b"))
+    assertEquals(edges, Set(Edge("com.example.a", "com.example.b", 3)))
+  }
+
   test("package nodes are dropped at file and type levels, kept at member level") {
     val g = DepsGraph(
       Set(
