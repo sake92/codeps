@@ -3,6 +3,7 @@ package ba.sake.codeps.cli
 import ba.sake.codeps.exporting.{DotExporter, MermaidExporter, OutputFormat}
 import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
+import ba.sake.codeps.report.Reporter
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
@@ -128,7 +129,7 @@ object Main:
                   0
 
   @main
-  def analyze(
+  def draw(
       @arg(short = 'g') granularity: Aggregator.Level,
       @arg(short = 'f') format: OutputFormat,
       @arg(short = 'i') include: Seq[String],
@@ -137,7 +138,41 @@ object Main:
       @arg(short = 'o') out: Option[String],
       leftover: Leftover[String]
   ): Int =
-    val inputs = leftover.value
+    runOnGraph(leftover.value, out) { graph =>
+      val filtered = Filter(graph, include, exclude)
+      if filtered.nodes.isEmpty then Left("no nodes remain after filtering")
+      else
+        parseRules(collapse).flatMap { rules =>
+          val (nodes, edges) = Aggregator.aggregate(filtered, granularity)
+          val (collapsedNodes, collapsedEdges) = Collapser.collapse(nodes, edges, rules)
+          val g = GraphBuilder.build(collapsedNodes, collapsedEdges)
+          val cycles = CycleDetector.detect(g)
+          val content = format match
+            case OutputFormat.Dot     => DotExporter.render(g, cycles)
+            case OutputFormat.Mermaid => MermaidExporter.render(g, cycles)
+          Right(content)
+        }
+    }
+
+  @main
+  def report(
+      @arg(short = 'i') include: Seq[String],
+      @arg(short = 'e') exclude: Seq[String],
+      @arg(short = 'c') collapse: Seq[String],
+      @arg(short = 'o') out: Option[String],
+      leftover: Leftover[String]
+  ): Int =
+    runOnGraph(leftover.value, out) { graph =>
+      val filtered = Filter(graph, include, exclude)
+      if filtered.nodes.isEmpty then Left("no nodes remain after filtering")
+      else
+        parseRules(collapse).map { rules =>
+          Reporter.run(graph, include, exclude, rules).toJson(spaces = 2, sort = true)
+        }
+    }
+
+  /** Reads one json input (file or stdin) and runs `f` on it; errors go to stderr, exit 1. */
+  private def runOnGraph(inputs: Seq[String], out: Option[String])(f: DepsGraph => Either[String, String]): Int =
     if inputs.isEmpty then
       System.err.println("error: exactly one input is required (a json file, or '-' for stdin)")
       1
@@ -145,47 +180,37 @@ object Main:
       System.err.println("error: expected exactly one input (a json file, or '-' for stdin)")
       1
     else
-      val input = inputs.head
-      val text =
-        if input == "-" then
-          new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
-        else
-          val path = os.Path(input, os.pwd)
-          if !os.exists(path) then
-            System.err.println(s"error: input path does not exist: $path")
-            return 1
-          os.read(path)
-      try
-        val graph = text.parseJson[DepsGraph]
-        val filtered = Filter(graph, include, exclude)
-        if filtered.nodes.isEmpty then
-          System.err.println("error: no nodes remain after filtering")
+      readGraphInput(inputs.head) match
+        case Left(err) =>
+          System.err.println(s"error: $err")
           1
-        else
-          val rulesResult = collapse.foldLeft(Right(Nil): Either[String, Seq[CollapseRule]]) { (acc, pattern) =>
-            for
-              rules <- acc
-              rule  <- CollapseRule.parse(pattern)
-            yield rules :+ rule
-          }
-          rulesResult match
+        case Right(graph) =>
+          f(graph) match
             case Left(err) =>
               System.err.println(s"error: $err")
               1
-            case Right(rules) =>
-              val (nodes, edges) = Aggregator.aggregate(filtered, granularity)
-              val (collapsedNodes, collapsedEdges) = Collapser.collapse(nodes, edges, rules)
-              val g = GraphBuilder.build(collapsedNodes, collapsedEdges)
-              val cycles = CycleDetector.detect(g)
-              val content = format match
-                case OutputFormat.Dot     => DotExporter.render(g, cycles)
-                case OutputFormat.Mermaid => MermaidExporter.render(g, cycles)
+            case Right(content) =>
               writeOutput(content, out)
               0
-      catch
-        case e: ba.sake.tupson.TupsonException =>
-          System.err.println(s"error: failed to parse json: ${e.getMessage}")
-          1
+
+  private def readGraphInput(input: String): Either[String, DepsGraph] =
+    val text =
+      if input == "-" then new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+      else
+        val path = os.Path(input, os.pwd)
+        if !os.exists(path) then return Left(s"input path does not exist: $path")
+        os.read(path)
+    try Right(text.parseJson[DepsGraph])
+    catch
+      case e: ba.sake.tupson.TupsonException => Left(s"failed to parse json: ${e.getMessage}")
+
+  private def parseRules(collapse: Seq[String]): Either[String, Seq[CollapseRule]] =
+    collapse.foldLeft(Right(Nil): Either[String, Seq[CollapseRule]]) { (acc, pattern) =>
+      for
+        rules <- acc
+        rule  <- CollapseRule.parse(pattern)
+      yield rules :+ rule
+    }
 
   private def writeOutput(content: String, out: Option[String]): Unit =
     out match

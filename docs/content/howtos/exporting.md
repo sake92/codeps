@@ -6,7 +6,7 @@ description: Exporting to DOT and Mermaid
 
 # How to export the graph
 
-`codeps analyze` ends with one of two output formats, selected with `-f/--format`:
+`codeps draw` ends with one of two output formats, selected with `-f/--format`:
 
 | Format | Use case |
 |---|---|
@@ -14,14 +14,14 @@ description: Exporting to DOT and Mermaid
 | `mermaid` | Markdown documentation, Mermaid live editors, GitHub markdown |
 
 The graph is first produced in the [common JSON format](/reference/json-input.html) by
-`codeps export` — to a file, or to stdout for piping straight into `analyze`.
+`codeps export` — to a file, or to stdout for piping straight into `draw`.
 Output goes to stdout by default; use `-o/--out` to write to a file.
 
 ## DOT
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps analyze -g package -f dot -o graph.dot deps.json
+codeps draw -g package -f dot -o graph.dot deps.json
 dot -Tsvg graph.dot -o graph.svg   # render with graphviz
 ```
 
@@ -40,7 +40,7 @@ right after the `digraph deps {` header.
 ## Mermaid
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g package -f mermaid -
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f mermaid -
 ```
 
 ```mermaid
@@ -74,7 +74,7 @@ flowchart LR
   stay readable; loops created by collapsing are dropped
 
 ```shell
-codeps analyze -g package -f dot -i com.example -c com.example.modules.** deps.json
+codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
 ```
 
 See [Export formats](/reference/export-formats.html) for format details and

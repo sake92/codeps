@@ -2,7 +2,7 @@ package ba.sake.codeps.semanticdb
 
 import ba.sake.codeps.testing.FixtureCompiler
 import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
-import scala.meta.internal.semanticdb.{Range, SymbolInformation, SymbolOccurrence, TextDocument, TextDocuments}
+import scala.meta.internal.semanticdb.{Access, PrivateAccess, PrivateThisAccess, PrivateWithinAccess, ProtectedAccess, PublicAccess, Range, SymbolInformation, SymbolOccurrence, TextDocument, TextDocuments}
 
 class SemanticDbParserSpec extends munit.FunSuite:
 
@@ -95,4 +95,66 @@ class SemanticDbParserSpec extends munit.FunSuite:
     // the reference anchored on the object resolves to the object's type node id, not a dangling '#' id
     assert(deps.nodes.contains(Node("com.example.app.Deps", NodeKind.`type`, Some("com.example.app"), Some(file))))
     assert(deps.edges.contains(Edge("com.example.app.Main", "com.example.app.Deps")))
+  }
+
+  test("class-scoped private symbols are collapsed into their nearest non-private ancestor") {
+    val root = os.pwd.toNIO
+    val file = "src/com/example/a/Priv.scala"
+    val doc = TextDocument(
+      uri = file,
+      symbols = Seq(
+        SymbolInformation(symbol = "com/example/a/Priv#", kind = SymbolInformation.Kind.CLASS, displayName = "Priv", access = Access.Empty),
+        SymbolInformation(symbol = "com/example/a/Priv#pub().", kind = SymbolInformation.Kind.METHOD, displayName = "pub", access = PublicAccess()),
+        SymbolInformation(symbol = "com/example/a/Priv#priv().", kind = SymbolInformation.Kind.METHOD, displayName = "priv", access = PrivateAccess()),
+        SymbolInformation(symbol = "com/example/a/Priv#privThis().", kind = SymbolInformation.Kind.METHOD, displayName = "privThis", access = PrivateThisAccess()),
+        SymbolInformation(symbol = "com/example/a/Priv#pkgPriv().", kind = SymbolInformation.Kind.METHOD, displayName = "pkgPriv", access = PrivateWithinAccess("com.example.a")),
+        SymbolInformation(symbol = "com/example/a/Priv#prot().", kind = SymbolInformation.Kind.METHOD, displayName = "prot", access = ProtectedAccess()),
+        SymbolInformation(symbol = "com/example/a/Hidden.", kind = SymbolInformation.Kind.OBJECT, displayName = "Hidden", access = PrivateAccess()),
+        SymbolInformation(symbol = "com/example/b/Other#", kind = SymbolInformation.Kind.CLASS, displayName = "Other", access = Access.Empty)
+      ),
+      occurrences = Seq(
+        SymbolOccurrence(range = Some(Range(1, 0, 1, 4)), symbol = "com/example/a/Priv#", role = SymbolOccurrence.Role.DEFINITION),
+        // pub references Other: source stays pub
+        SymbolOccurrence(range = Some(Range(2, 0, 2, 3)), symbol = "com/example/a/Priv#pub().", role = SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(range = Some(Range(3, 0, 3, 3)), symbol = "com/example/b/Other#", role = SymbolOccurrence.Role.REFERENCE),
+        // priv references Other: source collapses to the enclosing type Priv
+        SymbolOccurrence(range = Some(Range(4, 0, 4, 3)), symbol = "com/example/a/Priv#priv().", role = SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(range = Some(Range(5, 0, 5, 3)), symbol = "com/example/b/Other#", role = SymbolOccurrence.Role.REFERENCE),
+        // privThis references Other: source collapses to Priv
+        SymbolOccurrence(range = Some(Range(6, 0, 6, 3)), symbol = "com/example/a/Priv#privThis().", role = SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(range = Some(Range(7, 0, 7, 3)), symbol = "com/example/b/Other#", role = SymbolOccurrence.Role.REFERENCE),
+        // pkgPriv references Other: source stays pkgPriv (kept as a node)
+        SymbolOccurrence(range = Some(Range(8, 0, 8, 3)), symbol = "com/example/a/Priv#pkgPriv().", role = SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(range = Some(Range(9, 0, 9, 3)), symbol = "com/example/b/Other#", role = SymbolOccurrence.Role.REFERENCE),
+        // prot references Other: source stays prot (kept as a node)
+        SymbolOccurrence(range = Some(Range(10, 0, 10, 3)), symbol = "com/example/a/Priv#prot().", role = SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(range = Some(Range(11, 0, 11, 3)), symbol = "com/example/b/Other#", role = SymbolOccurrence.Role.REFERENCE),
+        // pub references the private member priv: target collapses to the type Priv
+        SymbolOccurrence(range = Some(Range(12, 0, 12, 3)), symbol = "com/example/a/Priv#priv().", role = SymbolOccurrence.Role.REFERENCE),
+        // pub references the private top-level object Hidden: dropped (file-scoped, no cross-file info)
+        SymbolOccurrence(range = Some(Range(13, 0, 13, 3)), symbol = "com/example/a/Hidden.", role = SymbolOccurrence.Role.REFERENCE),
+        // Other definition at the end so its node exists and edges stay internal
+        SymbolOccurrence(range = Some(Range(14, 0, 14, 3)), symbol = "com/example/b/Other#", role = SymbolOccurrence.Role.DEFINITION)
+      )
+    )
+    val deps = SemanticDbParser.parse(TextDocuments(Seq(doc)).toByteArray, root).toOption.get.withoutDanglingEdges
+    val ids = deps.nodes.map(_.id)
+    // class-scoped private symbols are not nodes; private[pkg] and protected are kept
+    assert(!ids.contains("com.example.a.Priv#priv"))
+    assert(!ids.contains("com.example.a.Priv#privThis"))
+    assert(!ids.contains("com.example.a.Hidden"))
+    assert(ids.contains("com.example.a.Priv#pub"))
+    assert(ids.contains("com.example.a.Priv#pkgPriv"))
+    assert(ids.contains("com.example.a.Priv#prot"))
+    // reference inside priv (line 5) is attributed to the enclosing type
+    assert(deps.edges.contains(Edge("com.example.a.Priv", "com.example.b.Other")))
+    // reference inside privThis (line 7) too
+    assert(deps.edges.contains(Edge("com.example.a.Priv", "com.example.b.Other")))
+    // references inside kept members stay on the member
+    assert(deps.edges.contains(Edge("com.example.a.Priv#pkgPriv", "com.example.b.Other")))
+    assert(deps.edges.contains(Edge("com.example.a.Priv#prot", "com.example.b.Other")))
+    // reference to a class-private member collapses to the declaring type
+    assert(deps.edges.contains(Edge("com.example.a.Priv#prot", "com.example.a.Priv")))
+    // reference to the private top-level object produces no edge
+    assert(!deps.edges.exists(_.target == "com.example.a.Hidden"))
   }

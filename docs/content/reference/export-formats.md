@@ -6,7 +6,7 @@ description: DOT and Mermaid export format details
 
 # Export formats
 
-`codeps analyze` renders the final graph in two formats: `-f dot` and `-f mermaid`.
+`codeps draw` renders the final graph in two formats: `-f dot` and `-f mermaid`.
 The graph's nodes are whatever `-g` granularity produced, after
 [filtering and collapsing](/reference/cli.html); edges are directed dependencies
 (self-loops removed, deduplicated).
@@ -33,7 +33,7 @@ Render it with Graphviz:
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps analyze -g package -f dot deps.json -o graph.dot
+codeps draw -g package -f dot deps.json -o graph.dot
 dot -Tsvg graph.dot -o graph.svg
 ```
 

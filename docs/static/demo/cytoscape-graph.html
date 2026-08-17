@@ -305,6 +305,36 @@
   .suggest-item .io { color: var(--text-dim); font-variant-numeric: tabular-nums; font-size: 11px; flex: none; }
   .suggest-empty { color: var(--text-dim); font-size: 11.5px; padding: 4px 12px 8px; }
 
+  #cycle-panel { width: 380px; max-height: min(70vh, 560px); }
+  .cycle-item {
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 11.5px;
+  }
+  .cycle-item:hover { background: var(--panel-2); }
+  .cycle-item .sev-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .cycle-item .sev {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 1px 7px;
+    border-radius: 999px;
+  }
+  .cycle-item .sev.s-fine { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+  .cycle-item .sev.s-meh { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+  .cycle-item .sev.s-bad { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+  .cycle-item .break-hint { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .cycle-item .chain {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10.5px;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.5;
+  }
+
   #tooltip {
     position: absolute;
     z-index: 20;
@@ -443,6 +473,17 @@
     <option value="dagre">Layout: dagre</option>
   </select>
 
+  <select id="level-select" class="hidden" title="Granularity level of the analysis report">
+    <option value="package">Level: package</option>
+    <option value="file">Level: file</option>
+    <option value="type">Level: type</option>
+    <option value="member">Level: member</option>
+  </select>
+
+  <label class="chk hidden" id="hide-fine-wrap" title="Hide 'fine' cycles (same-file mutual recursion) from the panel and highlighting">
+    <input type="checkbox" id="hide-fine-check" /> hide fine
+  </label>
+
   <div class="searchbox">
     <input type="text" id="search-input" placeholder="Filter: pkg1, /regex/, …" aria-label="Filter packages" spellcheck="false" autocomplete="off" />
     <button id="search-clear" class="mini" title="Clear search">×</button>
@@ -468,6 +509,7 @@
   <button id="paste-btn" title="Paste graph JSON">Paste</button>
   <button id="pkg-btn" title="Show/hide the package list">Packages</button>
   <button id="suggest-btn" title="Show suggested packages to tackle">Suggest</button>
+  <button id="cycle-btn" class="hidden" title="Show/hide the cycles of the current report level">Cycles</button>
   <button id="reset-btn" title="Reset all filters">Reset</button>
 
   <span id="stats"></span>
@@ -480,7 +522,9 @@
     <div class="hero-card">
       <h1>Package dependency graph</h1>
       <p>
-        Load a graph JSON (as produced by the codeps CLI with <code>codeps export</code>):
+        Load a graph JSON (as produced by the codeps CLI with <code>codeps export</code>),
+        or an analysis report from <code>codeps report</code> (cycle highlighting,
+        severity grades and suggestions):
         drop a file anywhere, pick one, or paste the JSON. Then filter, focus and
         rearrange the graph.
       </p>
@@ -525,6 +569,15 @@
       <button class="close-btn" id="suggest-close" title="Close">×</button>
     </div>
     <div id="suggest-list"></div>
+  </div>
+
+  <div id="cycle-panel" class="panel hidden">
+    <div class="pkg-head">
+      <span class="title">Cycles</span>
+      <span class="count" id="cycle-count"></span>
+      <button class="close-btn" id="cycle-close" title="Close">×</button>
+    </div>
+    <div id="cycle-list"></div>
   </div>
 
   <div id="focus-badge" class="hidden">
@@ -602,8 +655,13 @@
     showClasses: false,   // "7c" on node labels
     manualHidden: new Set(),  // unchecked in the package list
     subtreeHidden: new Set(), // hidden via right-click subtree
-    focusId: null,
-    layout: 'elk'
+    focusIds: new Set(),  // focused node id(s) — a single node, or all members of a cycle
+    layout: 'elk',
+    reportMode: false,    // true when a report JSON ({"levels": ...}) is loaded
+    reportLevels: null,   // the report's "levels" object
+    reportLevelData: null,// the active level's LevelReport
+    activeLevel: 'package',
+    hideFine: false
   };
   var cy = null;
 
@@ -883,11 +941,11 @@
   }
 
   function focusedIds() {
-    if (!state.focusId) return null;
-    var set = new Set([state.focusId]);
+    if (state.focusIds.size === 0) return null;
+    var set = new Set(state.focusIds);
     state.graph.edges.forEach(function (e) {
-      if (e.source === state.focusId) set.add(e.target);
-      if (e.target === state.focusId) set.add(e.source);
+      if (state.focusIds.has(e.source)) set.add(e.target);
+      if (state.focusIds.has(e.target)) set.add(e.source);
     });
     return set;
   }
@@ -993,6 +1051,14 @@
         style: {
           'line-color': '#38bdf8',
           'target-arrow-color': '#38bdf8'
+        }
+      },
+      {
+        selector: 'edge.cyc',
+        style: {
+          'line-color': '#ef4444',
+          'target-arrow-color': '#ef4444',
+          'width': 2.2
         }
       },
       {
@@ -1119,7 +1185,7 @@
   function applyClasses(visible, focused) {
     cy.nodes().forEach(function (node) {
       var id = node.id();
-      node.toggleClass('focused', state.focusId === id);
+      node.toggleClass('focused', state.focusIds.has(id));
       node.toggleClass('dimmed', focused ? !focused.has(id) : !visible.has(id));
     });
     cy.edges().forEach(function (edge) {
@@ -1146,6 +1212,7 @@
       runLayout();
     }
     applyClasses(visible, focused);
+    applyCycleClasses();
 
     refreshLabels();
     updateStats(visible);
@@ -1158,6 +1225,13 @@
     var total = state.meta.size;
     var edgeCount = state.graph.edges.length;
     var parts = [total + ' packages', edgeCount + ' deps'];
+    if (state.reportMode && state.reportLevelData) {
+      var counts = { bad: 0, meh: 0, fine: 0 };
+      (state.reportLevelData.cycles || []).forEach(function (c) {
+        if (counts[c.severity] !== undefined) counts[c.severity]++;
+      });
+      parts.push(counts.bad + ' bad · ' + counts.meh + ' meh · ' + counts.fine + ' fine');
+    }
     if (visible && visible.size !== total) parts.push(total - visible.size + ' hidden');
     $('#stats').textContent = parts.join(' · ');
   }
@@ -1169,8 +1243,9 @@
 
   function updateFocusBadge() {
     var badge = $('#focus-badge');
-    if (state.focusId) {
-      $('#focus-name').textContent = state.focusId;
+    if (state.focusIds.size > 0) {
+      var names = Array.from(state.focusIds);
+      $('#focus-name').textContent = names.length === 1 ? names[0] : names.length + ' nodes';
       badge.classList.remove('hidden');
     } else {
       badge.classList.add('hidden');
@@ -1240,6 +1315,10 @@
   function buildSuggestions() {
     var list = $('#suggest-list');
     list.textContent = '';
+    if (state.reportMode && state.reportLevelData && state.reportLevelData.suggestions) {
+      buildReportSuggestions(list, state.reportLevelData.suggestions);
+      return;
+    }
     var r = rankSuggestions();
     if (r.knots.length === 0 && r.easy.length === 0) {
       var empty = document.createElement('div');
@@ -1288,10 +1367,73 @@
     else r.easy.forEach(addItem);
   }
 
+  /** Suggestions panel for report mode: uses the analysis JSON instead of recomputing. */
+  function buildReportSuggestions(list, s) {
+    var addSection = function (label) {
+      var sec = document.createElement('div');
+      sec.className = 'suggest-section';
+      sec.textContent = label;
+      list.appendChild(sec);
+    };
+    var addEmpty = function (text) {
+      var el = document.createElement('div');
+      el.className = 'suggest-empty';
+      el.textContent = text;
+      list.appendChild(el);
+    };
+    var addItem = function (label, io, onClick) {
+      var item = document.createElement('div');
+      item.className = 'suggest-item';
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = '#38bdf8';
+      var name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = label;
+      name.title = label;
+      var ioEl = document.createElement('span');
+      ioEl.className = 'io';
+      ioEl.textContent = io || '';
+      item.appendChild(dot);
+      item.appendChild(name);
+      item.appendChild(ioEl);
+      item.addEventListener('click', onClick);
+      list.appendChild(item);
+    };
+    var metrics = state.reportLevelData.metrics || {};
+    var ioOf = function (id) {
+      var m = metrics[id];
+      return m ? m.in + '/' + m.out : '';
+    };
+    addSection('Cycle-breaking edges');
+    if (!s.breakEdges || s.breakEdges.length === 0) addEmpty('None — no cycles at this level');
+    else s.breakEdges.forEach(function (be) {
+      addItem(be.edge.source + ' → ' + be.edge.target, 'breaks ' + be.breaks, function () {
+        setFocusIds([be.edge.source, be.edge.target]);
+      });
+    });
+    addSection('Hardest knots');
+    if (!s.hardestKnots || s.hardestKnots.length === 0) addEmpty('None — package level only');
+    else s.hardestKnots.forEach(function (id) {
+      addItem(id, ioOf(id), function () { setFocus(id); });
+    });
+    addSection('Easy wins');
+    if (!s.easyWins || s.easyWins.length === 0) addEmpty('None — package level only');
+    else s.easyWins.forEach(function (id) {
+      addItem(id, ioOf(id), function () { setFocus(id); });
+    });
+  }
+
   /* ================================================================
    * Loading graphs
    * ================================================================ */
-  function loadGraph(obj, label) {
+  function loadGraph(obj, label, keepReportMode) {
+    // report JSON ({levels: {...}}) switches to report mode
+    if (obj && typeof obj === 'object' && obj.levels && typeof obj.levels === 'object') {
+      loadReport(obj, label);
+      return;
+    }
+    if (!keepReportMode && state.reportMode) resetReportMode();
     var parsed = parseGraph(obj);
     var computed = computeMeta(parsed.ids, parsed.edges, parsed.meta);
     state.graph = { ids: parsed.ids, edges: parsed.edges };
@@ -1307,7 +1449,7 @@
     state.showInOut = false;
     state.showFiles = false;
     state.showClasses = false;
-    state.focusId = null;
+    state.focusIds = new Set();
     state.manualHidden.clear();
     state.subtreeHidden.clear();
     $('#search-input').value = '';
@@ -1338,6 +1480,115 @@
     toast('Loaded ' + parsed.ids.size + ' packages, ' + parsed.edges.length + ' deps' + (label ? ' from ' + label : ''));
   }
 
+  /** Report mode: one analysis JSON covers all granularities. */
+  function loadReport(obj, label) {
+    state.reportMode = true;
+    state.reportLevels = obj.levels;
+    var order = ['package', 'file', 'type', 'member'];
+    var first = null;
+    for (var i = 0; i < order.length; i++) {
+      if (obj.levels[order[i]] && obj.levels[order[i]].graph) { first = order[i]; break; }
+    }
+    state.activeLevel = first || 'package';
+    $('#level-select').value = state.activeLevel;
+    $('#level-select').classList.remove('hidden');
+    $('#hide-fine-wrap').classList.remove('hidden');
+    $('#cycle-btn').classList.remove('hidden');
+    $('#hide-fine-check').checked = state.hideFine;
+    applyReportLevel(label);
+  }
+
+  function resetReportMode() {
+    state.reportMode = false;
+    state.reportLevels = null;
+    state.reportLevelData = null;
+    state.activeLevel = 'package';
+    state.hideFine = false;
+    $('#level-select').classList.add('hidden');
+    $('#hide-fine-wrap').classList.add('hidden');
+    $('#cycle-btn').classList.add('hidden');
+    $('#cycle-panel').classList.add('hidden');
+    $('#hide-fine-check').checked = false;
+  }
+
+  function applyReportLevel(label) {
+    state.reportLevelData = state.reportLevels[state.activeLevel] ||
+      { cycles: [], suggestions: null, graph: null, metrics: null };
+    if (state.reportLevelData.graph) {
+      loadGraph(state.reportLevelData.graph, (label || 'report') + ' · ' + state.activeLevel, true);
+      buildCyclesPanel();
+    } else {
+      // member level has no embedded graph — keep the current one, list cycles only
+      buildCyclesPanel();
+      buildSuggestions();
+      updateStats();
+      toast('No graph at ' + state.activeLevel + ' level — cycles are in the Cycles panel');
+    }
+  }
+
+  /** Cycles of the active report level, respecting the "hide fine" toggle. */
+  function visibleCycles() {
+    if (!state.reportLevelData || !state.reportLevelData.cycles) return [];
+    var cycles = state.reportLevelData.cycles;
+    if (state.hideFine) cycles = cycles.filter(function (c) { return c.severity !== 'fine'; });
+    return cycles;
+  }
+
+  function buildCyclesPanel() {
+    var list = $('#cycle-list');
+    list.textContent = '';
+    var cycles = visibleCycles();
+    $('#cycle-count').textContent = cycles.length + (state.hideFine ? ' (fine hidden)' : '');
+    if (cycles.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'suggest-empty';
+      empty.textContent = state.hideFine ? 'Only fine cycles here — nothing to see' : 'No cycles at this level';
+      list.appendChild(empty);
+      return;
+    }
+    cycles.forEach(function (cycle) {
+      var item = document.createElement('div');
+      item.className = 'cycle-item';
+      var sevRow = document.createElement('div');
+      sevRow.className = 'sev-row';
+      var chip = document.createElement('span');
+      chip.className = 'sev s-' + cycle.severity;
+      chip.textContent = cycle.severity;
+      sevRow.appendChild(chip);
+      if (cycle.breakCandidate) {
+        var hint = document.createElement('span');
+        hint.className = 'break-hint';
+        hint.textContent = 'break: ' + cycle.breakCandidate;
+        sevRow.appendChild(hint);
+      }
+      var chain = document.createElement('div');
+      chain.className = 'chain';
+      chain.textContent = (cycle.members || []).join(' → ');
+      item.appendChild(sevRow);
+      item.appendChild(chain);
+      var members = [];
+      (cycle.members || []).forEach(function (m) { if (members.indexOf(m) === -1) members.push(m); });
+      item.addEventListener('click', function () { setFocusIds(members); });
+      list.appendChild(item);
+    });
+  }
+
+  /** Marks edges that participate in visible cycles (red). */
+  function applyCycleClasses() {
+    if (!cy) return;
+    var keys = new Set();
+    if (state.reportMode) {
+      visibleCycles().forEach(function (cycle) {
+        (cycle.edges || []).forEach(function (e) {
+          keys.add(e.source + '\u0000' + e.target);
+        });
+      });
+    }
+    cy.edges().forEach(function (edge) {
+      edge.toggleClass('cyc', keys.has(edge.data('source') + '\u0000' + edge.data('target')));
+    });
+  }
+
   function loadGraphText(text, label) {
     var obj;
     try {
@@ -1357,13 +1608,18 @@
    * Focus
    * ================================================================ */
   function setFocus(id) {
-    state.focusId = id;
+    state.focusIds = new Set([id]);
+    updateFocusBadge();
+    render();
+  }
+  function setFocusIds(ids) {
+    state.focusIds = new Set(ids);
     updateFocusBadge();
     render();
   }
   function clearFocus() {
-    if (!state.focusId) return;
-    state.focusId = null;
+    if (state.focusIds.size === 0) return;
+    state.focusIds = new Set();
     updateFocusBadge();
     render();
   }
@@ -1448,7 +1704,7 @@
     // (cytoscape already distinguishes taps from drags — no suppression needed)
     cy.on('tap', 'node', function (e) {
       var id = e.target.id();
-      if (state.focusId === id) clearFocus();
+      if (state.focusIds.has(id)) clearFocus();
       else setFocus(id);
     });
     cy.on('tap', function (e) {
@@ -1498,7 +1754,7 @@
     state.showInOut = false;
     state.showFiles = false;
     state.showClasses = false;
-    state.focusId = null;
+    state.focusIds = new Set();
     state.manualHidden.clear();
     state.subtreeHidden.clear();
     $('#search-input').value = '';
@@ -1519,6 +1775,7 @@
     $('#paste-panel').classList.add('hidden');
     $('#pkg-panel').classList.add('hidden');
     $('#suggest-panel').classList.add('hidden');
+    $('#cycle-panel').classList.add('hidden');
     if (willShow) {
       el.classList.remove('hidden');
       if (sel === '#paste-panel') $('#paste-input').focus();
@@ -1575,11 +1832,22 @@
     $('#paste-btn').addEventListener('click', function () { togglePanel('#paste-panel'); });
     $('#pkg-btn').addEventListener('click', function () { togglePanel('#pkg-panel'); });
     $('#suggest-btn').addEventListener('click', function () { togglePanel('#suggest-panel'); });
+    $('#cycle-btn').addEventListener('click', function () { togglePanel('#cycle-panel'); });
     $('#reset-btn').addEventListener('click', resetFilters);
+    $('#level-select').addEventListener('change', function (e) {
+      state.activeLevel = e.target.value;
+      applyReportLevel('report');
+    });
+    $('#hide-fine-check').addEventListener('change', function (e) {
+      state.hideFine = e.target.checked;
+      buildCyclesPanel();
+      render();
+    });
 
     $('#paste-close').addEventListener('click', function () { $('#paste-panel').classList.add('hidden'); });
     $('#pkg-close').addEventListener('click', function () { $('#pkg-panel').classList.add('hidden'); });
     $('#suggest-close').addEventListener('click', function () { $('#suggest-panel').classList.add('hidden'); });
+    $('#cycle-close').addEventListener('click', function () { $('#cycle-panel').classList.add('hidden'); });
     $('#paste-render').addEventListener('click', function () {
       var v = $('#paste-input').value.trim();
       if (v) loadGraphText(v, 'pasted JSON');
@@ -1614,6 +1882,7 @@
         $('#paste-panel').classList.add('hidden');
         $('#pkg-panel').classList.add('hidden');
         $('#suggest-panel').classList.add('hidden');
+        $('#cycle-panel').classList.add('hidden');
       }
     });
 

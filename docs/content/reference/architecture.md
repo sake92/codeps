@@ -23,11 +23,11 @@ flowchart LR
 
 ```text
 ┌── producer ─────────────────────┐   ┌── analyzer ──────────────────────────────┐
-│ codeps export --from semanticdb │   │ codeps analyze -g <level> -f dot|mermaid │
-│ codeps export --from jdeps      │   │                                          │
+│ codeps export --from semanticdb │   │ codeps draw -g <level> -f dot|mermaid     │
+│ codeps export --from jdeps      │   │ codeps report [-i] [-e] [-c]              │
 │                                │   │                                          │
 │ parse ──► common JSON graph ────┼──►│ filter ─► aggregate -g ─► collapse ─►    │
-│ (DepsGraph, core)               │   │ graph ─► cycles ─► dot / mermaid         │
+│ (DepsGraph, core)               │   │ graph ─► cycles ─► dot / mermaid          │
 └─────────────────────────────────┘   └──────────────────────────────────────────┘
 ```
 
@@ -63,6 +63,13 @@ The graph model and processing pipeline:
   cycle per strongly connected component of size ≥ 2 (self-loops are dropped
   earlier), in true dependency order and deterministic (rotated to start from
   the smallest member)
+- `report/Reporter` — runs the pipeline (filter → aggregate → collapse → build
+  graph → cycles) at every granularity in one pass and grades each cycle:
+  package = `bad`, file = `meh`, type/member cycles within one file = `fine`
+  (cross-file or file-less members = `meh`). Computes per-level metrics
+  (in/out/hub), `breakEdges` (cycle edge cut list), and package-level
+  `hardestKnots`/`easyWins` suggestions. Emits the self-contained
+  `AnalysisReport` JSON ([schema](/reference/report.html)).
 
 Graph storage uses [jgrapht](https://jgrapht.org/).
 
@@ -73,9 +80,14 @@ via `semanticdb-shared` and emits a `DepsGraph`:
 
 - nodes — one `file` node per document (id = source URI relative to `--root`), and
   `type`/`member`/`package` nodes for the document's defined symbols (constructors
-  and local symbols are skipped)
+  and local symbols are skipped). Class-scoped private symbols (`private`,
+  `private[this]`) are skipped too: they can never create cross-package dependencies,
+  and their references are collapsed into the nearest non-private ancestor (enclosing
+  type, else file/package), so package- and file-level results are unaffected.
+  `private[pkg]` and `protected` symbols are kept.
 - edges — for each symbol occurrence, the innermost defined symbol whose range
-  contains the occurrence → the referenced symbol; self-edges skipped
+  contains the occurrence → the referenced symbol; self-edges skipped; references
+  to/from class-private symbols are collapsed up or dropped
 - external references are dropped: only own symbols are materialized (dangling-edge
   prune after merge via `withoutDanglingEdges`)
 
@@ -100,15 +112,18 @@ See [Export formats](/reference/export-formats.html) and
 
 ### cli
 
-`Main` (mainargs-based) with two subcommands:
+`Main` (mainargs-based) with three subcommands:
 
 - `export` — resolves inputs, runs the producers (`semanticdb`/`jdeps`), merges
   the resulting `DepsGraph`s and writes the common JSON to stdout or `-o`
-- `analyze` — reads the common JSON (file or stdin), runs the pipeline
+- `draw` — reads the common JSON (file or stdin), runs the pipeline
   (filter → aggregate to `-g` → collapse → build graph → detect cycles → export)
   and writes dot/mermaid to stdout or `-o`
+- `report` — reads the common JSON (file or stdin), runs the pipeline at all four
+  granularities via `Reporter` and writes the analysis report JSON to stdout or `-o`
 
-See the [CLI reference](/reference/cli.html).
+See the [CLI reference](/reference/cli.html) and the
+[Cycle analysis report](/reference/report.html).
 
 ### test-utils
 

@@ -43,22 +43,22 @@ class MainSpec extends munit.FunSuite:
     assert(!content.contains("\"kind\": \"file\""))
   }
 
-  test("analyze -g package produces package-level dot") {
+  test("draw -g package produces package-level dot") {
     val out = os.pwd / "tmp" / "cli-test" / "out.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("analyze", "-g", "package", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
+    val res = runCli("draw", "-g", "package", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.startsWith("digraph deps {"))
     assert(content.contains("\"com.example.modules.module1\" -> \"com.example.util\";"))
   }
 
-  test("analyze -g type shows type nodes, no package nodes") {
+  test("draw -g type shows type nodes, no package nodes") {
     val out = os.pwd / "tmp" / "cli-test" / "out-types.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("analyze", "-g", "type", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
+    val res = runCli("draw", "-g", "type", "-f", "dot", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"com.example.modules.module1.Service1\""))
@@ -66,25 +66,25 @@ class MainSpec extends munit.FunSuite:
     assert(!content.contains("\"org.thirdparty\""))
   }
 
-  test("analyze accepts long-form flags with values after positionals") {
+  test("draw accepts long-form flags with values after positionals") {
     val out = os.pwd / "tmp" / "cli-test" / "out-long.mmd"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     // reorder moves the positional json after all named args, so this must behave
     // like the short-form calls even though the positional follows named flags
     val res = runCli(
-      "analyze", "--granularity", "type", "--format", "mermaid", "--include", "com.example",
+      "draw", "--granularity", "type", "--format", "mermaid", "--include", "com.example",
       exportJson("deps.json").toString, "-o", out.toString
     )
     assertEquals(res.exitCode, 0)
     assert(os.read(out).contains("\"com.example.modules.module1.Service1\""))
   }
 
-  test("analyze -g file shows file nodes, no package nodes") {
+  test("draw -g file shows file nodes, no package nodes") {
     val out = os.pwd / "tmp" / "cli-test" / "out-files.mmd"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("analyze", "-g", "file", "-f", "mermaid", exportJson("deps.json").toString, "-o", out.toString)
+    val res = runCli("draw", "-g", "file", "-f", "mermaid", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains(".scala"))
@@ -92,33 +92,33 @@ class MainSpec extends munit.FunSuite:
     assert(!content.contains("\"org.thirdparty\""))
   }
 
-  test("analyze collapses packages") {
+  test("draw collapses packages") {
     val out = os.pwd / "tmp" / "cli-test" / "out-collapsed.dot"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val res = runCli(
-      "analyze", "-g", "package", "-f", "dot", "-c", "com.example.modules.**",
+      "draw", "-g", "package", "-f", "dot", "-c", "com.example.modules.**",
       exportJson("deps.json").toString, "-o", out.toString
     )
     assertEquals(res.exitCode, 0)
     assert(os.read(out).contains("\"com.example.modules\" -> \"com.example.util\";"))
   }
 
-  test("analyze reads from stdin with '-'") {
+  test("draw reads from stdin with '-'") {
     val json = os.read(exportJson("deps.json"))
     val out = os.pwd / "tmp" / "cli-test" / "out-stdin.mmd"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val cmd: Seq[os.Shellable] =
       Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
-        Seq[os.Shellable]("analyze", "-g", "package", "-f", "mermaid", "-", "-o", out.toString)
+        Seq[os.Shellable]("draw", "-g", "package", "-f", "mermaid", "-", "-o", out.toString)
     val res = os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe, stdin = json)
     assertEquals(res.exitCode, 0)
     assert(os.read(out).contains("\"com.example.util\""))
   }
 
   test("empty result exits 1") {
-    val res = runCli("analyze", "-g", "package", "-f", "dot", "-i", "no.such.pkg", exportJson("deps.json").toString)
+    val res = runCli("draw", "-g", "package", "-f", "dot", "-i", "no.such.pkg", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("no nodes remain after filtering"))
   }
@@ -127,19 +127,19 @@ class MainSpec extends munit.FunSuite:
     val input = os.pwd / "tmp" / "cli-test" / "bad.json"
     os.makeDir.all(input / os.up)
     os.write.over(input, """{"nodes": "not-an-array"}""")
-    val res = runCli("analyze", "-g", "package", "-f", "dot", input.toString)
+    val res = runCli("draw", "-g", "package", "-f", "dot", input.toString)
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("failed to parse json"))
   }
 
   test("bad granularity exits non-zero") {
-    val res = runCli("analyze", "-g", "bogus", "-f", "dot", exportJson("deps.json").toString)
+    val res = runCli("draw", "-g", "bogus", "-f", "dot", exportJson("deps.json").toString)
     assert(res.exitCode != 0)
     assert(res.err.text().contains("unknown granularity: bogus"))
   }
 
   test("bad format exits non-zero") {
-    val res = runCli("analyze", "-g", "package", "-f", "bogus", exportJson("deps.json").toString)
+    val res = runCli("draw", "-g", "package", "-f", "bogus", exportJson("deps.json").toString)
     assert(res.exitCode != 0)
     assert(res.err.text().contains("unknown format: bogus"))
   }
@@ -151,7 +151,46 @@ class MainSpec extends munit.FunSuite:
   }
 
   test("bad collapse rule exits 1") {
-    val res = runCli("analyze", "-g", "package", "-f", "dot", "-c", "a.b.c", exportJson("deps.json").toString)
+    val res = runCli("draw", "-g", "package", "-f", "dot", "-c", "a.b.c", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("collapse rule must end with '**' or '*'"))
+  }
+
+  test("report emits multi-level analysis json") {
+    val out = os.pwd / "tmp" / "cli-test" / "report.json"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("report", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.contains("\"levels\""))
+    assert(content.contains("\"package\""))
+    assert(content.contains("\"file\""))
+    assert(content.contains("\"type\""))
+    assert(content.contains("\"member\""))
+    assert(content.contains("\"suggestions\""))
+    assert(content.contains("\"hardestKnots\""))
+    assert(content.contains("\"breakEdges\""))
+  }
+
+  test("report grades package cycles as bad and supports collapse") {
+    val input = os.pwd / "tmp" / "cli-test" / "cyclic.json"
+    os.makeDir.all(input / os.up)
+    os.write.over(
+      input,
+      """{"nodes":[{"id":"p1","kind":"package"},{"id":"p2","kind":"package"},
+        |{"id":"A.scala","kind":"file"},{"id":"B.scala","kind":"file"},
+        |{"id":"p1.A","kind":"type","parentId":"p1","file":"A.scala"},
+        |{"id":"p2.B","kind":"type","parentId":"p2","file":"B.scala"},
+        |{"id":"p1.A#m","kind":"member","parentId":"p1.A","file":"A.scala"},
+        |{"id":"p2.B#n","kind":"member","parentId":"p2.B","file":"B.scala"}],
+        |"edges":[{"source":"p1.A#m","target":"p2.B#n"},{"source":"p2.B#n","target":"p1.A#m"}]}""".stripMargin
+    )
+    val out = os.pwd / "tmp" / "cli-test" / "report-cyclic.json"
+    os.remove.all(out)
+    val res = runCli("report", "-c", "p1.**", input.toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.contains("\"severity\": \"bad\""))
+    assert(content.contains("\"severity\": \"meh\""))
   }

@@ -6,13 +6,15 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with two subcommands
+`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with three subcommands
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
    emits the [common JSON graph format](/reference/json-input.html). No analysis.
-2. [`analyze`](#analyze) — the *analyzer*: consumes that JSON (a file or stdin) and renders
+2. [`draw`](#draw) — the *renderer*: consumes that JSON (a file or stdin) and renders
    dot or mermaid at any granularity.
+3. [`report`](#report) — the *analyzer*: consumes that JSON and emits a multi-level
+   [cycle analysis report](/reference/report.html).
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
@@ -23,10 +25,10 @@ java -jar codeps.jar <subcommand> [options] <inputs...>
 
 The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 
-The two steps pipe together — `export` writes the graph to stdout, `analyze` reads it from stdin (`-`):
+The steps pipe together — `export` writes the graph to stdout, `draw`/`report` read it from stdin (`-`):
 
 ```shell
-codeps export --from jdeps jdeps.txt | codeps analyze -g type -f dot -
+codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
 ```
 
 ## export
@@ -65,13 +67,13 @@ the run continues:
 warning: failed to parse semanticdb: ...
 ```
 
-## analyze
+## draw
 
 ```shell
-codeps analyze -g <package|file|type|member> -f <dot|mermaid> [-i inc] [-e exc] [-c collapse] [-o out] <file|->
+codeps draw -g <package|file|type|member> -f <dot|mermaid> [-i inc] [-e exc] [-c collapse] [-o out] <file|->
 ```
 
-Pure analyzer: reads the common JSON graph (a file, or stdin via `-`) and renders it
+Pure renderer: reads the common JSON graph (a file, or stdin via `-`) and renders it
 in the requested format at the requested granularity. Pipeline:
 parse → filter → aggregate to `-g` → collapse → build graph → cycle detection → render.
 
@@ -87,12 +89,12 @@ parse → filter → aggregate to `-g` → collapse → build graph → cycle de
 | `-o` / `--out` | Write output to this file instead of stdout. |
 
 Exactly one input is required — a JSON file, or `-` for stdin, so `export` output
-can be piped straight into `analyze`:
+can be piped straight into `draw`:
 
 ```shell
-codeps analyze -g package -f dot deps.json
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g type -f mermaid -
-codeps export --from jdeps jdeps.txt | codeps analyze -g type -f dot -
+codeps draw -g package -f dot deps.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g type -f mermaid -
+codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
 ```
 
 ### Granularity
@@ -133,7 +135,7 @@ resulting universe (self-edges are dropped). With no `-i`, all nodes are kept.
 
 ```shell
 # keep only com.example and subpackages, minus internal helpers
-codeps analyze -g package -f dot -i com.example -e com.example.internal deps.json
+codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
 ```
 
 ## Collapse rules
@@ -152,8 +154,38 @@ match a node, the **longest prefix wins** (ties: first rule in the sequence).
 Loops created by collapsing are dropped; edges are deduplicated.
 
 ```shell
-codeps analyze -g package -f dot -i com.example -c com.example.modules.** deps.json
+codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
 ```
+
+## report
+
+```shell
+codeps report [-i inc] [-e exc] [-c collapse] [-o out] <file|->
+```
+
+Pure analyzer: reads the common JSON graph (a file, or stdin via `-`) and runs the
+pipeline (filter → aggregate → collapse → build graph → cycle detection) at **all four
+granularities in one pass**, grading every cycle and computing metrics and suggestions.
+Emits one self-contained JSON document (see [Cycle analysis report](/reference/report.html)),
+always exits `0` on success.
+
+| Option | Description |
+|---|---|
+| `-i` / `--include` | Same as `draw` — applied at every granularity. |
+| `-e` / `--exclude` | Same as `draw`. |
+| `-c` / `--collapse` | Same as `draw`. |
+| `-o` / `--out` | Write the report JSON to this file instead of stdout. |
+
+There is no `-g`: the report covers package, file, type and member levels at once.
+
+```shell
+codeps report deps.json -o report.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report - > report.json
+```
+
+The report JSON is the input for the [interactive demo](/demo/cytoscape-graph.html)'s
+report mode (cycle highlighting, severity grades, suggestions) and is shaped for agents
+to consume directly.
 
 ## Exit codes and errors
 
@@ -167,7 +199,7 @@ so a partial run still succeeds:
 warning: failed to parse semanticdb: ...
 ```
 
-For `analyze`, malformed or type-invalid JSON input is a hard error (exit 1):
+For `draw`, malformed or type-invalid JSON input is a hard error (exit 1):
 
 ```text
 error: failed to parse json: ...
@@ -180,5 +212,5 @@ see the [README](https://github.com/sake92/codeps#development):
 
 ```shell
 deder exec -t run -m cli export --from semanticdb <dir> -o deps.json
-deder exec -t run -m cli analyze -g package -f dot deps.json
+deder exec -t run -m cli draw -g package -f dot deps.json
 ```

@@ -1,13 +1,13 @@
 ---
 layout: reference.html
 title: Common JSON format
-description: the common JSON graph format produced by codeps export and consumed by codeps analyze
+description: the common JSON graph format produced by codeps export and consumed by codeps draw
 ---
 
 # Common JSON format
 
 The common JSON format is the contract between the two codeps steps: `codeps export`
-*produces* it, `codeps analyze` *consumes* it. It is a self-contained dependency
+*produces* it, `codeps draw` *consumes* it. It is a self-contained dependency
 graph with `package`/`file`/`type`/`member` nodes and directed edges between node ids.
 
 ```json
@@ -71,7 +71,7 @@ codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
 ```
 
 External tools can emit nodes+edges JSON directly (matching the schema above)
-and pipe it into `codeps analyze ... -`. The examples below are sketches; adapt
+and pipe it into `codeps draw ... -`. The examples below are sketches; adapt
 them to your tool's output. The key points: give every node a unique `id` and a
 valid `kind`, and reference only existing ids in `edges`.
 
@@ -79,17 +79,17 @@ JavaScript/TypeScript (file-level deps from [madge](https://github.com/pahen/mad
 mapped to file/package nodes, e.g. by tsconfig `rootDir`):
 
 ```shell
-madge --json src | jq '...' | codeps analyze -g file -f mermaid -
+madge --json src | jq '...' | codeps draw -g file -f mermaid -
 ```
 
 Python (module-level deps from [pydeps](https://github.com/thebjorn/pydeps)):
 
 ```shell
-pydeps --json mypackage | jq '...' | codeps analyze -g package -f dot -
+pydeps --json mypackage | jq '...' | codeps draw -g package -f dot -
 ```
 
 Go (`go list` already emits package-level import deps):
 
 ```shell
-go list -json ./... | jq '...' | codeps analyze -g package -f dot -
+go list -json ./... | jq '...' | codeps draw -g package -f dot -
 ```

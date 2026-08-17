@@ -1,7 +1,7 @@
 package ba.sake.codeps.semanticdb
 
 import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
-import scala.meta.internal.semanticdb.{Range, SymbolInformation, TextDocument, TextDocuments}
+import scala.meta.internal.semanticdb.{Access, PrivateAccess, PrivateThisAccess, Range, SymbolInformation, TextDocument, TextDocuments}
 
 object SemanticDbParser:
 
@@ -42,15 +42,28 @@ object SemanticDbParser:
         nodes += Node(occ.symbol.stripSuffix("/").replace('/', '.'), NodeKind.`package`)
     nodes
 
-  /** Node (id, kind, parentId) of a defined symbol, if it is not noise (locals, params, constructors). */
+  /** Node (id, kind, parentId) of a defined symbol, if it is not noise (locals, params, constructors).
+    * Class-scoped private symbols (`private`, `private[this]`) are skipped entirely: they are
+    * implementation details that can never create cross-package dependencies, so they only add
+    * noise at the member/type levels. Their references are collapsed into the nearest non-private
+    * ancestor (see `collapseUp`). Package-private (`private[pkg]`) and `protected` symbols are kept:
+    * they can be referenced across files/packages.
+    */
   private def symbolNodeId(s: SymbolInformation): Option[(String, NodeKind, Option[String])] =
     val sym = s.symbol
     if sym.endsWith("/") then Some((sym.stripSuffix("/").replace('/', '.'), NodeKind.`package`, None)) // package decl
+    else if isClassPrivate(s.access) then None
     else if s.kind.isLocal then None
     else if isConstructor(sym) then None
     else if isTypeKind(s.kind) then Some((typeId(sym), NodeKind.`type`, parentOf(sym)))
     else if isMemberKind(s.kind) then Some((memberId(sym), NodeKind.member, parentOf(sym)))
     else None // PARAMETER, SELF_PARAMETER, TYPE_PARAMETER, ... — also PACKAGE_OBJECT: package objects ("foo.package.") are deliberately not emitted as nodes, so references to them dangle and are pruned by withoutDanglingEdges; acceptable because they are rare and their members still surface
+
+  /** True for class-scoped private access (`private`, `private[this]`); `private[pkg]` and `protected` are kept. */
+  private def isClassPrivate(access: Access): Boolean =
+    access match
+      case _: PrivateAccess | _: PrivateThisAccess => true
+      case _                                       => false
 
   private def isTypeKind(k: SymbolInformation.Kind): Boolean =
     k.isType || k.isClass || k.isTrait || k.isObject
@@ -124,22 +137,32 @@ object SemanticDbParser:
   private def documentEdges(doc: TextDocument, root: java.nio.file.Path): Set[Edge] =
     val fallbackFile = fileId(doc.uri, root)
     val defined = definedSymbols(doc)
+    // symbol -> access, keyed by raw symbol (the owner walk stays in raw symbol space)
+    val accessOf = doc.symbols.iterator.map(s => s.symbol -> s.access).toMap
     var edges = Set.empty[Edge]
     for occ <- doc.occurrences do
       if occ.role.isReference then
-        targetId(occ.symbol).foreach { t =>
-          sourceId(defined, occ.range, fallbackFile).foreach { s =>
+        targetId(occ.symbol, accessOf).foreach { t =>
+          sourceId(defined, occ.range, fallbackFile, accessOf).foreach { s =>
             if s != t then edges += Edge(s, t)
           }
         }
     edges
 
-  /** Node id the occurrence points at; None for locals, package decls (already nodes), and unresolvable symbols. */
-  private def targetId(sym: String): Option[String] =
+  /** Node id the occurrence points at; None for locals, package decls (already nodes), unresolvable
+    * symbols, and references to class-private symbols that collapse into a package (dropped: they
+    * are file-scoped, so the edge carries no cross-file information).
+    */
+  private def targetId(sym: String, accessOf: Map[String, Access]): Option[String] =
     if sym.isEmpty || sym.endsWith("/") || isLocalSymbol(sym) then None
     else if isConstructor(sym) then parentOf(sym) // dependency on `new Foo` == dependency on Foo
-    else if sym.endsWith("#") then Some(typeId(sym))
-    else Some(memberId(sym))
+    else if isClassPrivate(accessOf.getOrElse(sym, Access.Empty)) then
+      collapseUp(sym, accessOf).filter(!_.endsWith("/")).map(dotFormId)
+    else Some(targetIdPlain(sym))
+
+  private def targetIdPlain(sym: String): String =
+    if sym.endsWith("#") then typeId(sym)
+    else memberId(sym)
 
   /**
     * Defined, non-noise symbols of a document with the position of their definition
@@ -152,6 +175,8 @@ object SemanticDbParser:
     * definition rather than to the object/class itself — bounded mis-attribution, never
     * a wrong target id; deliberate because semanticdb documents in the wild have empty
     * `text` and definition ranges covering only names, so range containment is not possible.
+    * Class-private definitions stay as anchors (attribution stays precise); the edge
+    * source is collapsed up afterwards.
     */
   private def definedSymbols(doc: TextDocument): Vector[(Range, String)] =
     val kinds = doc.symbols.iterator.map(s => s.symbol -> s.kind).toMap
@@ -165,8 +190,17 @@ object SemanticDbParser:
       .toVector
       .sortBy { case (r, _) => (r.startLine, r.startCharacter) }
 
-  /** Innermost defined symbol preceding the occurrence; falls back to the file node. */
-  private def sourceId(defined: Vector[(Range, String)], occRange: Option[Range], fallbackFile: String): Option[String] =
+  /** Innermost defined symbol preceding the occurrence; falls back to the file node.
+    * A class-private source is collapsed into its nearest non-private ancestor; when that
+    * lands on a package (top-level private symbol) the file node is used instead, so the
+    * file's dependencies stay visible at file/package level.
+    */
+  private def sourceId(
+      defined: Vector[(Range, String)],
+      occRange: Option[Range],
+      fallbackFile: String,
+      accessOf: Map[String, Access]
+  ): Option[String] =
     occRange match
       case None => Some(fallbackFile)
       case Some(o) =>
@@ -176,8 +210,69 @@ object SemanticDbParser:
               (defRange.startLine == o.startLine && defRange.startCharacter <= o.startCharacter)
           }
           .lastOption
-          .map { case (_, sym) => if sym.endsWith("#") then typeId(sym) else memberId(sym) }
+          .map { case (_, sym) =>
+            val id = if sym.endsWith("#") then typeId(sym) else memberId(sym)
+            if isClassPrivate(accessOf.getOrElse(sym, Access.Empty)) then
+              collapseUp(sym, accessOf) match
+                case Some(up) if !up.endsWith("/") => dotFormId(up)
+                case _                             => fallbackFile // top-level private: attribute to the file
+            else id
+          }
           .orElse(Some(fallbackFile))
+
+  /**
+    * Walks the owner chain of a class-private symbol (in raw symbol space: `#`-suffixed types,
+    * `.`-suffixed members/objects, `/`-suffixed packages) until a non-private ancestor is found.
+    * Returns None when the chain is exhausted; a top-level private symbol resolves to its
+    * package (raw symbol ending in '/'), which callers treat as "file-scoped".
+    */
+  private def collapseUp(sym: String, accessOf: Map[String, Access]): Option[String] =
+    var cur = sym
+    var guard = 0
+    while isClassPrivate(accessOf.getOrElse(cur, Access.Empty)) && guard < 100 do
+      rawOwnerOf(cur) match
+        case Some(owner) => cur = owner
+        case None        => return None
+      guard += 1
+    Some(cur)
+
+  /** Raw owner symbol of a symbol; None for packages and symbols without an owner.
+    * `com/example/a/Foo#m().` -> `com/example/a/Foo#`, `com/example/a/O.m().` -> `com/example/a/O.`,
+    * `com/example/a/Foo#` -> `com/example/a/`, `com/example/a/topLevelHelper.` -> `com/example/a/`.
+    */
+  private def rawOwnerOf(sym: String): Option[String] =
+    if sym.endsWith("/") then None
+    else if sym.endsWith("#") then
+      val withoutHash = sym.stripSuffix("#")
+      val innerIdx = withoutHash.lastIndexOf('#')
+      if innerIdx >= 0 then Some(withoutHash.substring(0, innerIdx + 1))
+      else packageRaw(withoutHash)
+    else
+      val idx = sym.lastIndexOf('#')
+      if idx >= 0 then
+        val rest = sym.stripSuffix(".").substring(idx + 1)
+        val dotIdx = rest.lastIndexOf('.')
+        if dotIdx >= 0 then Some(sym.substring(0, idx + 1) + rest.substring(0, dotIdx) + ".")
+        else Some(sym.substring(0, idx + 1))
+      else
+        val stripped = sym.stripSuffix(".")
+        val slashIdx = stripped.lastIndexOf('/')
+        if slashIdx < 0 then None
+        else
+          val seg = stripped.substring(slashIdx + 1)
+          val dotIdx = seg.lastIndexOf('.')
+          if dotIdx >= 0 then Some(stripped.substring(0, slashIdx + 1) + seg.substring(0, dotIdx) + ".")
+          else Some(stripped.substring(0, slashIdx + 1)) // top-level: the package
+
+  /** Dot-form node id of a raw symbol (`com/example/a/Foo#` -> `com.example.a.Foo`, etc.). */
+  private def dotFormId(sym: String): String =
+    if sym.endsWith("/") then sym.stripSuffix("/").replace('/', '.')
+    else if sym.endsWith("#") then typeId(sym)
+    else memberId(sym)
+
+  private def packageRaw(symNoTerminator: String): Option[String] =
+    val slashIdx = symNoTerminator.lastIndexOf('/')
+    if slashIdx >= 0 then Some(symNoTerminator.substring(0, slashIdx + 1)) else None
 
   /** Source URI relative to the workspace root; relative URIs kept as-is; absolute URIs outside the root fall back to the file name. */
   private def fileId(uri: String, root: java.nio.file.Path): String =

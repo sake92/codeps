@@ -13,6 +13,8 @@ howtos:
 references:
   - label: "CLI"
     url: "/reference/cli.html"
+  - label: "Cycle analysis report"
+    url: "/reference/report.html"
   - label: "Export formats"
     url: "/reference/export-formats.html"
   - label: "Common JSON format"

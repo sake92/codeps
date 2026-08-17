@@ -52,13 +52,13 @@ See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with 
 Render the graph at package granularity as Mermaid:
 
 ```shell
-codeps analyze -g package -f mermaid deps.json
+codeps draw -g package -f mermaid deps.json
 ```
 
-or pipe export straight into analyze:
+or pipe export straight into draw:
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g package -f mermaid -
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f mermaid -
 ```
 
 For deeper views use `-g type` or `-g file` (and `-g member` on Scala data).

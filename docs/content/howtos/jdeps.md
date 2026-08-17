@@ -38,17 +38,20 @@ that are not themselves defined in the input.
 
 ## Analyzing
 
-`codeps analyze` renders the graph at the granularity you pick:
+`codeps draw` renders the graph at the granularity you pick:
 
 ```shell
-codeps analyze -g type -f dot deps.json
+codeps draw -g type -f dot deps.json
 ```
 
 or in one pipe:
 
 ```shell
-codeps export --from jdeps jdeps.txt | codeps analyze -g type -f dot -
+codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
 ```
+
+For cycle analysis at every granularity in one run, use `codeps report` —
+see the [Cycle analysis report](/reference/report.html).
 
 Example output:
 
@@ -66,7 +69,7 @@ The raw `jdeps -verbose:class` output includes edges to `java.*`, `scala.*` and 
 platform classes. Exclude them to keep the graph focused on your code:
 
 ```shell
-codeps analyze -g type -f dot -i com.example -e java.** -e scala.** deps.json
+codeps draw -g type -f dot -i com.example -e java.** -e scala.** deps.json
 ```
 
 > Note: excludes are package patterns matched against each node's root package —
@@ -77,7 +80,7 @@ codeps analyze -g type -f dot -i com.example -e java.** -e scala.** deps.json
 Just like with SemanticDB input, `-c/--collapse` rules apply:
 
 ```shell
-codeps analyze -g package -f dot -c com.example.modules.** deps.json
+codeps draw -g package -f dot -c com.example.modules.** deps.json
 ```
 
 See [CLI reference](/reference/cli.html) for the full option list.

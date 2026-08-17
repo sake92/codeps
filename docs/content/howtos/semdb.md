@@ -55,11 +55,11 @@ codeps export --from semanticdb classes/META-INF/semanticdb --root . -o deps.jso
 
 ## Analyzing
 
-`codeps analyze` reads the JSON graph and renders it at the granularity you pick:
+`codeps draw` reads the JSON graph and renders it at the granularity you pick:
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps analyze -g package -f dot deps.json
+codeps draw -g package -f dot deps.json
 ```
 
 - `-g` is the aggregation level — all four are available on SemanticDB data: `package`
@@ -67,11 +67,11 @@ codeps analyze -g package -f dot deps.json
 - `-f` is the output format: `dot` or `mermaid`
 - `-i`/`-e`/`-c` filter and collapse, e.g. `-i com.example` keeps only your packages
 
-No intermediate file needed — pipe `export` straight into `analyze` (the `-` tells
-`analyze` to read the JSON from stdin):
+No intermediate file needed — pipe `export` straight into `draw` (the `-` tells
+`draw` to read the JSON from stdin):
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps analyze -g type -f mermaid -
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g type -f mermaid -
 ```
 
 Example `-g package` output:
@@ -87,6 +87,18 @@ digraph deps {
 Circular dependencies are reported as `// cycles:` / `%% cycles:` comments in the output
 (see [Export formats](/reference/export-formats.html)).
 
+For a deeper look at cycles, `codeps report` analyzes the graph at **all four
+granularities in one run** and grades every cycle (`bad` / `meh` / `fine`) with
+suggestions what to fix:
+
+```shell
+codeps report deps.json -o report.json
+```
+
+The report JSON can be loaded into the [interactive demo](/demo/cytoscape-graph.html)
+for cycle highlighting, and is shaped for agents to consume directly — see the
+[Cycle analysis report](/reference/report.html).
+
 ## Filtering and collapsing
 
 `--include`/`--exclude` take package patterns: a pattern `com.example` matches the package
@@ -94,16 +106,16 @@ itself and everything below it; excludes win over includes.
 
 ```shell
 # only com.example packages, no third-party or JDK noise
-codeps analyze -g package -f dot -i com.example deps.json
+codeps draw -g package -f dot -i com.example deps.json
 
 # com.example.* minus internal helpers
-codeps analyze -g package -f dot -i com.example -e com.example.internal deps.json
+codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
 ```
 
 Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:
 
 ```shell
-codeps analyze -g package -f dot -i com.example -c com.example.modules.** deps.json
+codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
 ```
 
 When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.
