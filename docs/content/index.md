@@ -32,7 +32,7 @@ codeps just reads them.
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`)
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
 - **Two output formats** — [DOT and Mermaid](/reference/export-formats.html)
-- **Interactive demo** — a standalone [graph viewer](/demo/cytoscape-graph.html): layouts, filtering, degree analysis, cycle highlighting, package suggestions
+- **Interactive demo** — a standalone [graph viewer](/demo/cytoscape-graph.html): layouts, filtering, degree analysis, cycle highlighting, package suggestions, scoped drill-down (double-click a node, click an edge, breadcrumbs back)
 
 ## Quick example
 

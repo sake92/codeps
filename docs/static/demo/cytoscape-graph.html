@@ -129,6 +129,37 @@
     white-space: nowrap;
   }
 
+  /* ---------- drill-down breadcrumbs ---------- */
+  #nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: nowrap;
+    z-index: 9;
+  }
+  #nav-bar .nav-hint { color: var(--text-dim); }
+  #nav-bar .nav-sep { color: var(--text-dim); user-select: none; }
+  #nav-bar .crumb {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 9px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    cursor: pointer;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #nav-bar .crumb:hover { border-color: var(--accent); color: #e2e8f0; }
+  #nav-bar .crumb.current { border-color: #0e7490; color: #bae6fd; background: #0c4a6e; }
+
   /* ---------- main / graph ---------- */
   #main { position: relative; flex: 1; min-height: 0; }
   #cy {
@@ -515,6 +546,12 @@
   <span id="stats"></span>
 </header>
 
+<div id="nav-bar" class="hidden">
+  <span class="nav-hint">view:</span>
+  <button class="crumb" id="nav-root" title="Back to the unscoped view">All</button>
+  <span id="nav-crumbs"></span>
+</div>
+
 <div id="main">
   <div id="cy"></div>
 
@@ -526,7 +563,9 @@
         or an analysis report from <code>codeps report</code> (cycle highlighting,
         severity grades and suggestions):
         drop a file anywhere, pick one, or paste the JSON. Then filter, focus and
-        rearrange the graph.
+        rearrange the graph. Double-click a node to drill into its contents (package → file → type →
+        member); click an edge to drill into both sides. The breadcrumb bar above
+        the canvas takes you back.
       </p>
       <div class="hero-actions">
         <button id="hero-load" class="primary">Choose file</button>
@@ -596,6 +635,8 @@
 <footer id="hints">
   <span><kbd>drag node</kbd> move · <kbd>wheel</kbd> zoom · <kbd>drag background</kbd> pan</span>
   <span><kbd>click node</kbd> focus on it + its neighbors</span>
+  <span><kbd>double-click node</kbd> drill into its contents (package→file→type→member)</span>
+  <span><kbd>click edge</kbd> drill into both endpoints · inside edges dimmed</span>
   <span><kbd>right-click node</kbd> (ctrl+click on macOS) hide its whole subtree</span>
   <span><kbd>Esc</kbd> clear focus / close panels</span>
 </footer>
@@ -643,6 +684,12 @@
    * ================================================================ */
   var state = {
     graph: null,          // { ids: Set, edges: [{source, target, weight}] } — deduped master graph
+    full: null,            // { nodesById: Map(id -> {id, kind, parentId, file}), edges: [{source,target,weight}] }
+    metaByNode: {},        // id -> {files, classes} (from the "meta" key, if any)
+    viewLevel: 'package',  // root level of the export-mode view
+    navStack: [],          // drill frames: [{anchorLevel, viewLevel, ids:Set, label, crossDim}]
+    anchorOf: new Map(),   // view id -> Set of anchor ids (only while scoped)
+    viewCyclesCache: [],   // client-computed cycles for the current derived view
     meta: new Map(),  // id -> { name, degree, inDeg, outDeg, hubScore, benefit, files, classes }
     maxDegree: 0,
     maxWeight: 0,
@@ -753,6 +800,7 @@
     if (!Array.isArray(obj.edges)) throw new Error('"edges" must be an array');
 
     var ids = new Set();
+    var nodesById = new Map();
     for (var i = 0; i < obj.nodes.length; i++) {
       var n = obj.nodes[i];
       var id = null;
@@ -760,6 +808,14 @@
       else if (n && typeof n === 'object') id = (typeof n.id === 'string' ? n.id : (typeof n.name === 'string' ? n.name : null));
       if (!id) throw new Error('invalid node entry at index ' + i + ': expected a string or {id|name: string}');
       ids.add(id);
+      if (!nodesById.has(id)) {
+        nodesById.set(id, {
+          id: id,
+          kind: (n && typeof n === 'object' && typeof n.kind === 'string') ? n.kind : 'package',
+          parentId: (n && typeof n === 'object' && typeof n.parentId === 'string') ? n.parentId : null,
+          file: (n && typeof n === 'object' && typeof n.file === 'string') ? n.file : null
+        });
+      }
     }
 
     var edges = [];
@@ -796,7 +852,7 @@
         }
       });
     }
-    return { ids: ids, edges: edges, meta: meta };
+    return { ids: ids, edges: edges, meta: meta, nodesById: nodesById };
   }
 
   function computeMeta(ids, edges, meta) {
@@ -901,6 +957,215 @@
 
   function escapeHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ================================================================
+   * Client-side pipeline — mirrors core: Node.rootPackageId,
+   * Aggregator.mapNode/aggregate, Filter's universe, collapse=none.
+   * ================================================================ */
+  var LEVEL_ORDER = ['package', 'file', 'type', 'member'];
+
+  function nextLevel(level) {
+    var i = LEVEL_ORDER.indexOf(level);
+    return (i >= 0 && i < LEVEL_ORDER.length - 1) ? LEVEL_ORDER[i + 1] : null;
+  }
+
+  /** Mirror of Node.rootPackageId: walk parentId chains to the topmost package. */
+  function rootPackageId(nodesById, n) {
+    if (n.kind === 'package') return n.id;
+    var cur = n.parentId;
+    var visited = new Set();
+    while (cur && !visited.has(cur)) {
+      visited.add(cur);
+      var p = nodesById.get(cur);
+      if (!p) return null;
+      if (p.kind === 'package') return p.id;
+      cur = p.parentId;
+    }
+    return null;
+  }
+
+  /** Mirror of Aggregator.mapNode: nearest ancestor at `level`, with fallbacks, else null (dropped). */
+  function mapNode(nodesById, n, level) {
+    switch (level) {
+      case 'member': return n.id;
+      case 'type':
+        if (n.kind === 'type') return n.id;
+        if (n.kind === 'member') return n.parentId;
+        return null; // package, file
+      case 'file':
+        if (n.kind === 'file') return n.id;
+        if (n.kind === 'package') return null;
+        return n.file || rootPackageId(nodesById, n);
+      case 'package':
+        if (n.kind === 'package') return n.id;
+        if (n.kind === 'file') return null;
+        return rootPackageId(nodesById, n);
+    }
+    return null;
+  }
+
+  /** Mirror of Aggregator.aggregate: lift ids and edges to `level`, sum weights, drop nulls/self-loops. */
+  function aggregate(nodesById, edges, level) {
+    var ids = new Set();
+    nodesById.forEach(function (n) {
+      var mapped = mapNode(nodesById, n, level);
+      if (mapped !== null) ids.add(mapped);
+    });
+    var weightByKey = new Map();
+    edges.forEach(function (e) {
+      var sn = nodesById.get(e.source), tn = nodesById.get(e.target);
+      if (!sn || !tn) return;
+      var s = mapNode(nodesById, sn, level), t = mapNode(nodesById, tn, level);
+      if (s === null || t === null || s === t) return;
+      var key = s + '\u0000' + t;
+      weightByKey.set(key, (weightByKey.get(key) || 0) + e.weight);
+    });
+    var edgesOut = [];
+    weightByKey.forEach(function (w, key) {
+      var p = key.split('\u0000');
+      edgesOut.push({ source: p[0], target: p[1], weight: w });
+    });
+    return { ids: ids, edges: edgesOut };
+  }
+
+  /** Universe of a drill scope: full-graph nodes that lift to one of scopeIds at anchorLevel. */
+  function scopeUniverse(nodesById, anchorLevel, scopeIds) {
+    var kept = new Map();
+    nodesById.forEach(function (n) {
+      var a = mapNode(nodesById, n, anchorLevel);
+      if (a !== null && scopeIds.has(a)) kept.set(n.id, n);
+    });
+    return kept;
+  }
+
+  /** Derive the view at `level`, scoped by `scope` ({anchorLevel, ids} | null). */
+  function deriveView(level, scope) {
+    var nodesById = scope ? scopeUniverse(state.full.nodesById, scope.anchorLevel, scope.ids) : state.full.nodesById;
+    var agg = aggregate(nodesById, state.full.edges, level);
+    var anchors = new Map(); // view id -> Set of anchor ids (for edge-drill dimming)
+    if (scope) {
+      nodesById.forEach(function (n) {
+        var a = mapNode(state.full.nodesById, n, scope.anchorLevel);
+        var v = mapNode(nodesById, n, level);
+        if (a === null || v === null) return;
+        var set = anchors.get(v);
+        if (!set) { set = new Set(); anchors.set(v, set); }
+        set.add(a);
+      });
+    }
+    return { ids: agg.ids, edges: agg.edges, anchors: anchors };
+  }
+
+  /** Coarsest level with a non-empty aggregate — default view level for export mode. */
+  function defaultLevel(full) {
+    for (var i = 0; i < LEVEL_ORDER.length; i++) {
+      if (aggregate(full.nodesById, full.edges, LEVEL_ORDER[i]).ids.size > 0) return LEVEL_ORDER[i];
+    }
+    return 'member';
+  }
+
+  /* ================================================================
+   * View state — nav stack frames and effective level/scope
+   * ================================================================ */
+  function currentFrame() {
+    return state.navStack.length ? state.navStack[state.navStack.length - 1] : null;
+  }
+  function currentLevel() {
+    var f = currentFrame();
+    return f ? f.viewLevel : state.viewLevel;
+  }
+  function currentScope() {
+    var f = currentFrame();
+    return f ? { anchorLevel: f.anchorLevel, ids: f.ids } : null;
+  }
+
+  /** Re-derive the graph at the current level/scope and rebuild everything. */
+  function applyView() {
+    if (!state.full || state.reportMode) return;
+    var level = currentLevel();
+    var derived = deriveView(level, currentScope());
+    state.graph = { ids: derived.ids, edges: derived.edges };
+    state.anchorOf = derived.anchors;
+    state.focusIds = new Set(Array.from(state.focusIds).filter(function (id) { return state.graph.ids.has(id); }));
+    var computed = computeMeta(derived.ids, derived.edges, state.metaByNode);
+    state.meta = computed.info;
+    state.maxDegree = computed.max;
+    state.maxWeight = computed.maxWeight;
+    state.maxHub = computed.maxHub;
+    state.viewCyclesCache = computeClientCycles();
+    $('#level-select').value = level;
+    $('#degree-slider').max = String(Math.max(1, state.maxDegree));
+    $('#degree-slider').value = '0';
+    $('#degree-label').textContent = 'deg ≥ 0';
+    state.minDegree = 0;
+    removedNodes = [];
+    removedEdges = [];
+    cy.json({ elements: buildElements(allIds()) });
+    cy.style().fromJson(buildStyle()).update();
+    buildPackagePanel();
+    buildSuggestions();
+    buildCyclesPanel();
+    syncNavBar();
+    updateFocusBadge();
+    render();
+    updateLabelMetrics();
+  }
+
+  function syncNavBar() {
+    var bar = $('#nav-bar');
+    var box = $('#nav-crumbs');
+    box.textContent = '';
+    state.navStack.forEach(function (f, i) {
+      var sep = document.createElement('span');
+      sep.className = 'nav-sep';
+      sep.textContent = '▸';
+      box.appendChild(sep);
+      var b = document.createElement('button');
+      b.className = 'crumb' + (i === state.navStack.length - 1 ? ' current' : '');
+      b.textContent = f.label;
+      b.title = f.crossDim ? 'drill scope: ' + Array.from(f.ids).join(', ') : 'drill scope: ' + f.label;
+      (function (keep) {
+        b.addEventListener('click', function () { popNav(keep); });
+      })(i + 1);
+      box.appendChild(b);
+    });
+    bar.classList.toggle('hidden', state.navStack.length === 0);
+  }
+
+  function popNav(newLen) {
+    state.navStack.length = newLen;
+    clearFocus();
+    applyView();
+  }
+
+  function drillInto(id) {
+    if (state.reportMode) return;
+    var cur = currentLevel();
+    var next = nextLevel(cur);
+    if (!next) { toast('Already at the finest level'); return; }
+    clearFocus();
+    state.navStack.push({ anchorLevel: cur, viewLevel: next, ids: new Set([id]), label: id, crossDim: false });
+    applyView();
+    toast('Drilled into ' + id + ' (' + next + ' level)');
+  }
+
+  function drillIntoEdge(s, t) {
+    if (state.reportMode) return;
+    var cur = currentLevel();
+    var next = nextLevel(cur);
+    if (!next) { toast('Already at the finest level'); return; }
+    clearFocus();
+    state.navStack.push({ anchorLevel: cur, viewLevel: next, ids: new Set([s, t]), label: s + ' ⇄ ' + t, crossDim: true });
+    applyView();
+    toast('Drilled into ' + s + ' ⇄ ' + t + ' (' + next + ' level)');
+  }
+
+  function sameAnchorSet(a, b) {
+    if (a.size !== b.size) return false;
+    var it = a.values();
+    for (var v of it) if (!b.has(v)) return false;
+    return true;
   }
 
   /* ================================================================
@@ -1196,9 +1461,19 @@
       node.toggleClass('focused', state.focusIds.has(id));
       node.toggleClass('dimmed', focused ? !focused.has(id) : !visible.has(id));
     });
+    var f = currentFrame();
+    var crossDim = !!(f && f.crossDim);
     cy.edges().forEach(function (edge) {
       var s = edge.data('source'), t = edge.data('target');
-      edge.toggleClass('edge-dimmed', focused ? !(focused.has(s) && focused.has(t)) : !(visible.has(s) && visible.has(t)));
+      var dim;
+      if (crossDim) {
+        var as = state.anchorOf.get(s) || new Set();
+        var at = state.anchorOf.get(t) || new Set();
+        dim = sameAnchorSet(as, at); // intra-scope edges dim; cross-scope stay primary
+      } else {
+        dim = focused ? !(focused.has(s) && focused.has(t)) : !(visible.has(s) && visible.has(t));
+      }
+      edge.toggleClass('edge-dimmed', dim);
     });
   }
 
@@ -1443,55 +1718,94 @@
     }
     if (!keepReportMode && state.reportMode) resetReportMode();
     var parsed = parseGraph(obj);
-    var computed = computeMeta(parsed.ids, parsed.edges, parsed.meta);
-    state.graph = { ids: parsed.ids, edges: parsed.edges };
-    state.meta = computed.info;
-    state.maxDegree = computed.max;
-    state.maxWeight = computed.maxWeight;
-    state.maxHub = computed.maxHub;
+    if (state.reportMode) {
+      // --- report mode: legacy behavior (per-level precomputed graphs) ---
+      var computed = computeMeta(parsed.ids, parsed.edges, parsed.meta);
+      state.graph = { ids: parsed.ids, edges: parsed.edges };
+      state.meta = computed.info;
+      state.maxDegree = computed.max;
+      state.maxWeight = computed.maxWeight;
+      state.maxHub = computed.maxHub;
 
-    // reset per-graph filter state
-    state.search = '';
-    state.minDegree = 0;
-    state.dim = false;
-    state.hideIsolated = false;
-    state.showInOut = false;
-    state.showFiles = false;
-    state.showClasses = false;
-    state.focusIds = new Set();
-    state.manualHidden.clear();
-    state.subtreeHidden.clear();
-    $('#search-input').value = '';
-    $('#dim-check').checked = false;
-    $('#isolated-check').checked = false;
-    $('#io-check').checked = false;
-    $('#files-check').checked = false;
-    $('#classes-check').checked = false;
-    var hasCounts = Object.keys(parsed.meta).length > 0;
-    $('#files-check').disabled = !hasCounts;
-    $('#classes-check').disabled = !hasCounts;
-    $('#degree-slider').max = String(Math.max(1, state.maxDegree));
-    $('#degree-slider').value = '0';
-    $('#degree-label').textContent = 'deg ≥ 0';
-    $('#hero').classList.add('hidden');
-    $('#paste-panel').classList.add('hidden');
+      // reset per-graph filter state
+      state.search = '';
+      state.minDegree = 0;
+      state.dim = false;
+      state.hideIsolated = false;
+      state.showInOut = false;
+      state.showFiles = false;
+      state.showClasses = false;
+      state.focusIds = new Set();
+      state.manualHidden.clear();
+      state.subtreeHidden.clear();
+      $('#search-input').value = '';
+      $('#dim-check').checked = false;
+      $('#isolated-check').checked = false;
+      $('#io-check').checked = false;
+      $('#files-check').checked = false;
+      $('#classes-check').checked = false;
+      var hasCounts = Object.keys(parsed.meta).length > 0;
+      $('#files-check').disabled = !hasCounts;
+      $('#classes-check').disabled = !hasCounts;
+      $('#degree-slider').max = String(Math.max(1, state.maxDegree));
+      $('#degree-slider').value = '0';
+      $('#degree-label').textContent = 'deg ≥ 0';
+      $('#hero').classList.add('hidden');
+      $('#paste-panel').classList.add('hidden');
 
-    removedNodes = [];
-    removedEdges = [];
-    cy.json({ elements: buildElements(allIds()) });
+      removedNodes = [];
+      removedEdges = [];
+      cy.json({ elements: buildElements(allIds()) });
 
-    cy.style().fromJson(buildStyle()).update();
-    buildPackagePanel();
-    buildSuggestions();
-    updateFocusBadge();
-    render();
-    updateLabelMetrics();
-    toast('Loaded ' + parsed.ids.size + ' packages, ' + parsed.edges.length + ' deps' + (label ? ' from ' + label : ''));
+      cy.style().fromJson(buildStyle()).update();
+      buildPackagePanel();
+      buildSuggestions();
+      updateFocusBadge();
+      render();
+      updateLabelMetrics();
+      toast('Loaded ' + parsed.ids.size + ' packages, ' + parsed.edges.length + ' deps' + (label ? ' from ' + label : ''));
+    } else {
+      // --- export mode: full graph + client-side pipeline ---
+      state.full = { nodesById: parsed.nodesById, edges: parsed.edges };
+      state.metaByNode = parsed.meta;
+      state.navStack = [];
+      state.anchorOf = new Map();
+      state.viewLevel = defaultLevel(state.full);
+      $('#level-select').classList.remove('hidden');
+      $('#cycle-btn').classList.remove('hidden');
+      // per-graph filter resets (same block as the report path: search/dim/checks cleared)
+      state.search = '';
+      state.minDegree = 0;
+      state.dim = false;
+      state.hideIsolated = false;
+      state.showInOut = false;
+      state.showFiles = false;
+      state.showClasses = false;
+      state.focusIds = new Set();
+      state.manualHidden.clear();
+      state.subtreeHidden.clear();
+      $('#search-input').value = '';
+      $('#dim-check').checked = false;
+      $('#isolated-check').checked = false;
+      $('#io-check').checked = false;
+      $('#files-check').checked = false;
+      $('#classes-check').checked = false;
+      var hasCounts = Object.keys(parsed.meta).length > 0;
+      $('#files-check').disabled = !hasCounts;
+      $('#classes-check').disabled = !hasCounts;
+      $('#hero').classList.add('hidden');
+      $('#paste-panel').classList.add('hidden');
+      applyView();
+      toast('Loaded ' + parsed.ids.size + ' nodes, ' + parsed.edges.length + ' deps' + (label ? ' from ' + label : ''));
+    }
   }
 
   /** Report mode: one analysis JSON covers all granularities. */
   function loadReport(obj, label) {
     state.reportMode = true;
+    state.navStack = [];
+    state.anchorOf = new Map();
+    $('#nav-bar').classList.add('hidden');
     state.reportLevels = obj.levels;
     var order = ['package', 'file', 'type', 'member'];
     var first = null;
@@ -1535,11 +1849,12 @@
     }
   }
 
-  /** Cycles of the active report level, respecting the "hide fine" toggle. */
+  /** Cycles of the active level: report data in report mode, client-computed in export mode. */
   function visibleCycles() {
-    if (!state.reportLevelData || !state.reportLevelData.cycles) return [];
-    var cycles = state.reportLevelData.cycles;
-    if (state.hideFine) cycles = cycles.filter(function (c) { return c.severity !== 'fine'; });
+    var cycles = state.reportMode
+      ? (state.reportLevelData && state.reportLevelData.cycles) || []
+      : state.viewCyclesCache;
+    if (state.reportMode && state.hideFine) cycles = cycles.filter(function (c) { return c.severity !== 'fine'; });
     return cycles;
   }
 
@@ -1582,20 +1897,107 @@
     });
   }
 
-  /** Marks edges that participate in visible cycles (red). */
   function applyCycleClasses() {
     if (!cy) return;
     var keys = new Set();
-    if (state.reportMode) {
-      visibleCycles().forEach(function (cycle) {
-        (cycle.edges || []).forEach(function (e) {
-          keys.add(e.source + '\u0000' + e.target);
-        });
+    visibleCycles().forEach(function (cycle) {
+      (cycle.edges || []).forEach(function (e) {
+        keys.add(e.source + '\u0000' + e.target);
       });
-    }
+    });
     cy.edges().forEach(function (edge) {
       edge.toggleClass('cyc', keys.has(edge.data('source') + '\u0000' + edge.data('target')));
     });
+  }
+
+  /* ================================================================
+   * Client-side cycles — mirrors CycleDetector + Reporter grading
+   * ================================================================ */
+  function tarjanScc(ids, adj) {
+    var index = 0;
+    var stack = [], onStack = new Set();
+    var idx = new Map(), low = new Map();
+    var sccs = [];
+    function strongconnect(v) {
+      idx.set(v, index); low.set(v, index); index++;
+      stack.push(v); onStack.add(v);
+      var outs = Array.from(adj.get(v) || []).sort();
+      outs.forEach(function (w) {
+        if (!idx.has(w)) { strongconnect(w); low.set(v, Math.min(low.get(v), low.get(w))); }
+        else if (onStack.has(w)) { low.set(v, Math.min(low.get(v), idx.get(w))); }
+      });
+      if (low.get(v) === idx.get(v)) {
+        var comp = new Set();
+        var w;
+        do { w = stack.pop(); onStack.delete(w); comp.add(w); } while (w !== v);
+        sccs.push(comp);
+      }
+    }
+    Array.from(ids).sort().forEach(function (v) { if (!idx.has(v)) strongconnect(v); });
+    return sccs;
+  }
+
+  /** One elementary cycle per SCC (deterministic: starts from the smallest id). */
+  function findCycle(scc, adj) {
+    var start = Array.from(scc).sort()[0];
+    var path = [];
+    var visited = new Set();
+    (function dfs(cur) {
+      if (path.length > 0 && cur === start) return true;
+      if (visited.has(cur)) return false;
+      visited.add(cur);
+      path.push(cur);
+      var outs = Array.from(adj.get(cur) || []).sort();
+      for (var i = 0; i < outs.length; i++) {
+        if (scc.has(outs[i]) && dfs(outs[i])) return true;
+      }
+      path.pop();
+      return false;
+    })(start);
+    path.push(start);
+    return path;
+  }
+
+  /** Cycles of the current derived view, graded like Reporter. */
+  function computeClientCycles() {
+    if (!state.graph || state.reportMode) return [];
+    var adj = new Map();
+    state.graph.ids.forEach(function (id) { adj.set(id, new Set()); });
+    state.graph.edges.forEach(function (e) {
+      var t = adj.get(e.source);
+      if (t) t.add(e.target);
+    });
+    var weightByKey = new Map();
+    state.graph.edges.forEach(function (e) {
+      weightByKey.set(e.source + '\u0000' + e.target, e.weight);
+    });
+    var cycles = [];
+    tarjanScc(state.graph.ids, adj).forEach(function (scc) {
+      if (scc.size < 2) return;
+      var members = findCycle(scc, adj);
+      var edges = [];
+      for (var i = 0; i < members.length - 1; i++) {
+        var key = members[i] + '\u0000' + members[i + 1];
+        edges.push({ source: members[i], target: members[i + 1], weight: weightByKey.get(key) || 1 });
+      }
+      var severity = 'meh';
+      if (currentLevel() === 'package') severity = 'bad';
+      else if (currentLevel() === 'type' || currentLevel() === 'member') {
+        var files = members.slice(0, -1).map(function (m) {
+          var n = state.full.nodesById.get(m);
+          return n ? n.file : null;
+        });
+        if (files.every(function (x) { return x; }) && files.every(function (x) { return x === files[0]; })) severity = 'fine';
+      }
+      var distinct = members.slice(0, -1).filter(function (m, i, a) { return a.indexOf(m) === i; });
+      distinct.sort(function (a, b) {
+        var da = state.meta.get(a) ? state.meta.get(a).degree : 0;
+        var db = state.meta.get(b) ? state.meta.get(b).degree : 0;
+        return (da - db) || (a < b ? -1 : 1);
+      });
+      cycles.push({ members: members, edges: edges, severity: severity, breakCandidate: distinct[0] });
+    });
+    return cycles;
   }
 
   function loadGraphText(text, label) {
@@ -1721,6 +2123,11 @@
       if (e.target === cy) clearFocus();
     });
 
+    // double-click node: drill one granularity deeper, scoped to that node
+    cy.on('dbltap', 'node', function (e) {
+      drillInto(e.target.id());
+    });
+
     // right-click: hide node + transitive dependencies
     cy.on('cxttap', 'node', function (e) {
       var id = e.target.id();
@@ -1728,6 +2135,12 @@
       subtree.forEach(function (n) { state.subtreeHidden.add(n); });
       toast('Hidden ' + subtree.size + ' package' + (subtree.size === 1 ? '' : 's') + ' (subtree of ' + id + ')');
       render();
+    });
+
+    // click edge: drill into both endpoints, dimming edges inside one endpoint's scope
+    cy.on('tap', 'edge', function (e) {
+      var d = e.target.data();
+      drillIntoEdge(d.source, d.target);
     });
 
     // tooltip: follow the node under the cursor
@@ -1766,6 +2179,8 @@
     state.focusIds = new Set();
     state.manualHidden.clear();
     state.subtreeHidden.clear();
+    state.navStack = [];
+    state.anchorOf = new Map();
     $('#search-input').value = '';
     $('#dim-check').checked = false;
     $('#isolated-check').checked = false;
@@ -1774,8 +2189,8 @@
     $('#classes-check').checked = false;
     $('#degree-slider').value = '0';
     $('#degree-label').textContent = 'deg ≥ 0';
-    updateFocusBadge();
-    render();
+    if (state.reportMode) { updateFocusBadge(); render(); }
+    else if (state.full) { state.viewLevel = defaultLevel(state.full); applyView(); }
   }
 
   function togglePanel(sel) {
@@ -1837,6 +2252,7 @@
     $('#fit-btn').addEventListener('click', function () {
       if (cy && cy.nodes().length > 0) cy.fit(undefined, 40);
     });
+    $('#nav-root').addEventListener('click', function () { popNav(0); });
     $('#load-btn').addEventListener('click', function () { $('#file-input').click(); });
     $('#paste-btn').addEventListener('click', function () { togglePanel('#paste-panel'); });
     $('#pkg-btn').addEventListener('click', function () { togglePanel('#pkg-panel'); });
@@ -1844,8 +2260,15 @@
     $('#cycle-btn').addEventListener('click', function () { togglePanel('#cycle-panel'); });
     $('#reset-btn').addEventListener('click', resetFilters);
     $('#level-select').addEventListener('change', function (e) {
-      state.activeLevel = e.target.value;
-      applyReportLevel('report');
+      if (state.reportMode) {
+        state.activeLevel = e.target.value;
+        applyReportLevel('report');
+      } else {
+        var f = currentFrame();
+        if (f) f.viewLevel = e.target.value;
+        else state.viewLevel = e.target.value;
+        applyView();
+      }
     });
     $('#hide-fine-check').addEventListener('change', function (e) {
       state.hideFine = e.target.checked;
@@ -1939,8 +2362,20 @@
       resetFilters: resetFilters,
       parseGraph: parseGraph,
       labelFor: labelFor,
+      mapNode: mapNode,
+      rootPackageId: rootPackageId,
+      aggregate: aggregate,
+      deriveView: deriveView,
+      nextLevel: nextLevel,
+      defaultLevel: defaultLevel,
       hubColorFor: hubColorFor,
-      rankSuggestions: rankSuggestions
+      rankSuggestions: rankSuggestions,
+      tarjanScc: tarjanScc,
+      computeClientCycles: computeClientCycles,
+      drillInto: drillInto,
+      drillIntoEdge: drillIntoEdge,
+      applyView: applyView,
+      popNav: popNav,
     };
   }
 })();
