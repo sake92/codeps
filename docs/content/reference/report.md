@@ -9,7 +9,8 @@ description: the codeps report JSON format, cycle grades and suggestions
 `codeps report` runs the analysis pipeline at every granularity in one pass and emits a
 single, self-contained JSON document: per-level graphs, cycle grades, metrics and
 suggestions. It is the input for the [interactive demo](/demo/cytoscape-graph.html)'s
-report mode, and is shaped for agents to consume directly — no further computation needed.
+report mode (switch to its Matrix tab for the DSM view), and is shaped for agents to
+consume directly — no further computation needed.
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb | codeps report - > report.json

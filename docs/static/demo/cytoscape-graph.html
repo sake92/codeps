@@ -129,6 +129,22 @@
     white-space: nowrap;
   }
 
+  /* ---------- view tabs ---------- */
+  #view-tabs { display: flex; gap: 2px; }
+  #view-tabs button {
+    background: var(--panel-2);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12.5px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  #view-tabs button:hover { border-color: var(--accent); color: #e2e8f0; }
+  #view-tabs button.active { background: #0c4a6e; border-color: #0e7490; color: #e0f2fe; }
+  #dsm { position: absolute; inset: 0; background: var(--bg); }
+
   /* ---------- drill-down breadcrumbs ---------- */
   #nav-bar {
     display: flex;
@@ -497,6 +513,18 @@
 <header id="toolbar">
   <span class="brand"><span class="dot">●</span> codeps &middot; package graph</span>
 
+  <div id="view-tabs" role="tablist">
+    <button id="tab-graph" class="active" title="Node-link graph view">Graph</button>
+    <button id="tab-matrix" title="Design structure matrix (DSM) view">Matrix</button>
+  </div>
+  <select id="sort-select" class="hidden" title="Matrix row/column order">
+    <option value="topo" selected>Order: topo</option>
+    <option value="alpha">Order: A–Z</option>
+    <option value="in">Order: in</option>
+    <option value="out">Order: out</option>
+    <option value="hub">Order: hub</option>
+  </select>
+
   <select id="layout-select" title="Layout algorithm">
     <option value="elk" selected>Layout: ELK (layered)</option>
     <option value="cola">Layout: cola (force)</option>
@@ -554,6 +582,7 @@
 
 <div id="main">
   <div id="cy"></div>
+  <canvas id="dsm" class="hidden"></canvas>
 
   <div id="hero">
     <div class="hero-card">
@@ -639,6 +668,7 @@
   <span><kbd>click edge</kbd> drill into both endpoints · inside edges dimmed</span>
   <span><kbd>right-click node</kbd> (ctrl+click on macOS) hide its whole subtree</span>
   <span><kbd>Esc</kbd> clear focus / close panels</span>
+  <span class="matrix-hint hidden"><kbd>click cell</kbd> drill into both · <kbd>double-click header</kbd> drill in · <kbd>right-click header</kbd> hide subtree · <kbd>drag</kbd> pan · <kbd>wheel</kbd> zoom</span>
 </footer>
 
 <input type="file" id="file-input" accept=".json,.txt,application/json,text/plain" class="hidden" />
@@ -653,6 +683,8 @@
 <script src="https://cdn.jsdelivr.net/npm/layout-base@2.0.1/layout-base.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cose-base@2.2.0/cose-base.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-fcose@2/cytoscape-fcose.min.js"></script>
+
+<script src="dsm-matrix.js"></script>
 
 <script>
 (function () {
@@ -709,9 +741,12 @@
     reportLevels: null,   // the report's "levels" object
     reportLevelData: null,// the active level's LevelReport
     activeLevel: 'package',
-    hideFine: false
+    hideFine: false,
+    viewMode: 'graph',       // 'graph' | 'matrix'
+    matrixSort: 'topo'       // 'topo' | 'alpha' | 'in' | 'out' | 'hub'
   };
   var cy = null;
+  var matrix = null;   // the DSM view module (assigned at boot)
 
   /* ================================================================
    * Sample graph (common JSON format: nodes with id+kind, edges as
@@ -1487,7 +1522,13 @@
     if (!cy || !state.graph) return;
     var visible = computeVisibleIds();
     var focused = focusedIds();
-
+    if (state.viewMode === 'matrix' && matrix) {
+      matrix.render(visible, focused);
+      updateStats(visible);
+      updateEmptyOverlay(visible);
+      syncPackagePanel();
+      return;
+    }
     if (state.dim) {
       syncTo(allIds()); // restore everything, then dim instead of hide
     } else {
@@ -1832,6 +1873,23 @@
     $('#cycle-btn').classList.add('hidden');
     $('#cycle-panel').classList.add('hidden');
     $('#hide-fine-check').checked = false;
+  }
+
+  /* ================================================================
+   * View mode (graph | matrix)
+   * ================================================================ */
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    var isMatrix = mode === 'matrix';
+    $('#tab-graph').classList.toggle('active', !isMatrix);
+    $('#tab-matrix').classList.toggle('active', isMatrix);
+    $('#cy').classList.toggle('hidden', isMatrix);
+    $('#dsm').classList.toggle('hidden', !isMatrix);
+    $('#layout-select').classList.toggle('hidden', isMatrix);
+    $('#sort-select').classList.toggle('hidden', !isMatrix);
+    $$('#hints .matrix-hint').forEach(function (el) { el.classList.toggle('hidden', !isMatrix); });
+    if (matrix) matrix.resetView();   // refit on next matrix draw
+    render();
   }
 
   function applyReportLevel(label) {
@@ -2210,6 +2268,12 @@
     var scheduleRender = debounce(render, 250);
     var scheduleRenderFast = debounce(render, 120);
 
+    $('#tab-graph').addEventListener('click', function () { setViewMode('graph'); });
+    $('#tab-matrix').addEventListener('click', function () { setViewMode('matrix'); });
+    $('#sort-select').addEventListener('change', function (e) {
+      state.matrixSort = e.target.value;
+      render();
+    });
     $('#layout-select').addEventListener('change', function (e) {
       state.layout = e.target.value;
       runLayout();
@@ -2250,7 +2314,11 @@
       scheduleRenderFast();
     });
     $('#fit-btn').addEventListener('click', function () {
-      if (cy && cy.nodes().length > 0) cy.fit(undefined, 40);
+      if (state.viewMode === 'matrix' && matrix) {
+        matrix.fit();
+      } else if (cy && cy.nodes().length > 0) {
+        cy.fit(undefined, 40);
+      }
     });
     $('#nav-root').addEventListener('click', function () { popNav(0); });
     $('#load-btn').addEventListener('click', function () { $('#file-input').click(); });
@@ -2351,6 +2419,27 @@
   initCy();
   wireUI();
 
+  matrix = window.codepsMatrix({
+    $: $, $$: $$,
+    state: state,
+    render: render,
+    computeVisibleIds: computeVisibleIds,
+    focusedIds: focusedIds,
+    visibleCycles: visibleCycles,
+    tarjanScc: tarjanScc,
+    escapeHtml: escapeHtml,
+    positionTooltip: positionTooltip,
+    showTooltip: showTooltip,
+    hideTooltip: hideTooltip,
+    drillIntoEdge: drillIntoEdge,
+    drillInto: drillInto,
+    setFocus: setFocus,
+    clearFocus: clearFocus,
+    collectSubtree: collectSubtree,
+    toast: toast,
+    debounce: debounce
+  });
+
   // test hook (only when opened with ?test=)
   if (/[?&]test=/.test(location.search)) {
     window.__codeps = {
@@ -2372,6 +2461,9 @@
       rankSuggestions: rankSuggestions,
       tarjanScc: tarjanScc,
       computeClientCycles: computeClientCycles,
+      matrixOrder: matrix.order,
+      renderMatrix: matrix.render,
+      setViewMode: setViewMode,
       drillInto: drillInto,
       drillIntoEdge: drillIntoEdge,
       applyView: applyView,
