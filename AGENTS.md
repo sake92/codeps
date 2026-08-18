@@ -12,7 +12,7 @@
 | Task | Command |
 |------|---------|
 | Download CLI jar | `curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar` |
-| Run CLI | `java -jar codeps.jar semdb <dir> -i com.example -f json` |
+| Run CLI | `java -jar codeps.jar export --from semanticdb <dir> -o deps.json` |
 | Build docs | `./scripts/build-docs.sh` (outputs `docs/_site/`) |
 | All tests (dev, needs deder) | `deder test` |
 | Test one module (dev, needs deder) | `deder exec -t test -m core-test` |
