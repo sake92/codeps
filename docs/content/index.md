@@ -19,8 +19,16 @@ No build-system integration needed: your local build tools already produce the i
 `.semanticdb` files from a Scala compiler with SemanticDB enabled, and `.class` files for the JDK's `jdeps` —
 codeps just reads them.
 
-> **New here?** Start with the [Quickstart](/tutorials/quickstart.html).
-> Want to explore a graph interactively? Try the [interactive demo](/demo/cytoscape-graph.html) — it loads graphs produced by `codeps export` and analysis reports from `codeps report`.
+**Try it right now** — the interactive graph viewer runs in your browser, no install needed.
+Load a graph JSON produced by `codeps export`, or an analysis report from `codeps report`
+(with cycle highlighting, severity grades and suggestions). Then explore: layouts, DSM matrix
+view, filtering, degree analysis, and scoped drill-down (double-click a node, click an edge,
+breadcrumbs back).
+
+<p role="group">
+  <a href="/demo/cytoscape-graph.html" role="button">Open the interactive demo</a>
+  <a href="/tutorials/quickstart.html" role="button" class="secondary">Quickstart</a>
+</p>
 
 ## Features
 
@@ -48,14 +56,6 @@ digraph deps {
 }
 ```
 
-```dot
-digraph deps {
-  "com.example.app" -> "com.example.modules.module2";
-  "com.example.modules.module1" -> "com.example.util";
-  "com.example.modules.module2" -> "com.example.modules.module1";
-}
-```
-
 ## Site Map
 - [Tutorials](/tutorials) — step-by-step guides to get things working
   {% for tut in site.data.project.tutorials %}- [{{ tut.label }}]({{ tut.url}})
@@ -67,8 +67,3 @@ digraph deps {
   {% for tut in site.data.project.references %}- [{{ tut.label }}]({{ tut.url}})
   {% endfor %}
 
-## Demo
-
-[Open the interactive graph demo](/demo/cytoscape-graph.html) — drop a graph JSON (as produced by `codeps export`)
-or an analysis report (from `codeps report`) onto the page, then filter, focus and analyze packages; report mode
-highlights cycle edges, grades them and lists suggestions.

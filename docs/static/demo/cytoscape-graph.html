@@ -52,6 +52,8 @@
     white-space: nowrap;
   }
   .brand .dot { color: var(--teal); }
+  .brand a { color: inherit; text-decoration: none; }
+  .brand a:hover { color: var(--accent); }
   #toolbar select, #toolbar input[type="text"] {
     background: var(--panel-2);
     color: var(--text);
@@ -511,7 +513,7 @@
 <body>
 
 <header id="toolbar">
-  <span class="brand"><span class="dot">●</span> codeps &middot; package graph</span>
+  <span class="brand"><span class="dot">●</span> <a href="../" title="codeps documentation">codeps</a> &middot; package graph</span>
 
   <div id="view-tabs" role="tablist">
     <button id="tab-graph" class="active" title="Node-link graph view">Graph</button>

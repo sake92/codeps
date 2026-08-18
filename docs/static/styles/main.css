@@ -155,3 +155,8 @@ table {
     box-shadow: var(--shadow-sm);
     overflow: hidden;
 }
+/* === demo nav link === */
+body > header a[href="/demo/cytoscape-graph.html"] {
+    color: var(--pico-primary);
+    font-weight: 600;
+}
