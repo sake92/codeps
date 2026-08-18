@@ -32,9 +32,11 @@ class SemanticDbParserSpec extends munit.FunSuite:
     assert(ids.contains("org.thirdparty.Ext#name"))
     // files: workspace-relative paths, one per source file
     val files = deps.nodes.filter(_.kind == NodeKind.file).map(_.id)
-    assertEquals(files.size, 5)
+    assertEquals(files.size, 7)
     assert(files.exists(_.endsWith("/com/example/app/Main.scala")))
     assert(files.exists(_.endsWith("/org/thirdparty/Ext.scala")))
+    assert(files.exists(_.endsWith("/com/example/util/HelperSpec.scala")))
+    assert(files.exists(_.endsWith("/com/example/specs/OnlyTestsHereSpec.scala")))
     // type nodes carry parent package and file
     assert(deps.nodes.contains(Node("com.example.util.Helper", NodeKind.`type`, Some("com.example.util"), Some(files.find(_.endsWith("Helper.scala")).get))))
   }

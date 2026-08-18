@@ -8,6 +8,7 @@ object Filter:
     * root package matches an exclude pattern (exclude wins). A pattern `ba.sake` matches
     * `ba.sake` itself and everything below it. With no includes, all nodes are kept.
     * Edges are kept only when both endpoints are in the universe; self-edges dropped.
+    * Childless package nodes are pruned afterwards (`Prune.emptyPackages`).
     */
   def apply(graph: DepsGraph, includes: Seq[String], excludes: Seq[String]): DepsGraph =
     val nodesById = graph.nodes.map(n => n.id -> n).toMap
@@ -16,7 +17,7 @@ object Filter:
       .filterNot(n => excludes.exists(pat => n.rootPackageId(nodesById).exists(matches(_, pat))))
     val keptIds = universe.map(_.id)
     val keptEdges = graph.edges.filter(e => keptIds.contains(e.source) && keptIds.contains(e.target) && e.source != e.target)
-    DepsGraph(universe, keptEdges)
+    Prune.emptyPackages(DepsGraph(universe, keptEdges))
 
   private def matches(pkg: String, pattern: String): Boolean =
     pkg == pattern || pkg.startsWith(pattern + ".")

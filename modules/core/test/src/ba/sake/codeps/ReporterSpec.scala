@@ -150,3 +150,22 @@ class ReporterSpec extends munit.FunSuite:
   test("run is deterministic") {
     assertEquals(Reporter.run(graph, Nil, Nil, Nil), Reporter.run(graph, Nil, Nil, Nil))
   }
+
+  test("testPatterns exclude matching nodes before every level") {
+    val withTest = graph.copy(
+      nodes = graph.nodes ++ Set(
+        Node("src/MySpec.scala", NodeKind.file),
+        Node("com.a.MySpec", NodeKind.`type`, Some("com.a"), Some("src/MySpec.scala")),
+        Node("com.a.MySpec#verify", NodeKind.member, Some("com.a.MySpec"), Some("src/MySpec.scala"))
+      ),
+      edges = graph.edges + Edge("com.a.MySpec#verify", "com.b.B1#m3")
+    )
+    val filtered = Reporter.run(withTest, Nil, Nil, Nil, Some(Seq("**/*Spec.scala")))
+    assert(!filtered.levels("file").graph.get.nodes.exists(_.id == "src/MySpec.scala"))
+    assert(!filtered.levels("type").graph.get.nodes.exists(_.id == "com.a.MySpec"))
+    assert(filtered.levels("file").graph.get.nodes.exists(_.id == "src/a1.scala"))
+    assertEquals(
+      filtered.levels("package").cycles.map(_.members.toSet),
+      report.levels("package").cycles.map(_.members.toSet)
+    )
+  }

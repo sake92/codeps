@@ -47,9 +47,13 @@ class FilterSpec extends munit.FunSuite:
   }
 
   test("include pattern matches the root package itself and subpackages") {
-    val withUtil = graph.copy(nodes = graph.nodes + Node("com.example.util", NodeKind.`package`))
-    assert(Filter(withUtil, Seq("com.example"), Nil).nodes.map(_.id).contains("com.example.util"))
-    assert(!Filter(withUtil, Seq("com.example"), Nil).nodes.map(_.id).contains("org.thirdparty"))
+    val withUtil = graph.copy(nodes = graph.nodes +
+      Node("com.example.util", NodeKind.`package`) +
+      Node("com.example.util.HelperUtil", NodeKind.`type`, Some("com.example.util"), Some("src/HelperUtil.scala")))
+    val filtered = Filter(withUtil, Seq("com.example"), Nil)
+    assert(filtered.nodes.map(_.id).contains("com.example.util"))
+    assert(filtered.nodes.map(_.id).contains("com.example.util.HelperUtil"))
+    assert(!filtered.nodes.map(_.id).contains("org.thirdparty"))
   }
 
   test("multi-hop parent walk: member under type under package is matched by root package include") {
@@ -77,4 +81,15 @@ class FilterSpec extends munit.FunSuite:
     val withFile = graph.copy(nodes = graph.nodes + Node("src/Service1.scala", NodeKind.file))
     assert(!Filter(withFile, Seq("com.example.modules"), Nil).nodes.map(_.id).contains("src/Service1.scala"))
     assert(Filter(withFile, Nil, Nil).nodes.map(_.id).contains("src/Service1.scala"))
+  }
+
+  test("childless package nodes are pruned") {
+    val withChildless = graph.copy(nodes = graph.nodes + Node("com.example.orphan", NodeKind.`package`))
+    assert(!Filter(withChildless, Nil, Nil).nodes.map(_.id).contains("com.example.orphan"))
+  }
+
+  test("a package whose children are all excluded is pruned; others survive") {
+    val filtered = Filter(graph, Nil, Seq("com.example.modules.module2"))
+    assert(!filtered.nodes.map(_.id).contains("com.example.modules.module2"))
+    assert(filtered.nodes.map(_.id).contains("com.example.modules.module1"))
   }

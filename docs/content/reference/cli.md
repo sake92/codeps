@@ -85,6 +85,8 @@ parse → filter → aggregate to `-g` → collapse → build graph → cycle de
 | `-f` / `--format` | Output format: `dot` or `mermaid`. Required. |
 | `-i` / `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
+| `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
+| `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
 | `-o` / `--out` | Write output to this file instead of stdout. |
 
@@ -138,6 +140,35 @@ resulting universe (self-edges are dropped). With no `-i`, all nodes are kept.
 codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
 ```
 
+## Skip tests
+
+`--skip-tests` (on `draw` and `report`) excludes nodes defined in test files: `file`
+nodes whose id matches a pattern, and `type`/`member` nodes whose `file` attribute
+matches. Package nodes and file-less nodes (all of jdeps data) never match, so on
+jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and
+packages left without children are pruned.
+
+Built-in patterns:
+
+| Pattern | Catches |
+|---|---|
+| `**/test/**` | sbt/maven/mill/deder layouts: `src/test/…`, `modules/x/test/src/…` |
+| `**/*.test.scala` | scala-cli test scope |
+| `**/*Spec.scala`, `**/*Test.scala`, `**/*Tests.scala`, `**/*Suite.scala` | Scala naming conventions |
+| `**/*Spec.java`, `**/*Test.java`, `**/*Tests.java`, `**/*Suite.java` | Java naming conventions |
+
+Glob syntax: `**/` matches zero or more whole path segments, `*` does not cross `/`,
+`?` matches one non-`/` character.
+
+`--test-pattern <glob>` (repeatable) **replaces** the built-in patterns — use it to
+escape false positives (e.g. a main `*Spec.scala` DSL file) or to cover exotic
+layouts. Passing it without `--skip-tests` is an error.
+
+```shell
+codeps draw -g package -f dot --skip-tests deps.json
+codeps report --skip-tests --test-pattern '**/specs/**' deps.json
+```
+
 ## Collapse rules
 
 Collapse rules merge nodes into a single node, making large graphs readable.
@@ -173,6 +204,8 @@ always exits `0` on success.
 |---|---|
 | `-i` / `--include` | Same as `draw` — applied at every granularity. |
 | `-e` / `--exclude` | Same as `draw`. |
+| `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
+| `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `-c` / `--collapse` | Same as `draw`. |
 | `-o` / `--out` | Write the report JSON to this file instead of stdout. |
 

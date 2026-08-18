@@ -26,8 +26,9 @@ flowchart LR
 │ codeps export --from semanticdb │   │ codeps draw -g <level> -f dot|mermaid     │
 │ codeps export --from jdeps      │   │ codeps report [-i] [-e] [-c]              │
 │                                │   │                                          │
-│ parse ──► common JSON graph ────┼──►│ filter ─► aggregate -g ─► collapse ─►    │
-│ (DepsGraph, core)               │   │ graph ─► cycles ─► dot / mermaid          │
+│ parse ──► common JSON graph ────┼──►│ filter ─► skip-tests? ─► aggregate -g ─► │
+│ (DepsGraph, core)               │   │ collapse ─► graph ─► cycles ─►           │
+│                                 │   │ dot / mermaid / report                   │
 └─────────────────────────────────┘   └──────────────────────────────────────────┘
 ```
 
@@ -50,6 +51,15 @@ The graph model and processing pipeline:
 - `model/CollapseRule` — collapse rules: `Wild` (`prefix.**`) and `SingleLevel` (`prefix.*`)
 - `graph/Filter` — applies include/exclude patterns against each node's root package;
   universe = matching nodes, edges kept only when both endpoints are in the universe
+- `graph/TestFilter` — `skipTests(graph, patterns)` drops nodes defined in test
+  files: `file` nodes matched by id, `type`/`member` nodes matched by their `file`
+  attribute (package and file-less nodes never match — jdeps is a no-op); carries
+  the built-in `defaultPatterns` (`**/test/**`, `**/*.test.scala`, `*Spec`/`*Test`/
+  `*Tests`/`*Suite` name conventions for `.scala` and `.java`); `--test-pattern`
+  replaces them
+- `graph/Prune` — drops `package` nodes left childless after filtering; runs at the
+  end of both `Filter` and `TestFilter`
+- `graph/Glob` — minimal `**`/`*`/`?` glob matcher used by `TestFilter`
 - `graph/Aggregator` — maps a `DepsGraph` to a granularity level
   (`member`/`type`/`file`/`package`), lifting nodes to their nearest ancestor at that
   level and lifting edges through the same mapping; nodes coarser than the level
@@ -120,9 +130,11 @@ See [Export formats](/reference/export-formats.html) and
   the resulting `DepsGraph`s and writes the common JSON to stdout or `-o`
 - `draw` — reads the common JSON (file or stdin), runs the pipeline
   (filter → aggregate to `-g` → collapse → build graph → detect cycles → export)
-  and writes dot/mermaid to stdout or `-o`
+  and writes dot/mermaid to stdout or `-o`; `--skip-tests`/`--test-pattern`
+  exclude test code from the analysis (via `TestFilter`)
 - `report` — reads the common JSON (file or stdin), runs the pipeline at all four
-  granularities via `Reporter` and writes the analysis report JSON to stdout or `-o`
+  granularities via `Reporter` and writes the analysis report JSON to stdout or `-o`;
+  `--skip-tests`/`--test-pattern` exclude test code from the analysis (via `TestFilter`)
 
 See the [CLI reference](/reference/cli.html) and the
 [Cycle analysis report](/reference/report.html).

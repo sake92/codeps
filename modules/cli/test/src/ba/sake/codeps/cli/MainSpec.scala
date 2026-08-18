@@ -25,6 +25,14 @@ class MainSpec extends munit.FunSuite:
     assertEquals(res.exitCode, 0)
     out
 
+  private def exportJdepsJson(name: String): os.Path =
+    val out = os.pwd / "tmp" / "cli-test" / name
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("export", "--from", "jdeps", FixtureCompiler.jdepsFile.toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    out
+
   test("export --from semanticdb emits the common json format") {
     val content = os.read(exportJson("deps.json"))
     assert(content.contains("\"kind\": \"package\""))
@@ -188,6 +196,7 @@ class MainSpec extends munit.FunSuite:
       Edge("com.example.app", "com.example.modules.module2", 2),
       Edge("com.example.modules.module1", "com.example.util", 2),
       Edge("com.example.modules.module2", "com.example.modules.module1", 2),
+      Edge("com.example.specs", "com.example.util", 2),
       Edge("com.example.modules.module2", "org.thirdparty", 2)
     ))
     val fileEdges = report.levels("file").graph.get.edges
@@ -195,6 +204,8 @@ class MainSpec extends munit.FunSuite:
       Edge("src/com/example/app/Main.scala", "src/com/example/modules/module2/Service2.scala", 3),
       Edge("src/com/example/modules/module1/Service1.scala", "src/com/example/util/Helper.scala", 3),
       Edge("src/com/example/modules/module2/Service2.scala", "src/com/example/modules/module1/Service1.scala", 3),
+      Edge("src/com/example/specs/OnlyTestsHereSpec.scala", "src/com/example/util/Helper.scala", 3),
+      Edge("src/com/example/util/HelperSpec.scala", "src/com/example/util/Helper.scala", 2),
       Edge("src/com/example/modules/module2/Service2.scala", "src/org/thirdparty/Ext.scala", 3)
     ))
   }
@@ -219,4 +230,78 @@ class MainSpec extends munit.FunSuite:
     val content = os.read(out)
     assert(content.contains("\"severity\": \"bad\""))
     assert(content.contains("\"severity\": \"meh\""))
+  }
+
+  test("--test-pattern without --skip-tests exits 1") {
+    val res = runCli("draw", "-g", "package", "-f", "dot", "--test-pattern", "**/test/**", exportJson("deps.json").toString)
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("--test-pattern requires --skip-tests"))
+  }
+
+  test("report: --test-pattern without --skip-tests exits 1") {
+    val res = runCli("report", "--test-pattern", "**/test/**", exportJson("deps.json").toString)
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("--test-pattern requires --skip-tests"))
+  }
+
+  test("draw -g file --skip-tests drops test files, keeps main files") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-skip-tests.dot"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("draw", "-g", "file", "-f", "dot", "--skip-tests", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.contains("Helper.scala"))
+    assert(!content.contains("HelperSpec.scala"))
+    assert(!content.contains("OnlyTestsHereSpec.scala"))
+  }
+
+  test("draw -g package --skip-tests prunes test-only packages") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-skip-tests-pkg.dot"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("draw", "-g", "package", "-f", "dot", "--skip-tests", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(!content.contains("com.example.specs"))
+    assert(content.contains("com.example.util"))
+  }
+
+  test("report --skip-tests excludes test nodes from the report") {
+    val out = os.pwd / "tmp" / "cli-test" / "report-skip-tests.json"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("report", "--skip-tests", exportJson("deps.json").toString, "-o", out.toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(!content.contains("HelperSpec"))
+    assert(!content.contains("OnlyTestsHereSpec"))
+    assert(content.contains("Helper.scala"))
+  }
+
+  test("--test-pattern replaces the built-in defaults") {
+    val out = os.pwd / "tmp" / "cli-test" / "out-custom-pattern.dot"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli(
+      "draw", "-g", "file", "-f", "dot", "--skip-tests", "--test-pattern", "**/nonexistent/**",
+      exportJson("deps.json").toString, "-o", out.toString
+    )
+    assertEquals(res.exitCode, 0)
+    // defaults replaced by a pattern that matches nothing: the spec files survive
+    assert(os.read(out).contains("HelperSpec.scala"))
+  }
+
+  test("jdeps data: --skip-tests is a no-op") {
+    val out1 = os.pwd / "tmp" / "cli-test" / "jdeps-without.dot"
+    val out2 = os.pwd / "tmp" / "cli-test" / "jdeps-with.dot"
+    os.makeDir.all(out1 / os.up)
+    os.remove.all(out1)
+    os.remove.all(out2)
+    val json = exportJdepsJson("deps-jdeps2.json").toString
+    val res1 = runCli("draw", "-g", "type", "-f", "dot", json, "-o", out1.toString)
+    val res2 = runCli("draw", "-g", "type", "-f", "dot", "--skip-tests", json, "-o", out2.toString)
+    assertEquals(res1.exitCode, 0)
+    assertEquals(res2.exitCode, 0)
+    assertEquals(os.read(out1), os.read(out2))
   }

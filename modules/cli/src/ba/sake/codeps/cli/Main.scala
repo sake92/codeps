@@ -1,7 +1,7 @@
 package ba.sake.codeps.cli
 
 import ba.sake.codeps.exporting.{DotExporter, MermaidExporter, OutputFormat}
-import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder}
+import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder, TestFilter}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
 import ba.sake.codeps.report.Reporter
 import ba.sake.codeps.jdeps.JdepsParser
@@ -30,7 +30,7 @@ object Main:
 
   private def reorderRest(rest: Seq[String]): Seq[String] =
     val valueFlags = Set("-i", "--include", "-e", "--exclude", "-c", "--collapse", "-f", "--format",
-      "-g", "--granularity", "-o", "--out", "--from", "--root")
+      "-g", "--granularity", "-o", "--out", "--from", "--root", "--test-pattern")
     val named    = Seq.newBuilder[String]
     val leftover = Seq.newBuilder[String]
     var i = 0
@@ -135,41 +135,57 @@ object Main:
       @arg(short = 'i') include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],
+      @arg(name = "skip-tests") skipTests: mainargs.Flag,
+      @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(short = 'o') out: Option[String],
       leftover: Leftover[String]
   ): Int =
-    runOnGraph(leftover.value, out) { graph =>
-      val filtered = Filter(graph, include, exclude)
-      if filtered.nodes.isEmpty then Left("no nodes remain after filtering")
-      else
-        parseRules(collapse).flatMap { rules =>
-          val (nodes, edges) = Aggregator.aggregate(filtered, granularity)
-          val (collapsedNodes, collapsedEdges) = Collapser.collapse(nodes, edges, rules)
-          val g = GraphBuilder.build(collapsedNodes, collapsedEdges)
-          val cycles = CycleDetector.detect(g)
-          val content = format match
-            case OutputFormat.Dot     => DotExporter.render(g, cycles)
-            case OutputFormat.Mermaid => MermaidExporter.render(g, cycles)
-          Right(content)
+    testPatternsOrError(skipTests.value, testPattern) match
+      case Left(err) =>
+        System.err.println(s"error: $err")
+        1
+      case Right(patterns) =>
+        runOnGraph(leftover.value, out) { graph =>
+          val filtered = Filter(graph, include, exclude)
+          val withoutTests = patterns.map(TestFilter.skipTests(filtered, _)).getOrElse(filtered)
+          if withoutTests.nodes.isEmpty then Left("no nodes remain after filtering")
+          else
+            parseRules(collapse).flatMap { rules =>
+              val (nodes, edges) = Aggregator.aggregate(withoutTests, granularity)
+              val (collapsedNodes, collapsedEdges) = Collapser.collapse(nodes, edges, rules)
+              val g = GraphBuilder.build(collapsedNodes, collapsedEdges)
+              val cycles = CycleDetector.detect(g)
+              val content = format match
+                case OutputFormat.Dot     => DotExporter.render(g, cycles)
+                case OutputFormat.Mermaid => MermaidExporter.render(g, cycles)
+              Right(content)
+            }
         }
-    }
 
   @main
   def report(
       @arg(short = 'i') include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],
+      @arg(name = "skip-tests") skipTests: mainargs.Flag,
+      @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(short = 'o') out: Option[String],
       leftover: Leftover[String]
   ): Int =
-    runOnGraph(leftover.value, out) { graph =>
-      val filtered = Filter(graph, include, exclude)
-      if filtered.nodes.isEmpty then Left("no nodes remain after filtering")
-      else
-        parseRules(collapse).map { rules =>
-          Reporter.run(graph, include, exclude, rules).toJson(spaces = 2, sort = true)
+    testPatternsOrError(skipTests.value, testPattern) match
+      case Left(err) =>
+        System.err.println(s"error: $err")
+        1
+      case Right(patterns) =>
+        runOnGraph(leftover.value, out) { graph =>
+          val filtered = Filter(graph, include, exclude)
+          val withoutTests = patterns.map(TestFilter.skipTests(filtered, _)).getOrElse(filtered)
+          if withoutTests.nodes.isEmpty then Left("no nodes remain after filtering")
+          else
+            parseRules(collapse).map { rules =>
+              Reporter.run(graph, include, exclude, rules, patterns).toJson(spaces = 2, sort = true)
+            }
         }
-    }
 
   /** Reads one json input (file or stdin) and runs `f` on it; errors go to stderr, exit 1. */
   private def runOnGraph(inputs: Seq[String], out: Option[String])(f: DepsGraph => Either[String, String]): Int =
@@ -203,6 +219,11 @@ object Main:
     try Right(text.parseJson[DepsGraph])
     catch
       case e: ba.sake.tupson.TupsonException => Left(s"failed to parse json: ${e.getMessage}")
+
+  /** `--test-pattern` requires `--skip-tests`; when given it replaces the built-in patterns. */
+  private def testPatternsOrError(skipTests: Boolean, testPattern: Seq[String]): Either[String, Option[Seq[String]]] =
+    if testPattern.nonEmpty && !skipTests then Left("--test-pattern requires --skip-tests")
+    else Right(if skipTests then Some(if testPattern.nonEmpty then testPattern else TestFilter.defaultPatterns) else None)
 
   private def parseRules(collapse: Seq[String]): Either[String, Seq[CollapseRule]] =
     collapse.foldLeft(Right(Nil): Either[String, Seq[CollapseRule]]) { (acc, pattern) =>

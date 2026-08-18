@@ -1,12 +1,12 @@
 package ba.sake.codeps.report
 
-import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder}
+import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder, TestFilter}
 import ba.sake.codeps.model.*
 import org.jgrapht.graph.{DefaultDirectedGraph, DefaultEdge}
 import scala.jdk.CollectionConverters.*
 
-/** Runs the analysis pipeline (filter -> aggregate -> collapse -> graph -> cycles) at every
-  * granularity in one pass, grades each cycle, and computes per-level metrics and suggestions.
+/** Runs the analysis pipeline (filter -> optional test-filter -> aggregate -> collapse -> graph -> cycles) at
+  * every granularity in one pass, grades each cycle, and computes per-level metrics and suggestions.
   */
 object Reporter:
 
@@ -17,8 +17,19 @@ object Reporter:
   /** Lowercase JSON key of a level ("package", "file", "type", "member"). */
   def levelKey(level: Aggregator.Level): String = level.toString.toLowerCase
 
-  def run(graph: DepsGraph, include: Seq[String], exclude: Seq[String], rules: Seq[CollapseRule]): AnalysisReport =
-    val filtered = Filter(graph, include, exclude)
+  def run(
+      graph: DepsGraph,
+      include: Seq[String],
+      exclude: Seq[String],
+      rules: Seq[CollapseRule],
+      /** Patterns matched against node file paths; matching test nodes are dropped before
+        * aggregation (see `TestFilter`). `None` skips the test filter. */
+      testPatterns: Option[Seq[String]] = None
+  ): AnalysisReport =
+    val includeExcludeFiltered = Filter(graph, include, exclude)
+    val filtered = testPatterns match
+      case Some(patterns) => TestFilter.skipTests(includeExcludeFiltered, patterns)
+      case None           => includeExcludeFiltered
     AnalysisReport(levels.map(l => levelKey(l) -> levelReport(filtered, l, rules)).toMap)
 
   private def levelReport(graph: DepsGraph, level: Aggregator.Level, rules: Seq[CollapseRule]): LevelReport =
