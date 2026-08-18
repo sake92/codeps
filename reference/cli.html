@@ -52,6 +52,7 @@
             <li><a href="#granularity">Granularity</a></li>
            </ul></li>
           <li><a href="#include--exclude-patterns">Include / exclude patterns</a></li>
+          <li><a href="#skip-tests">Skip tests</a></li>
           <li><a href="#collapse-rules">Collapse rules</a></li>
           <li><a href="#report">report</a></li>
           <li><a href="#exit-codes-and-errors">Exit codes and errors</a></li>
@@ -147,6 +148,14 @@ codeps export --from jdeps jdeps.txt
       <td>Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable.</td>
      </tr>
      <tr>
+      <td><code>--skip-tests</code></td>
+      <td>Exclude nodes defined in test files (see <a href="#skip-tests">Skip tests</a>).</td>
+     </tr>
+     <tr>
+      <td><code>--test-pattern</code></td>
+      <td>Glob matching test files; repeatable. Requires <code>--skip-tests</code>; replaces the built-in patterns.</td>
+     </tr>
+     <tr>
       <td><code>-c</code> / <code>--collapse</code></td>
       <td>Collapse rule, e.g. <code>com.example.**</code>. Repeatable.</td>
      </tr>
@@ -201,6 +210,40 @@ codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">keep only com.example and subpackages, minus internal helpers</span>
 codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
 </code></pre>
+   <h2 id="skip-tests">Skip tests<a href="#skip-tests" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>--skip-tests</code> (on <code>draw</code> and <code>report</code>) excludes nodes defined in test files: <code>file</code> nodes whose id matches a pattern, and <code>type</code>/<code>member</code> nodes whose <code>file</code> attribute matches. Package nodes and file-less nodes (all of jdeps data) never match, so on jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and packages left without children are pruned.</p>
+   <p>Built-in patterns:</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Pattern</th>
+      <th>Catches</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>**/test/**</code></td>
+      <td>sbt/maven/mill/deder layouts: <code>src/test/…</code>, <code>modules/x/test/src/…</code></td>
+     </tr>
+     <tr>
+      <td><code>**/*.test.scala</code></td>
+      <td>scala-cli test scope</td>
+     </tr>
+     <tr>
+      <td><code>**/*Spec.scala</code>, <code>**/*Test.scala</code>, <code>**/*Tests.scala</code>, <code>**/*Suite.scala</code></td>
+      <td>Scala naming conventions</td>
+     </tr>
+     <tr>
+      <td><code>**/*Spec.java</code>, <code>**/*Test.java</code>, <code>**/*Tests.java</code>, <code>**/*Suite.java</code></td>
+      <td>Java naming conventions</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Glob syntax: <code>**/</code> matches zero or more whole path segments, <code>*</code> does not cross <code>/</code>, <code>?</code> matches one non-<code>/</code> character.</p>
+   <p><code>--test-pattern &lt;glob&gt;</code> (repeatable) <strong>replaces</strong> the built-in patterns — use it to escape false positives (e.g. a main <code>*Spec.scala</code> DSL file) or to cover exotic layouts. Passing it without <code>--skip-tests</code> is an error.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f dot --skip-tests deps.json
+codeps report --skip-tests --test-pattern '**/specs/**' deps.json
+</code></pre>
    <h2 id="collapse-rules">Collapse rules<a href="#collapse-rules" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Collapse rules merge nodes into a single node, making large graphs readable. Only trailing wildcards are supported:</p>
    <table>
@@ -243,6 +286,14 @@ codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
      <tr>
       <td><code>-e</code> / <code>--exclude</code></td>
       <td>Same as <code>draw</code>.</td>
+     </tr>
+     <tr>
+      <td><code>--skip-tests</code></td>
+      <td>Exclude nodes defined in test files (see <a href="#skip-tests">Skip tests</a>).</td>
+     </tr>
+     <tr>
+      <td><code>--test-pattern</code></td>
+      <td>Glob matching test files; repeatable. Requires <code>--skip-tests</code>; replaces the built-in patterns.</td>
      </tr>
      <tr>
       <td><code>-c</code> / <code>--collapse</code></td>
