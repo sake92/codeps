@@ -221,7 +221,7 @@ codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
      </tr>
     </tbody>
    </table>
-   <p>Rules match node ids by prefix, kind-agnostically — they apply to whatever ids exist after aggregation (packages, files, types or members). When multiple rules match a node, the <strong>longest prefix wins</strong> (ties: first rule in the sequence). Loops created by collapsing are dropped; edges are deduplicated.</p>
+   <p>Rules match node ids by prefix, kind-agnostically — they apply to whatever ids exist after aggregation (packages, files, types or members). When multiple rules match a node, the <strong>longest prefix wins</strong> (ties: first rule in the sequence). Loops created by collapsing are dropped; edges landing on the same pair are merged with summed weights.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
 </code></pre>
    <h2 id="report">report<a href="#report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>

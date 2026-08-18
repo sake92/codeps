@@ -71,7 +71,7 @@
     <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.topLevelHelper"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"member"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"parentId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo#doWork"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.topLevelHelper"</span><span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo#doWork"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.topLevelHelper"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"weight"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">]</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -92,8 +92,8 @@
      </tr>
      <tr>
       <td><code>edges</code></td>
-      <td><code>[{source, target}]</code></td>
-      <td>directed dependency edges between node ids; a set (deduplicated)</td>
+      <td><code>[{source, target, weight}]</code></td>
+      <td>directed dependency edges between node ids; a set (deduplicated); <code>weight</code> = number of finer-grained references merged into the edge</td>
      </tr>
     </tbody>
    </table>
@@ -126,6 +126,33 @@
       <td><code>file</code></td>
       <td>string (optional)</td>
       <td>on <code>type</code>/<code>member</code> nodes: the id of their source <code>file</code> node</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Edge fields:</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Field</th>
+      <th>Type</th>
+      <th>Meaning</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>source</code></td>
+      <td>string</td>
+      <td>node id the dependency comes from</td>
+     </tr>
+     <tr>
+      <td><code>target</code></td>
+      <td>string</td>
+      <td>node id the dependency goes to</td>
+     </tr>
+     <tr>
+      <td><code>weight</code></td>
+      <td>number (optional)</td>
+      <td>number of finer-grained references this edge represents; 1 when absent (producers that don't emit it are accepted)</td>
      </tr>
     </tbody>
    </table>

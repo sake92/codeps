@@ -77,7 +77,7 @@
     <li><strong>Filtering</strong> — keep only nodes matching <code>--include</code> patterns, drop noise with <code>--exclude</code> (e.g. <code>java.*</code>, <code>scala.*</code>)</li>
     <li><strong>Collapsing</strong> — merge whole subtrees with <code>--collapse</code> rules (<code>com.example.**</code>, <code>org.lib.*</code>)</li>
     <li><strong>Two output formats</strong> — <a href="https://sake92.github.io/codeps/reference/export-formats.html">DOT and Mermaid</a></li>
-    <li><strong>Interactive demo</strong> — a standalone <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">graph viewer</a>: layouts, filtering, degree analysis, cycle highlighting, package suggestions</li>
+    <li><strong>Interactive demo</strong> — a standalone <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">graph viewer</a>: layouts, filtering, degree analysis, cycle highlighting, package suggestions, scoped drill-down (double-click a node, click an edge, breadcrumbs back)</li>
    </ul>
    <h2 id="quick-example">Quick example<a href="#quick-example" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f dot -
