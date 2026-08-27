@@ -31,7 +31,6 @@
      </li>
     </ul>
     <ul>
-     <li><a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">Demo</a></li>
      <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
      <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
      <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
@@ -62,7 +61,7 @@
    </div>
    <h1 id="export--analyze-scalasemanticdb-projects">Export &amp; analyze Scala/SemanticDB projects<a href="#export--analyze-scalasemanticdb-projects" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p>SemanticDB is a data format describing the semantic information of Scala (and Java) programs, produced by the Scala compiler (<code>-Xsemanticdb</code> flag) or tools like scala-cli.</p>
-   <p>Scala data is the richest codeps input: it carries <code>package</code>, <code>file</code>, <code>type</code> and <code>member</code> nodes, so the analyzer can render the graph at any of the four granularities (<code>-g package|file|type|member</code>). Only the project's <strong>own symbols</strong> are exported — references to external libraries and the JDK are dropped by the exporter.</p>
+   <p>Scala data is the richest codeps input: it carries package/file/type/member symbols, and <code>export</code> collapses them into <code>package</code> and <code>file</code> nodes with file-level edges (ports/mutPorts resolved at export time), so the analyzer can produce metrics at both scopes — the package graph and the file graph of a selected package. It also carries per-symbol access/kind information, which the exporter turns into the <a href="https://sake92.github.io/codeps/reference/report.html#exposed-surface">exposed-surface metrics</a> (<code>ports</code>/<code>mutPorts</code>: sealed hierarchies, givens, vars and mutable collections are all resolved at export time). Only the project's <strong>own symbols</strong> are exported — references to external libraries and the JDK are dropped by the exporter.</p>
    <h2 id="generating-semanticdb-files">Generating SemanticDB files<a href="#generating-semanticdb-files" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>If your build already emits SemanticDB (scala-cli, sbt or Maven with the <code>semanticdb</code> plugin, plain scalac with <code>-Xsemanticdb</code>), the <code>.semanticdb</code> files are already on your disk — the example below is just one way to get them:</p>
    <p>With scala-cli:</p>
@@ -75,7 +74,7 @@
     <li>Maven / sbt: enable the <code>semanticdb</code> compiler plugin and check the generated files in the target dir</li>
    </ul>
    <h2 id="exporting-the-graph">Exporting the graph<a href="#exporting-the-graph" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>codeps export</code> walks the directory, reads every <code>*.semanticdb</code> file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">common JSON graph format</a> (<code>nodes</code> + <code>edges</code>):</p>
+   <p><code>codeps export</code> walks the directory, reads every <code>*.semanticdb</code> file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">standard JSON export format</a> (<code>nodes</code> + <code>edges</code>):</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
 </code></pre>
    <ul>
@@ -87,40 +86,30 @@
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb --root . -o deps.json
 </code></pre>
    <h2 id="analyzing">Analyzing<a href="#analyzing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>codeps draw</code> reads the JSON graph and renders it at the granularity you pick:</p>
+   <p><code>codeps report</code> reads the JSON graph and emits the flat metrics report:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps draw -g package -f dot deps.json
+codeps report --scope packages deps.json
 </code></pre>
    <ul>
-    <li><code>-g</code> is the aggregation level — all four are available on SemanticDB data: <code>package</code> (the classic package view), <code>file</code>, <code>type</code> or <code>member</code></li>
-    <li><code>-f</code> is the output format: <code>dot</code> or <code>mermaid</code></li>
+    <li><code>--scope packages</code> — metrics over the whole package graph: cycles with simulated cut candidates, per-package exposed-surface (<code>ports</code>/<code>mutPorts</code>/<code>exposure</code>/<code>utilization</code>), and orphans</li>
+    <li><code>--scope files</code> — the same metrics over the <strong>file graph</strong> of the packages selected with <code>-i</code>; e.g. <code>-i com.example</code> descends into <code>com.example</code> and everything below it</li>
     <li><code>-i</code>/<code>-e</code>/<code>-c</code> filter and collapse, e.g. <code>-i com.example</code> keeps only your packages</li>
+    <li><code>--format json</code> emits machine-readable JSON (the default <code>table</code> renders the same data as plain aligned text)</li>
    </ul>
-   <p>No intermediate file needed — pipe <code>export</code> straight into <code>draw</code> (the <code>-</code> tells <code>draw</code> to read the JSON from stdin):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g type -f mermaid -
+   <p>No intermediate file needed — pipe <code>export</code> straight into <code>report</code> (the <code>-</code> tells <code>report</code> to read the JSON from stdin):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
 </code></pre>
-   <p>Example <code>-g package</code> output:</p>
-   <pre><code class="language-dot">digraph deps {
-  "com.example.app" -&gt; "com.example.modules.module2";
-  "com.example.modules.module1" -&gt; "com.example.util";
-  "com.example.modules.module2" -&gt; "com.example.modules.module1";
-}
-</code></pre>
-   <p>Circular dependencies are reported as <code>// cycles:</code> / <code>%% cycles:</code> comments in the output (see <a href="https://sake92.github.io/codeps/reference/export-formats.html">Export formats</a>).</p>
-   <p>For a deeper look at cycles, <code>codeps report</code> analyzes the graph at <strong>all four granularities in one run</strong> and grades every cycle (<code>bad</code> / <code>meh</code> / <code>fine</code>) with suggestions what to fix:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report deps.json -o report.json
-</code></pre>
-   <p>The report JSON can be loaded into the <a href="https://sake92.github.io/codeps/demo/cytoscape-graph.html">interactive demo</a> for cycle highlighting, and is shaped for agents to consume directly — see the <a href="https://sake92.github.io/codeps/reference/report.html">Cycle analysis report</a>.</p>
+   <p>See the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the full field reference.</p>
    <h2 id="filtering-and-collapsing">Filtering and collapsing<a href="#filtering-and-collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>--include</code>/<code>--exclude</code> take package patterns: a pattern <code>com.example</code> matches the package itself and everything below it; excludes win over includes.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">only com.example packages, no third-party or JDK noise</span>
-codeps draw -g package -f dot -i com.example deps.json
+codeps report --scope packages -i com.example deps.json
 <span class="hljs-meta prompt_">
 # </span><span class="language-bash">com.example.* minus internal helpers</span>
-codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
+codeps report --scope packages -i com.example -e com.example.internal deps.json
 </code></pre>
    <p>Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages -i com.example -c com.example.modules.** deps.json
 </code></pre>
    <p>When multiple rules match, the longest prefix wins; loops created by collapsing are dropped. See <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for the full option list.</p>
    <div role="group">
