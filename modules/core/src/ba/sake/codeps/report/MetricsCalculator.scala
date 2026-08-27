@@ -123,8 +123,7 @@ object MetricsCalculator:
       ),
       cycles = cycles,
       surface = surface,
-      orphans = orphans,
-      articulationPoints = articulationPoints(sg)
+      orphans = orphans
     )
 
   /** Longest path (in number of edges) through the condensation DAG: collapse each
@@ -151,42 +150,6 @@ object MetricsCalculator:
         inDeg(v) = inDeg(v) - 1
         if inDeg(v) == 0 then ready += v
     dist.values.maxOption.getOrElse(0)
-
-  /** Nodes whose removal increases the number of connected components of the
-    * undirected view of the graph (DFS with discovery/low-link times — same
-    * family as Tarjan, on the undirected graph). */
-  private def articulationPoints(sg: ScopeGraph): Seq[String] =
-    val adjacency = sg.edges.toSeq
-      .flatMap(e => Seq((e.source, e.target), (e.target, e.source)))
-      .groupMap(_._1)(_._2)
-      .view
-      .mapValues(_.distinct.sorted)
-      .toMap
-    val disc = scala.collection.mutable.Map.empty[String, Int]
-    val low = scala.collection.mutable.Map.empty[String, Int]
-    val result = scala.collection.mutable.Set.empty[String]
-    var time = 0
-
-    def dfs(u: String, parent: Option[String]): Unit =
-      disc(u) = time
-      low(u) = time
-      time += 1
-      var children = 0
-      for v <- adjacency.getOrElse(u, Nil) do
-        if parent.forall(_ != v) then
-          if !disc.contains(v) then
-            children += 1
-            dfs(v, Some(u))
-            low(u) = math.min(low(u), low(v))
-            if parent.isEmpty then
-              if children > 1 then result += u
-            else if low(v) >= disc(u) then result += u
-          else
-            low(u) = math.min(low(u), disc(v))
-
-    for u <- sg.nodes.toSeq.sorted do
-      if !disc.contains(u) then dfs(u, None)
-    result.toSeq.sorted
 
   // ---------- cycles ----------
 

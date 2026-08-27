@@ -18,8 +18,7 @@ class MetricsReportSpec extends munit.FunSuite:
         cutCandidates = Seq(CutCandidate("scheduler", "cache", 4))
       )),
       surface = Seq(SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33))),
-      orphans = Seq("DeadUtil.scala"),
-      articulationPoints = Seq("config", "core")
+      orphans = Seq("DeadUtil.scala")
     )
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"scope\":\"packages\""))
@@ -37,7 +36,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"fan_in\":3"))
     assert(json.contains("\"exposure\":24"))
     assert(json.contains("\"utilization\":0.33"))
-    assert(json.contains("\"articulation_points\":[\"config\",\"core\"]"))
+    assert(!json.contains("articulation_points"))
   }
 
   test("integral doubles render as integers, null utilization renders as null") {

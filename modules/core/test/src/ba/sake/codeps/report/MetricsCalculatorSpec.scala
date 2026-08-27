@@ -78,10 +78,9 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       SurfaceRow("com.c", 1, 0, 3.0, 0.0, 3.0, Some(1.0 / 3.0)),
       SurfaceRow("com.a", 0, 1, 3.0, 0.0, 3.0, None)
     )) // utilization asc, nulls last, then node asc
-    assertEquals(report.articulationPoints, Seq("com.b"))
   }
 
-  test("orphans and articulation points on a graph with an isolated node") {
+  test("orphans on a graph with an isolated node") {
     val graph = DepsGraph(
       nodes = Set(
         Node("p1", NodeKind.`package`),
@@ -98,7 +97,6 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     assertEquals(report.orphans, Seq("iso"))
     assertEquals(report.summary.orphans, 1)
-    assertEquals(report.articulationPoints, Seq("p2"))
   }
 
   test("critical path length ignores cycles via condensation") {

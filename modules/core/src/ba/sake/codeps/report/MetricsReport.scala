@@ -12,8 +12,7 @@ case class MetricsReport(
     summary: Summary,
     cycles: Seq[Cycle],
     surface: Seq[SurfaceRow],
-    orphans: Seq[String],
-    articulationPoints: Seq[String]
+    orphans: Seq[String]
 )
 
 case class Summary(
@@ -61,8 +60,7 @@ object MetricsReport:
         "summary" -> JsonRW[Summary].write(value.summary),
         "cycles" -> JsonRW[Seq[Cycle]].write(value.cycles),
         "surface" -> JsonRW[Seq[SurfaceRow]].write(value.surface),
-        "orphans" -> JsonRW[Seq[String]].write(value.orphans),
-        "articulation_points" -> JsonRW[Seq[String]].write(value.articulationPoints)
+        "orphans" -> JsonRW[Seq[String]].write(value.orphans)
       )
     override def parse(path: String, jValue: JValue): MetricsReport =
       throw new UnsupportedOperationException("metrics reports are write-only")

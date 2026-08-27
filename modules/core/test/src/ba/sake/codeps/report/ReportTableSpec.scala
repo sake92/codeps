@@ -12,11 +12,10 @@ class ReportTableSpec extends munit.FunSuite:
       SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33)),
       SurfaceRow("iso", 0, 0, 0.0, 0.0, 0.0, None)
     ),
-    orphans = Seq("iso"),
-    articulationPoints = Seq("cache")
+    orphans = Seq("iso")
   )
 
-  test("table renders summary, cycles, surface, orphans, articulation points") {
+  test("table renders summary, cycles, surface, orphans") {
     val text = ReportTable.render(report)
     assert(text.contains("scope: packages"))
     assert(text.contains("nodes: 2"))
@@ -39,8 +38,7 @@ class ReportTableSpec extends munit.FunSuite:
       summary = Summary(0, 0, 0, 0, 0),
       cycles = Seq.empty,
       surface = Seq.empty,
-      orphans = Seq.empty,
-      articulationPoints = Seq.empty
+      orphans = Seq.empty
     )
     val text = ReportTable.render(empty)
     assert(text.contains("(none)"))

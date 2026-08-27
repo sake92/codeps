@@ -45,11 +45,6 @@ object ReportTable:
     sb.append("Orphans\n")
     if report.orphans.isEmpty then sb.append("  (none)\n")
     else report.orphans.foreach(o => sb.append(s"  $o\n"))
-    sb.append("\n")
-
-    sb.append("Articulation points\n")
-    if report.articulationPoints.isEmpty then sb.append("  (none)\n")
-    else sb.append(s"  ${report.articulationPoints.mkString(", ")}\n")
     sb.result()
 
   /** Aligns columns to the widest cell, two-space gaps. */
