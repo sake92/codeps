@@ -14,12 +14,12 @@ object ReportTable:
         s"    orphans: ${s.orphans}    critical_path_length: ${s.criticalPathLength}\n\n"
     )
 
-    sb.append("Knots (size desc, ext_fan_in desc)\n")
-    if report.knots.isEmpty then sb.append("  (none)\n")
+    sb.append("Cycles (size desc, ext_fan_in desc)\n")
+    if report.cycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
         Seq("id", "size", "ext_fan_in", "min_cuts_estimate", "cut candidates"),
-        report.knots.map { k =>
+        report.cycles.map { k =>
           val cuts = if k.cutCandidates.isEmpty then "—"
           else k.cutCandidates.map(c => s"${c.source} -> ${c.target} (w=${c.weight}, ${c.effect} -> ${c.newSize})").mkString(", ")
           Seq(k.id, k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, cuts)

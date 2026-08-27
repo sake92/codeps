@@ -9,9 +9,9 @@ class MetricsReportSpec extends munit.FunSuite:
       scope = "packages",
       generatedAt = "2026-08-27T10:00:00+02:00",
       summary = Summary(nodes = 100, edges = 214, nodesInCycles = 34, orphans = 3, criticalPathLength = 7),
-      knots = Seq(Knot(
+      cycles = Seq(Cycle(
         id = "scc:cache",
-        members = Seq("cache", "scheduler"),
+        members = Seq("cache", "scheduler", "cache"),
         size = 2,
         extFanIn = 5,
         minCutsEstimate = 1,
@@ -28,6 +28,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"critical_path_length\":7"))
     assert(json.contains("\"ext_fan_in\":5"))
     assert(json.contains("\"min_cuts_estimate\":1"))
+    assert(json.contains("\"cycles\""))
     assert(json.contains("\"cut_candidates\""))
     assert(json.contains("\"edge\":[\"scheduler\",\"cache\"]"))
     assert(json.contains("\"new_size\":1"))

@@ -56,6 +56,6 @@ object TarjanScc:
     result.toSeq.sortBy(_.min)
 
   /** Only components with more than 1 member — singleton components are just
-    * acyclic nodes and never count as knots. */
-  def knots(nodes: Set[String], edges: Set[Edge]): Seq[Set[String]] =
+    * acyclic nodes and never count as cycles. */
+  def cycles(nodes: Set[String], edges: Set[Edge]): Seq[Set[String]] =
     components(nodes, edges).filter(_.size > 1)

@@ -2,6 +2,7 @@ package ba.sake.codeps.report
 
 import ba.sake.codeps.graph.{Collapser, Filter, TarjanScc, TestFilter}
 import ba.sake.codeps.model.*
+import scala.collection.mutable
 
 /** The language-agnostic metrics layer (v2.md §4): takes a node/edge list whose
   * per-node `isExposed`/`ports`/`mutPorts` were resolved by an extraction backend,
@@ -88,8 +89,8 @@ object MetricsCalculator:
     def fanOutOf(id: String): Int = fanOut.getOrElse(id, 0)
 
     val orphans = sg.nodes.filter(n => fanInOf(n) == 0 && fanOutOf(n) == 0).toSeq.sorted
-    val knotSets = TarjanScc.knots(sg.nodes, sg.edges)
-    val knots = knotSets.map(knot => knotRow(knot, sg)).sortBy(k => (-k.size, -k.extFanIn, k.id))
+    val cycleSets = TarjanScc.cycles(sg.nodes, sg.edges)
+    val cycles = cycleSets.map(k => cycleRow(k, sg)).sortBy(k => (-k.size, -k.extFanIn, k.id))
 
     val surface = sg.nodes.toSeq
       .map { id =>
@@ -116,11 +117,11 @@ object MetricsCalculator:
       summary = Summary(
         nodes = sg.nodes.size,
         edges = sg.edges.size,
-        nodesInCycles = knotSets.map(_.size).sum,
+        nodesInCycles = cycleSets.map(_.size).sum,
         orphans = orphans.size,
         criticalPathLength = criticalPathLength(sg)
       ),
-      knots = knots,
+      cycles = cycles,
       surface = surface,
       orphans = orphans,
       articulationPoints = articulationPoints(sg)
@@ -187,31 +188,60 @@ object MetricsCalculator:
       if !disc.contains(u) then dfs(u, None)
     result.toSeq.sorted
 
-  // ---------- knots ----------
+  // ---------- cycles ----------
 
-  /** Max candidate edges tested per knot per simulation round. */
+  /** Max candidate edges tested per cycle per simulation round. */
   private val maxCutCandidates = 6
 
-  private def knotRow(knot: Set[String], sg: ScopeGraph): Knot =
-    val members = knot.toSeq.sorted
-    val extFanIn = sg.edges.count(e => knot.contains(e.target) && !knot.contains(e.source))
-    Knot(
-      id = "scc:" + members.head, // stable key: min member id, NOT a counter
-      members = members,
-      size = members.size,
+  private def cycleRow(scc: Set[String], sg: ScopeGraph): Cycle =
+    val extFanIn = sg.edges.count(e => scc.contains(e.target) && !scc.contains(e.source))
+    Cycle(
+      id = "scc:" + scc.min, // stable key: min member id, NOT a counter
+      members = cyclePath(scc, sg),
+      size = scc.size,
       extFanIn = extFanIn,
-      minCutsEstimate = minCutsEstimate(knot, sg),
-      cutCandidates = cutCandidates(knot, sg)
+      minCutsEstimate = minCutsEstimate(scc, sg),
+      cutCandidates = cutCandidates(scc, sg)
     )
 
-  /** Internal edges of the knot sorted by weight ascending (stable tiebreak),
+  /** A simple cycle through the SCC's smallest member as a closed path (first
+    * node repeated at the end). Deterministic: DFS from the min member over
+    * sorted adjacency; the first edge back to the start closes the path. Every
+    * SCC with >1 member contains such a cycle. Defensive fallback (unreachable
+    * for a true SCC): sorted members plus the start. */
+  private def cyclePath(scc: Set[String], sg: ScopeGraph): Seq[String] =
+    val start = scc.min
+    val adj = sg.edges.toSeq
+      .filter(e => scc.contains(e.source) && scc.contains(e.target))
+      .groupMap(_.source)(_.target)
+      .view.mapValues(_.toSeq.sorted).toMap
+    val visited = mutable.Set.empty[String]
+    val path = mutable.ArrayDeque(start)
+    var found = false
+    def dfs(v: String): Unit =
+      if !found then
+        visited += v
+        for w <- adj.getOrElse(v, Nil) do
+          if found then return
+          else if w == start && path.size >= 2 then
+            path.append(start)
+            found = true
+            return
+          else if !visited.contains(w) then
+            path.append(w)
+            dfs(w)
+            if !found then path.removeLast()
+    dfs(start)
+    if found then path.toSeq else scc.toSeq.sorted :+ start
+
+  /** Internal edges of the cycle sorted by weight ascending (stable tiebreak),
     * top N, each with its simulated effect. */
-  private def cutCandidates(knot: Set[String], sg: ScopeGraph): Seq[CutCandidate] =
+  private def cutCandidates(cycle: Set[String], sg: ScopeGraph): Seq[CutCandidate] =
     sg.edges.toSeq
-      .filter(e => knot.contains(e.source) && knot.contains(e.target))
+      .filter(e => cycle.contains(e.source) && cycle.contains(e.target))
       .sortBy(e => (e.weight, e.source, e.target))
       .take(maxCutCandidates)
-      .map(e => simulateCut(e, knot, sg.edges))
+      .map(e => simulateCut(e, cycle, sg.edges))
 
   /** Removes the edge from a copy of the edge list, reruns Tarjan, and classifies
     * the effect on the component(s) containing the edge's endpoints:
@@ -219,24 +249,24 @@ object MetricsCalculator:
     * - a multi-member component remains but is smaller -> "partial" (report the largest)
     * - same size (endpoints still in one component) -> "none": the edge is redundant
     *   with the rest of the cycle (e.g. a chord running the ring's direction). */
-  private def simulateCut(e: Edge, knot: Set[String], edges: Set[Edge]): CutCandidate =
-    val containing = TarjanScc.components(knot, edges - e)
+  private def simulateCut(e: Edge, cycle: Set[String], edges: Set[Edge]): CutCandidate =
+    val containing = TarjanScc.components(cycle, edges - e)
       .filter(c => c.contains(e.source) || c.contains(e.target))
     val multiSizes = containing.map(_.size).filter(_ >= 2)
     val (effect, newSize) =
       if multiSizes.isEmpty then ("resolved", 1)
-      else if multiSizes.max < knot.size then ("partial", multiSizes.max)
-      else ("none", knot.size)
+      else if multiSizes.max < cycle.size then ("partial", multiSizes.max)
+      else ("none", cycle.size)
     CutCandidate(e.source, e.target, e.weight, effect, newSize)
 
-  /** Greedy estimate of the cuts needed to dissolve the knot: repeatedly apply the
+  /** Greedy estimate of the cuts needed to dissolve the cycle: repeatedly apply the
     * best candidate (resolved wins; else the partial with the smallest remaining
     * size), recompute the SCCs on the mutated trial edge list, repeat against the
     * shrunk component until it reaches size 1 or nothing improves. A greedy
     * heuristic, NOT a guaranteed-minimum feedback-edge set. */
-  private def minCutsEstimate(knot: Set[String], sg: ScopeGraph): Int =
+  private def minCutsEstimate(cycle: Set[String], sg: ScopeGraph): Int =
     var trialEdges = sg.edges
-    var comp = knot
+    var comp = cycle
     var cuts = 0
     var done = false
     while comp.size > 1 && !done do

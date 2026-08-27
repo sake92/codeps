@@ -10,7 +10,7 @@ case class MetricsReport(
     scope: String, // "packages" | "files"
     generatedAt: String, // ISO8601
     summary: Summary,
-    knots: Seq[Knot],
+    cycles: Seq[Cycle],
     surface: Seq[SurfaceRow],
     orphans: Seq[String],
     articulationPoints: Seq[String]
@@ -24,9 +24,12 @@ case class Summary(
     criticalPathLength: Int
 )
 
-/** One knot (multi-member SCC). `id` = "scc:" + smallest member id — stable
-  * across recomputations after cuts, unlike a counter. */
-case class Knot(
+/** One cycle (multi-member SCC). `id` = "scc:" + smallest member id — stable
+  * across recomputations after cuts, unlike a counter. `members` is a closed
+  * cycle path through the smallest member (first node repeated at the end);
+  * `size` is the full SCC member count, which may exceed the path length when
+  * the SCC contains several interlocking cycles. */
+case class Cycle(
     id: String,
     members: Seq[String],
     size: Int,
@@ -56,7 +59,7 @@ object MetricsReport:
         "scope" -> JsonRW[String].write(value.scope),
         "generated_at" -> JsonRW[String].write(value.generatedAt),
         "summary" -> JsonRW[Summary].write(value.summary),
-        "knots" -> JsonRW[Seq[Knot]].write(value.knots),
+        "cycles" -> JsonRW[Seq[Cycle]].write(value.cycles),
         "surface" -> JsonRW[Seq[SurfaceRow]].write(value.surface),
         "orphans" -> JsonRW[Seq[String]].write(value.orphans),
         "articulation_points" -> JsonRW[Seq[String]].write(value.articulationPoints)
@@ -77,9 +80,9 @@ object Summary:
     override def parse(path: String, jValue: JValue): Summary =
       throw new UnsupportedOperationException("metrics reports are write-only")
 
-object Knot:
-  given JsonRW[Knot] with
-    override def write(value: Knot): JValue =
+object Cycle:
+  given JsonRW[Cycle] with
+    override def write(value: Cycle): JValue =
       obj(
         "id" -> JsonRW[String].write(value.id),
         "members" -> JsonRW[Seq[String]].write(value.members),
@@ -88,7 +91,7 @@ object Knot:
         "min_cuts_estimate" -> JsonRW[Int].write(value.minCutsEstimate),
         "cut_candidates" -> JsonRW[Seq[CutCandidate]].write(value.cutCandidates)
       )
-    override def parse(path: String, jValue: JValue): Knot =
+    override def parse(path: String, jValue: JValue): Cycle =
       throw new UnsupportedOperationException("metrics reports are write-only")
 
 object CutCandidate:

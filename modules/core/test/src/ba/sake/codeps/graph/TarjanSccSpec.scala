@@ -37,10 +37,10 @@ class TarjanSccSpec extends munit.FunSuite:
     assertEquals(comps(nodes, edges), Seq(Seq("a"), Seq("b"), Seq("c")))
   }
 
-  test("knots returns only multi-member components") {
+  test("cycles returns only multi-member components") {
     val nodes = Set("a", "b", "c")
     val edges = Set(Edge("a", "b"), Edge("b", "a"), Edge("b", "c"))
-    assertEquals(TarjanScc.knots(nodes, edges).map(_.toSeq.sorted), Seq(Seq("a", "b")))
+    assertEquals(TarjanScc.cycles(nodes, edges).map(_.toSeq.sorted), Seq(Seq("a", "b")))
   }
 
   test("output is deterministic across runs") {

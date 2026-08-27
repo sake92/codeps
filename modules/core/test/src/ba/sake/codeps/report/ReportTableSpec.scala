@@ -6,7 +6,7 @@ class ReportTableSpec extends munit.FunSuite:
     scope = "packages",
     generatedAt = "2026-08-27T10:00:00+02:00",
     summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1, criticalPathLength = 1),
-    knots = Seq(Knot("scc:cache", Seq("cache", "scheduler"), 2, 5, 1,
+    cycles = Seq(Cycle("scc:cache", Seq("cache", "scheduler", "cache"), 2, 5, 1,
       Seq(CutCandidate("scheduler", "cache", 4, "resolved", 1)))),
     surface = Seq(
       SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33)),
@@ -16,7 +16,7 @@ class ReportTableSpec extends munit.FunSuite:
     articulationPoints = Seq("cache")
   )
 
-  test("table renders summary, knots, surface, orphans, articulation points") {
+  test("table renders summary, cycles, surface, orphans, articulation points") {
     val text = ReportTable.render(report)
     assert(text.contains("scope: packages"))
     assert(text.contains("nodes: 2"))
@@ -37,7 +37,7 @@ class ReportTableSpec extends munit.FunSuite:
       scope = "packages",
       generatedAt = "x",
       summary = Summary(0, 0, 0, 0, 0),
-      knots = Seq.empty,
+      cycles = Seq.empty,
       surface = Seq.empty,
       orphans = Seq.empty,
       articulationPoints = Seq.empty

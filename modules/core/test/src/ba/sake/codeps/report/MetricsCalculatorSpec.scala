@@ -72,7 +72,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     assertEquals(report.scope, "packages")
     assertEquals(report.summary, Summary(nodes = 3, edges = 2, nodesInCycles = 0, orphans = 0, criticalPathLength = 2))
-    assertEquals(report.knots, Seq.empty)
+    assertEquals(report.cycles, Seq.empty)
     assertEquals(report.surface, Seq(
       SurfaceRow("com.b", 1, 1, 3.0, 0.0, 3.0, Some(1.0 / 3.0)),
       SurfaceRow("com.c", 1, 0, 3.0, 0.0, 3.0, Some(1.0 / 3.0)),
@@ -150,7 +150,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.summary.edges, 0)
   }
 
-  test("knot: scc key, ext fan in, resolved cut on a plain ring") {
+  test("cycle: scc key, ext fan in, resolved cut on a plain ring") {
     val graph = DepsGraph(
       nodes = Set(
         Node("p1", NodeKind.`package`),
@@ -168,18 +168,18 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       )
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    assertEquals(report.knots.size, 1)
-    val knot = report.knots.head
-    assertEquals(knot.id, "scc:p1")
-    assertEquals(knot.members, Seq("p1", "p2", "p3"))
-    assertEquals(knot.size, 3)
-    assertEquals(knot.extFanIn, 1) // outside -> p1 only
-    assertEquals(knot.minCutsEstimate, 1) // cutting any ring edge resolves a 3-ring
-    assert(knot.cutCandidates.forall(_.effect == "resolved"))
-    assertEquals(knot.cutCandidates.map(_.newSize), Seq(1, 1, 1))
+    assertEquals(report.cycles.size, 1)
+    val cycle = report.cycles.head
+    assertEquals(cycle.id, "scc:p1")
+    assertEquals(cycle.members, Seq("p1", "p2", "p3", "p1"))
+    assertEquals(cycle.size, 3)
+    assertEquals(cycle.extFanIn, 1) // outside -> p1 only
+    assertEquals(cycle.minCutsEstimate, 1) // cutting any ring edge resolves a 3-ring
+    assert(cycle.cutCandidates.forall(_.effect == "resolved"))
+    assertEquals(cycle.cutCandidates.map(_.newSize), Seq(1, 1, 1))
   }
 
-  test("knot: chord edge cut has effect none (redundant with the ring)") {
+  test("cycle: chord edge cut has effect none (redundant with the ring)") {
     val graph = DepsGraph(
       nodes = Set(
         Node("p1", NodeKind.`package`),
@@ -194,17 +194,18 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       )
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    val knot = report.knots.head
-    assertEquals(knot.cutCandidates.map(c => (c.source, c.target, c.effect, c.newSize)), Seq(
+    val cycle = report.cycles.head
+    assertEquals(cycle.members, Seq("p1", "p2", "p3", "p1"))
+    assertEquals(cycle.cutCandidates.map(c => (c.source, c.target, c.effect, c.newSize)), Seq(
       ("p1", "p2", "partial", 2), // ring edge; the chord keeps p1<->p3 alive
       ("p1", "p3", "none", 3), // the chord itself: redundant with the ring
       ("p2", "p3", "partial", 2), // ring edge
       ("p3", "p1", "resolved", 1) // ring edge whose cut strands p3
     ))
-    assertEquals(knot.minCutsEstimate, 1) // p3 -> p1 resolves it
+    assertEquals(cycle.minCutsEstimate, 1) // p3 -> p1 resolves it
   }
 
-  test("knot: partial cut shrinks a two-ring + chord knot; greedy estimate counts cuts") {
+  test("cycle: partial cut shrinks a two-ring + chord knot; greedy estimate counts cuts") {
     // a<->b and c<->d rings joined by a->c and d->b (one 4-member SCC)
     val graph = DepsGraph(
       nodes = Set(
@@ -221,19 +222,20 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       )
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    val knot = report.knots.head
-    assertEquals(knot.size, 4)
+    val cycle = report.cycles.head
+    assertEquals(cycle.size, 4)
+    assertEquals(cycle.members, Seq("a", "b", "a"))
     // cutting a->c leaves {a,b} and {c,d}: endpoints separated, both multi-member -> partial, new_size 2
-    val cut = knot.cutCandidates.find(c => c.source == "a" && c.target == "c").get
+    val cut = cycle.cutCandidates.find(c => c.source == "a" && c.target == "c").get
     assertEquals(cut.effect, "partial")
     assertEquals(cut.newSize, 2)
     // b -> a resolves the whole 4-knot in one cut: its endpoints land in singleton
     // components (the leftover {c,d} cycle is a separate component that contains
     // neither endpoint, so it does not count)
-    assertEquals(knot.minCutsEstimate, 1)
+    assertEquals(cycle.minCutsEstimate, 1)
   }
 
-  test("knots sorted by size desc, then ext_fan_in desc, then id") {
+  test("cycles sorted by size desc, then ext_fan_in desc, then id") {
     val graph = DepsGraph(
       nodes = Set(
         Node("p1", NodeKind.`package`), Node("p2", NodeKind.`package`),
@@ -255,7 +257,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       )
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    assertEquals(report.knots.map(_.id), Seq("scc:q1", "scc:p1", "scc:z1"))
+    assertEquals(report.cycles.map(_.id), Seq("scc:q1", "scc:p1", "scc:z1"))
   }
 
   test("weighted edges: lighter edges are preferred cut candidates") {
@@ -271,9 +273,9 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       )
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    val knot = report.knots.head
-    assertEquals(knot.cutCandidates.head.source, "p2") // p2 -> p3 (weight 1) before p3 -> p1 (tiebreak source)
-    assertEquals(knot.cutCandidates.map(_.weight), Seq(1, 1, 10))
+    val cycle = report.cycles.head
+    assertEquals(cycle.cutCandidates.head.source, "p2") // p2 -> p3 (weight 1) before p3 -> p1 (tiebreak source)
+    assertEquals(cycle.cutCandidates.map(_.weight), Seq(1, 1, 10))
   }
 
   test("files scope: include selects the package's files (descend into it)") {
