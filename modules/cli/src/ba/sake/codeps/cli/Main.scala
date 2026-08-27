@@ -146,7 +146,7 @@ object Main:
   @main
   def report(
       @arg(short = 's', name = "scope") scope: ReportScope,
-      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Json,
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
       @arg(short = 'i') include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],

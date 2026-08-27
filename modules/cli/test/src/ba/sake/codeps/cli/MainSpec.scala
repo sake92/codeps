@@ -66,24 +66,28 @@ class MainSpec extends munit.FunSuite:
     val out = os.pwd / "tmp" / "cli-test" / "report-v2.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("report", "--scope", "packages", exportJson("deps.json").toString, "-o", out.toString)
+    val res = runCli("report", "--scope", "packages", "--format", "json", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"scope\": \"packages\""))
     assert(content.contains("\"generated_at\""))
+    assert(""""generated_at": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"""".r.findFirstIn(content).nonEmpty) // second precision, UTC
     assert(content.contains("\"summary\""))
     assert(content.contains("\"nodes_in_cycles\""))
-    assert(content.contains("\"knots\""))
+    assert(content.contains("\"cycles\""))
+    assert(!content.contains("\"knots\""))
     assert(content.contains("\"surface\""))
-    assert(content.contains("\"articulation_points\""))
-    assert(content.contains("\"com.example.modules.module2\"")) // a package node id in the fixture
+    assert(!content.contains("articulation_points"))
+    assert(!content.contains("\"effect\""))
+    assert(!content.contains("\"new_size\""))
+    assert(content.contains("\"com.example.modules.module2\""))
   }
 
   test("report --scope files -i selects the package's files") {
     val out = os.pwd / "tmp" / "cli-test" / "report-files.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
-    val res = runCli("report", "--scope", "files", "-i", "com.example.util", exportJson("deps.json").toString, "-o", out.toString)
+    val res = runCli("report", "--scope", "files", "-i", "com.example.util", "--format", "json", exportJson("deps.json").toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"scope\": \"files\""))
@@ -106,14 +110,17 @@ class MainSpec extends munit.FunSuite:
     val content = os.read(out)
     assert(content.startsWith("scope: packages"))
     assert(content.contains("Summary"))
-    assert(content.contains("Knots"))
+    assert(content.contains("Cycles"))
+    assert(!content.contains("Articulation points"))
     assert(content.contains("Surface"))
   }
 
-  test("report defaults --format to json") {
+  test("report defaults --format to table") {
     val res = runCli("report", "--scope", "packages", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 0)
-    assert(res.out.text().contains("\"summary\""))
+    assert(res.out.text().startsWith("scope: packages"))
+    assert(res.out.text().contains("Summary"))
+    assert(res.out.text().contains("Cycles"))
   }
 
   test("report --skip-tests excludes test nodes") {
@@ -170,7 +177,7 @@ class MainSpec extends munit.FunSuite:
     os.remove.all(out)
     val cmd: Seq[os.Shellable] =
       Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
-        Seq[os.Shellable]("report", "--scope", "packages", "-", "-o", out.toString)
+        Seq[os.Shellable]("report", "--scope", "packages", "--format", "json", "-", "-o", out.toString)
     val res = os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe, stdin = json)
     assertEquals(res.exitCode, 0)
     assert(os.read(out).contains("\"summary\""))
