@@ -12,8 +12,8 @@ that form a two-step pipeline:
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
    emits the [common JSON graph format](/reference/json-input.html). No analysis.
 2. [`report`](#report) — the *analyzer*: consumes that JSON (a file or stdin) and emits the
-   flat [metrics report](/reference/report.html): knots with simulated cut candidates,
-   per-node exposed-surface metrics, orphans and articulation points.
+   flat [metrics report](/reference/report.html): cycles with simulated cut candidates,
+   per-node exposed-surface metrics and orphans.
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
@@ -82,7 +82,7 @@ graph of the packages selected with `-i` (jdeps data has no file-level info and 
 | Option | Description |
 |---|---|
 | `-s` / `--scope` | `packages` or `files`. Required. |
-| `-f` / `--format` | `json` (default) or `table` — the table renders the exact same data as plain aligned text, nothing is recomputed. |
+| `-f` / `--format` | `table` (default) or `json` — the table renders the exact same data as plain aligned text, nothing is recomputed. |
 | `-i` / `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
@@ -102,14 +102,14 @@ codeps export --from jdeps jdeps.txt | codeps report --scope packages --format t
 The `table` format:
 
 ```text
-scope: packages    generated_at: 2026-08-27T10:00:00+02:00
+scope: packages    generated_at: 2026-08-27T10:00:00Z
 
 Summary
   nodes: 100    edges: 214    nodes_in_cycles: 34    orphans: 3    critical_path_length: 7
 
-Knots (size desc, ext_fan_in desc)
+Cycles (size desc, ext_fan_in desc)
   id           size  ext_fan_in  min_cuts_estimate  cut candidates
-  scc:cache    2     5           1                  scheduler -> cache (w=4, resolved -> 1)
+  scc:cache    2     5           1                  scheduler -> cache (w=4)
 
 Surface (utilization asc; — = no fan-in)
   node     fan_in  fan_out  ports  mut_ports  exposure  utilization
@@ -118,9 +118,6 @@ Surface (utilization asc; — = no fan-in)
 
 Orphans
   DeadUtil.scala
-
-Articulation points
-  config, core
 ```
 
 Errors (exit 1): `exactly one input is required (a json file, or '-' for stdin)`,

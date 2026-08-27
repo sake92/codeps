@@ -1,7 +1,7 @@
 ---
 layout: reference.html
 title: Metrics report
-description: the codeps report JSON format — knots, surface, orphans, articulation points
+description: the codeps report JSON format — cycles, surface, orphans
 ---
 
 # Metrics report
@@ -11,7 +11,7 @@ and emits a single flat JSON document: per-scope metrics over the graph's **pack
 **files** of the packages selected with `-i`.
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages - > report.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages --format json - > report.json
 ```
 
 Every value is computed fresh from the graph's node/edge list on every run — the report is a pure
@@ -22,7 +22,7 @@ function of the input, which is what makes diffing reports over time meaningful.
 ```json
 {
   "scope": "packages",
-  "generated_at": "<ISO8601>",
+  "generated_at": "<ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z>",
   "summary": {
     "nodes": 100,
     "edges": 214,
@@ -30,58 +30,58 @@ function of the input, which is what makes diffing reports over time meaningful.
     "orphans": 3,
     "critical_path_length": 7
   },
-  "knots": [
+  "cycles": [
     {
       "id": "scc:cache",
-      "members": ["cache", "scheduler"],
+      "members": ["cache", "scheduler", "cache"],
       "size": 2,
       "ext_fan_in": 5,
       "min_cuts_estimate": 1,
       "cut_candidates": [
-        { "edge": ["scheduler", "cache"], "weight": 4, "effect": "resolved", "new_size": 1 }
+        { "edge": ["scheduler", "cache"], "weight": 4 }
       ]
     }
   ],
   "surface": [
     { "node": "cache", "fan_in": 3, "fan_out": 2, "ports": 9, "mut_ports": 5, "exposure": 24, "utilization": 0.33 }
   ],
-  "orphans": ["DeadUtil.scala"],
-  "articulation_points": ["config", "core"]
+  "orphans": ["DeadUtil.scala"]
 }
 ```
 
 ## Summary
 
 - `nodes` / `edges` — size of the scope graph.
-- `nodes_in_cycles` — total members of all knots (multi-member strongly connected components).
+- `nodes_in_cycles` — total members of all cycles (multi-member strongly connected components).
 - `orphans` — count of nodes with zero fan-in and zero fan-out (dead-code-removal candidates).
 - `critical_path_length` — the longest path, in edges, through the condensation DAG (each SCC
   collapsed to one node). The structural lower bound on best-case parallel build time, whether
   or not cycles exist.
 
-## Knots (cycles)
+## Cycles
 
-A knot is a strongly connected component with more than 1 member (Tarjan's algorithm). Singleton
+A cycle is a strongly connected component with more than 1 member (Tarjan's algorithm). Singleton
 components are just acyclic nodes and are never reported.
 
 - `id` — `scc:` + the lexicographically smallest member id. Stable across recomputation after cuts
   (a counter-based id would renumber unpredictably).
-- `size` — member count.
+- `members` — a **closed cycle path** through the smallest member: the first node repeated at the
+  end. When the SCC contains several interlocking cycles, `size` may exceed the path length — the
+  path shows one of the cycles; `size` counts the full SCC membership.
+- `size` — full member count of the SCC (may exceed the path length, see above).
 - `ext_fan_in` — edges whose target is in the SCC and whose source is outside: how much outside
-  stuff is exposed to the cycle's blast radius. Knots are ranked by `size` first, `ext_fan_in`
+  stuff is exposed to the cycle's blast radius. Cycles are ranked by `size` first, `ext_fan_in`
   as tiebreaker.
-- `cut_candidates` — the knot's **internal** edges (both endpoints inside the cycle) with the
-  lowest `weight` (call-site count from SemanticDB), up to 6. Each candidate is **simulated**:
-  the edge is removed from a copy of the edge list, Tarjan reruns, and the effect on the
-  component containing the edge's endpoints is classified:
-  - `resolved` — the endpoints are no longer in any multi-member component;
-  - `partial` — a smaller multi-member component remains (`new_size`);
-  - `none` — the component is unchanged: the edge is redundant with the rest of the cycle
-    (e.g. a chord running the ring's direction). Reported as-is — a naive
-    "lowest weight = best cut" heuristic gets this wrong.
-- `min_cuts_estimate` — a greedy estimate: repeatedly apply the best `resolved`-or-largest-reduction
-  candidate, recompute against the shrunk component, until it reaches size 1 or nothing improves.
-  A heuristic, not a guaranteed-minimum feedback-edge set.
+- `cut_candidates` — the cycle's **internal** edges (both endpoints inside the cycle) whose removal
+  **resolves** the whole cycle. Each is **simulated**: the edge is removed from a copy of the edge
+  list and Tarjan reruns; only edges whose endpoints end up in no multi-member component
+  (`resolved`) are listed, sorted by `weight` ascending, up to 6. Edges that merely shrink the
+  cycle (`partial`) or leave it unchanged (`none`) are deliberately not listed — they don't
+  dissolve the cycle.
+- `min_cuts_estimate` — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly
+  apply the best `resolved`-or-largest-reduction candidate, recompute against the shrunk component,
+  until it reaches size 1 or nothing improves. A heuristic, not a guaranteed-minimum feedback-edge
+  set.
 
 ## Surface
 
@@ -118,10 +118,7 @@ exporter entirely; `var` setters are accessors and never count as surface. jdeps
 access info, so all its nodes have `ports`/`mut_ports` 0 and `utilization` `null` — a known gap,
 not silently meaningful.
 
-## Orphans and articulation points
+## Orphans
 
 - `orphans` — node ids with `fan_in == 0 AND fan_out == 0`, sorted. Step 1 of the improvement
   loop: dead-code-removal candidates.
-- `articulation_points` — nodes whose removal increases the number of connected components of the
-  **undirected** view of the graph (standard low-link DFS). Candidate "pinch points": the narrowest
-  waists in the dependency graph, useful as seam locations whether or not they are in a cycle.

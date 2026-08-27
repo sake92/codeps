@@ -63,15 +63,20 @@ The graph model and processing pipeline:
   drops loops, merges edges landing on the same pair with summed weights
 - `graph/TarjanScc` — Tarjan's strongly connected components over a plain node/edge
   list; rebuilt fresh on every call (nothing cached), deterministic (sorted adjacency,
-  components sorted by min member id); `knots` = multi-member components only
+  components sorted by min member id); `cycles` = multi-member components only
+- `graph/Aggregator` — collapses granular graphs into package+file nodes: type/member
+  symbols land in their file (file-less jdeps types in their root package), `ports`/
+  `mutPorts` summed per file, file-level edges with summed weights, `parentId` = root
+  package; applied by `export` at write time; the granular graph stays the internal
+  parser contract
 - `report/MetricsCalculator` — the language-agnostic metrics layer: maps the graph to
   a scope (`packages` — root packages; `files` — file ids, strict: file-less nodes
   are dropped), sums port contributions per scope node, applies collapse, then
   derives every metric fresh from the node/edge list: fan_in/fan_out, orphans,
-  knots with `ext_fan_in` and simulated cut candidates (top 6 internal edges by
-  weight, each removed from a copy of the edge list and re-simulated), the greedy
-  `min_cuts_estimate`, the condensation-graph `critical_path_length`, and
-  `articulation_points` (undirected low-link DFS)
+  cycles with `ext_fan_in`, a closed cycle path through the smallest member, and
+  simulated cut candidates (internal edges whose removal resolves the cycle, top 6
+  by weight, each removed from a copy of the edge list and re-simulated), the greedy
+  `min_cuts_estimate`, and the condensation-graph `critical_path_length`
 - `report/MetricsReport` — the flat report model with a write-only `JsonRW` emitting
   the exact snake_case JSON shape ([schema](/reference/report.html))
 - `report/ReportTable` — plain aligned-text rendering of the same data (`--format table`)
@@ -118,11 +123,12 @@ is always `null` — a known gap, not silently meaningful.
 `Main` (mainargs-based) with two subcommands:
 
 - `export` — resolves inputs, runs the producers (`semanticdb`/`jdeps`), merges
-  the resulting `DepsGraph`s and writes the common JSON to stdout or `-o`
+  the resulting `DepsGraph`s, collapses them to package/file level via
+  `Aggregator.fileLevel` and writes the common JSON to stdout or `-o`
 - `report` — reads the common JSON (file or stdin), runs the pipeline
   (filter → skip-tests? → scope aggregation → collapse → metrics) via
   `MetricsCalculator` and writes the flat report to stdout or `-o`, as
-  `json` (default) or `table`
+  `table` (default) or `json`
 
 See the [CLI reference](/reference/cli.html) and the
 [Metrics report](/reference/report.html).

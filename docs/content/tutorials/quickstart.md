@@ -67,10 +67,10 @@ For a file-level view of one package, use `--scope files` with an include patter
 codeps report --scope files -i com.example.modules.module1 deps.json
 ```
 
-The report contains cycle knots with simulated cut candidates, exposed-surface metrics
-(`ports`/`mut_ports`/`exposure`/`utilization`), orphans and articulation points — see the
-[Metrics report](/reference/report.html) for the full field reference. `--format table`
-renders the same data as plain aligned text.
+The report contains cycles with simulated cut candidates, exposed-surface metrics
+(`ports`/`mut_ports`/`exposure`/`utilization`) and orphans — see the
+[Metrics report](/reference/report.html) for the full field reference. It renders
+as plain aligned text by default; `--format json` emits machine-readable JSON.
 
 ## What's next?
 

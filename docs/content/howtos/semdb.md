@@ -9,10 +9,12 @@ description: Analyzing Scala dependencies with SemanticDB
 SemanticDB is a data format describing the semantic information of Scala (and Java) programs,
 produced by the Scala compiler (`-Xsemanticdb` flag) or tools like scala-cli.
 
-Scala data is the richest codeps input: it carries `package`, `file`, `type` and `member`
-nodes, so the analyzer can produce metrics at both scopes — the package graph and the file
-graph of a selected package. It also carries per-symbol access/kind information, which the
-exporter turns into the [exposed-surface metrics](/reference/report.html#exposed-surface)
+Scala data is the richest codeps input: it carries package/file/type/member symbols, and
+`export` collapses them into `package` and `file` nodes with file-level edges
+(ports/mut_ports resolved at export time), so the analyzer can produce metrics at both
+scopes — the package graph and the file graph of a selected package. It also carries
+per-symbol access/kind information, which the exporter turns into the
+[exposed-surface metrics](/reference/report.html#exposed-surface)
 (`ports`/`mut_ports`: sealed hierarchies, givens, vars and mutable collections are all
 resolved at export time). Only the project's **own symbols** are exported — references to
 external libraries and the JDK are dropped by the exporter.
@@ -65,13 +67,13 @@ codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
 codeps report --scope packages deps.json
 ```
 
-- `--scope packages` — metrics over the whole package graph: cycle knots with simulated
+- `--scope packages` — metrics over the whole package graph: cycles with simulated
   cut candidates, per-package exposed-surface (`ports`/`mut_ports`/`exposure`/`utilization`),
-  orphans and articulation points
+  and orphans
 - `--scope files` — the same metrics over the **file graph** of the packages selected with
   `-i`; e.g. `-i com.example` descends into `com.example` and everything below it
 - `-i`/`-e`/`-c` filter and collapse, e.g. `-i com.example` keeps only your packages
-- `--format table` renders the same data as plain aligned text
+- `--format json` emits machine-readable JSON (the default `table` renders the same data as plain aligned text)
 
 No intermediate file needed — pipe `export` straight into `report` (the `-` tells
 `report` to read the JSON from stdin):

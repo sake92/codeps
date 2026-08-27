@@ -5,8 +5,8 @@ Code package dependency analyzer.
 Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` output
 into a [common JSON graph format](https://sake92.github.io/codeps/reference/json-input.html),
 then emits a flat [metrics report](https://sake92.github.io/codeps/reference/report.html):
-cycle knots with simulated cut candidates, per-node exposed-surface metrics
-(`ports`/`mut_ports`/`exposure`/`utilization`), orphans and articulation points —
+cycles with simulated cut candidates, per-node exposed-surface metrics
+(`ports`/`mut_ports`/`exposure`/`utilization`) and orphans —
 over the package graph, or the file graph of the packages you select.
 
 - [Documentation](https://sake92.github.io/codeps/)
@@ -34,6 +34,7 @@ jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 java -jar codeps.jar export --from semanticdb classes/META-INF/semanticdb -o deps.json
 # or: java -jar codeps.jar export --from jdeps jdeps.txt -o deps.json
 java -jar codeps.jar report --scope packages deps.json
+# the default output is the plain-text table; pass --format json for machine-readable JSON
 ```
 
 ### Other languages

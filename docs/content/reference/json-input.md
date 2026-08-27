@@ -8,19 +8,21 @@ description: the common JSON graph format produced by codeps export and consumed
 
 The common JSON format is the contract between the two codeps steps: `codeps export`
 *produces* it, `codeps report` *consumes* it. It is a self-contained dependency
-graph with `package`/`file`/`type`/`member` nodes and directed edges between node ids.
+graph produced by `codeps export` as `package` and `file` nodes only — the exporters
+collapse type/member symbols into their file (or root package for file-less jdeps
+types), with `ports`/`mut_ports` summed and edges aggregated at file level with
+summed weights. `type`/`member` kinds are still *accepted* on input for backward
+compatibility with old graphs (the analyzer aggregates them), but exporters never
+emit them.
 
 ```json
 {
   "nodes": [
     {"id": "com.example.a", "kind": "package"},
-    {"id": "src/com/example/a/Foo.scala", "kind": "file"},
-    {"id": "com.example.a.Foo", "kind": "type", "parentId": "com.example.a", "file": "src/com/example/a/Foo.scala"},
-    {"id": "com.example.a.Foo#doWork", "kind": "member", "parentId": "com.example.a.Foo", "file": "src/com/example/a/Foo.scala"},
-    {"id": "com.example.a.topLevelHelper", "kind": "member", "parentId": "com.example.a"}
+    {"id": "src/com/example/a/Foo.scala", "kind": "file", "parentId": "com.example.a", "ports": 3, "mutPorts": 1}
   ],
   "edges": [
-    {"source": "com.example.a.Foo#doWork", "target": "com.example.a.topLevelHelper", "weight": 1}
+    {"source": "src/com/example/a/Foo.scala", "target": "src/com/example/b/Bar.scala", "weight": 5}
   ]
 }
 ```
@@ -37,8 +39,8 @@ Node fields:
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | hierarchical id, unique within the graph |
-| `kind` | string | `package`, `file`, `type` or `member` (lowercase) |
-| `parentId` | string (optional) | nearest enclosing node; `package` and `file` nodes are standalone (no `parentId`) |
+| `kind` | string | `package` or `file`; `type`/`member` (deprecated — accepted on input for backward compatibility, never emitted by `export`) |
+| `parentId` | string (optional) | nearest enclosing node; on `file` nodes: their root package; `package` nodes are standalone (no `parentId`) |
 | `file` | string (optional) | on `type`/`member` nodes: the id of their source `file` node |
 | `isExposed` | boolean (optional) | part of the externally visible surface; resolved by the extraction backend (SemanticDB export), default `true` for graphs without exposure info |
 | `ports` | number (optional) | the node's own weighted exposure contribution (types 3, defs/vals 1, sealed-hierarchy members 0.5, givens/implicits +1); the report sums these per scope node, default `0` |
@@ -59,15 +61,24 @@ Edge fields:
 ### Id rules
 
 - **package** — dotted name: `com.example.a`. Standalone (no `parentId`).
-- **file** — workspace-relative path: `src/com/example/a/Foo.scala`. Standalone (no `parentId`).
-- **type** — `com.example.a.Foo`; nested types use `#`: `com.example.a.Outer#Inner`.
+- **file** — workspace-relative path: `src/com/example/a/Foo.scala`. `parentId` is the
+  root package (lexicographically smallest when a file hosts several packages).
+- **type** (deprecated on input) — `com.example.a.Foo`; nested types use `#`: `com.example.a.Outer#Inner`.
   `parentId` is the enclosing type or the package.
-- **member** — `com.example.a.Foo#doWork` (a type member; `parentId` = the type) or
+- **member** (deprecated on input) — `com.example.a.Foo#doWork` (a type member; `parentId` = the type) or
   `com.example.a.topLevelHelper` (a package member; `parentId` = the package, no `#`).
 
-The hierarchy is only package → type → member, plus member → package directly.
-Edges can go between nodes of any kinds, e.g. a member of one type referencing a
-member of another.
+`export` collapses type/member symbols into their file node (or root package for
+file-less jdeps types), sums their `ports`/`mut_ports`, and aggregates edges at
+file level with summed weights — so the graphs it emits only ever contain
+package and file nodes. The granular package → type → member hierarchy remains
+the *internal* parser contract; the analyzer aggregates such old graphs the same
+way `export` does.
+
+On granular (pre-aggregation) input, the hierarchy is only package → type → member,
+plus member → package directly; edges can go between nodes of any kinds, e.g. a
+member of one type referencing a member of another. On `export` output (package +
+file nodes), edges always go between files or packages.
 
 Only the project's own symbols appear: references to external symbols are dropped
 by the producers. The format has no `own` array, no `stats` and no version field;

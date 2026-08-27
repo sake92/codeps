@@ -11,8 +11,9 @@ It ships with every JDK, so this workflow needs **no extra tooling** — great f
 or when you can't (or don't want to) enable SemanticDB.
 Your build already produced the `.class` files; the only extra step is piping `jdeps` output to a text file.
 
-jdeps data is type-level only: it has no file or member nodes, so `codeps report --scope files`
-errors on jdeps data (`no file nodes found in the input`) — use `--scope packages` instead.
+jdeps data is class-level: it has no file information, so `export` collapses it to package
+nodes and edges, and `codeps report --scope files` errors on it (`no file nodes found in
+the input`) — use `--scope packages` instead.
 It also carries no access information, so all nodes have `ports`/`mut_ports` 0 and
 `utilization` `null` — a known gap, not silently meaningful.
 
@@ -52,8 +53,8 @@ or in one pipe:
 codeps export --from jdeps jdeps.txt | codeps report --scope packages -
 ```
 
-Cycle knots come with simulated cut candidates, and the surface lists fan_in/fan_out,
-orphans and articulation points — see the [Metrics report](/reference/report.html).
+Cycles come with simulated cut candidates, and the surface lists fan_in/fan_out
+and orphans — see the [Metrics report](/reference/report.html).
 
 ## Filtering JDK noise
 
