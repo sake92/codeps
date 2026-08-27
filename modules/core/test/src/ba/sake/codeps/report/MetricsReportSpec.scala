@@ -15,7 +15,7 @@ class MetricsReportSpec extends munit.FunSuite:
         size = 2,
         extFanIn = 5,
         minCutsEstimate = 1,
-        cutCandidates = Seq(CutCandidate("scheduler", "cache", 4, "resolved", 1))
+        cutCandidates = Seq(CutCandidate("scheduler", "cache", 4))
       )),
       surface = Seq(SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33))),
       orphans = Seq("DeadUtil.scala"),
@@ -31,7 +31,8 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"cycles\""))
     assert(json.contains("\"cut_candidates\""))
     assert(json.contains("\"edge\":[\"scheduler\",\"cache\"]"))
-    assert(json.contains("\"new_size\":1"))
+    assert(!json.contains("\"effect\""))
+    assert(!json.contains("\"new_size\""))
     assert(json.contains("\"mut_ports\":5"))
     assert(json.contains("\"fan_in\":3"))
     assert(json.contains("\"exposure\":24"))

@@ -175,8 +175,8 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(cycle.size, 3)
     assertEquals(cycle.extFanIn, 1) // outside -> p1 only
     assertEquals(cycle.minCutsEstimate, 1) // cutting any ring edge resolves a 3-ring
-    assert(cycle.cutCandidates.forall(_.effect == "resolved"))
-    assertEquals(cycle.cutCandidates.map(_.newSize), Seq(1, 1, 1))
+    assertEquals(cycle.cutCandidates.toSet, Set(
+      CutCandidate("p1", "p2", 1), CutCandidate("p2", "p3", 1), CutCandidate("p3", "p1", 1)))
   }
 
   test("cycle: chord edge cut has effect none (redundant with the ring)") {
@@ -196,12 +196,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val cycle = report.cycles.head
     assertEquals(cycle.members, Seq("p1", "p2", "p3", "p1"))
-    assertEquals(cycle.cutCandidates.map(c => (c.source, c.target, c.effect, c.newSize)), Seq(
-      ("p1", "p2", "partial", 2), // ring edge; the chord keeps p1<->p3 alive
-      ("p1", "p3", "none", 3), // the chord itself: redundant with the ring
-      ("p2", "p3", "partial", 2), // ring edge
-      ("p3", "p1", "resolved", 1) // ring edge whose cut strands p3
-    ))
+    assertEquals(cycle.cutCandidates, Seq(CutCandidate("p3", "p1", 1))) // only the fully resolving cut
     assertEquals(cycle.minCutsEstimate, 1) // p3 -> p1 resolves it
   }
 
@@ -225,10 +220,10 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val cycle = report.cycles.head
     assertEquals(cycle.size, 4)
     assertEquals(cycle.members, Seq("a", "b", "a"))
-    // cutting a->c leaves {a,b} and {c,d}: endpoints separated, both multi-member -> partial, new_size 2
-    val cut = cycle.cutCandidates.find(c => c.source == "a" && c.target == "c").get
-    assertEquals(cut.effect, "partial")
-    assertEquals(cut.newSize, 2)
+    // b -> a strands both endpoints in singleton components (the leftover {c,d} ring
+    // contains neither endpoint, so it does not count); c -> d strands the same way,
+    // leaving {a,b} behind
+    assertEquals(cycle.cutCandidates, Seq(CutCandidate("b", "a", 1), CutCandidate("c", "d", 1)))
     // b -> a resolves the whole 4-knot in one cut: its endpoints land in singleton
     // components (the leftover {c,d} cycle is a separate component that contains
     // neither endpoint, so it does not count)

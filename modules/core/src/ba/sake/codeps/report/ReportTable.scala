@@ -21,7 +21,7 @@ object ReportTable:
         Seq("id", "size", "ext_fan_in", "min_cuts_estimate", "cut candidates"),
         report.cycles.map { k =>
           val cuts = if k.cutCandidates.isEmpty then "—"
-          else k.cutCandidates.map(c => s"${c.source} -> ${c.target} (w=${c.weight}, ${c.effect} -> ${c.newSize})").mkString(", ")
+          else k.cutCandidates.map(c => s"${c.source} -> ${c.target} (w=${c.weight})").mkString(", ")
           Seq(k.id, k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, cuts)
         }
       ))

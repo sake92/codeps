@@ -7,7 +7,7 @@ class ReportTableSpec extends munit.FunSuite:
     generatedAt = "2026-08-27T10:00:00+02:00",
     summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1, criticalPathLength = 1),
     cycles = Seq(Cycle("scc:cache", Seq("cache", "scheduler", "cache"), 2, 5, 1,
-      Seq(CutCandidate("scheduler", "cache", 4, "resolved", 1)))),
+      Seq(CutCandidate("scheduler", "cache", 4)))),
     surface = Seq(
       SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33)),
       SurfaceRow("iso", 0, 0, 0.0, 0.0, 0.0, None)
@@ -22,7 +22,7 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("nodes: 2"))
     assert(text.contains("critical_path_length: 1"))
     assert(text.contains("scc:cache"))
-    assert(text.contains("scheduler -> cache (w=4, resolved -> 1)"))
+    assert(text.contains("scheduler -> cache (w=4)"))
     assert(text.contains("0.33"))
     assert(text.contains("iso"))
   }

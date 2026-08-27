@@ -38,9 +38,9 @@ case class Cycle(
     cutCandidates: Seq[CutCandidate]
 )
 
-/** A simulated edge cut. `effect` is "resolved" | "partial" | "none";
-  * `newSize` is the resulting component size (1 when resolved). */
-case class CutCandidate(source: String, target: String, weight: Int, effect: String, newSize: Int)
+/** An internal edge whose removal resolves the whole cycle (its endpoints end
+  * up in no multi-member component). */
+case class CutCandidate(source: String, target: String, weight: Int)
 
 case class SurfaceRow(
     node: String,
@@ -99,9 +99,7 @@ object CutCandidate:
     override def write(value: CutCandidate): JValue =
       obj(
         "edge" -> JsonRW[Seq[String]].write(Seq(value.source, value.target)),
-        "weight" -> JsonRW[Int].write(value.weight),
-        "effect" -> JsonRW[String].write(value.effect),
-        "new_size" -> JsonRW[Int].write(value.newSize)
+        "weight" -> JsonRW[Int].write(value.weight)
       )
     override def parse(path: String, jValue: JValue): CutCandidate =
       throw new UnsupportedOperationException("metrics reports are write-only")

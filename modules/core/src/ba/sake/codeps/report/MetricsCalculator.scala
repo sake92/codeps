@@ -234,30 +234,32 @@ object MetricsCalculator:
     dfs(start)
     if found then path.toSeq else scc.toSeq.sorted :+ start
 
-  /** Internal edges of the cycle sorted by weight ascending (stable tiebreak),
-    * top N, each with its simulated effect. */
-  private def cutCandidates(cycle: Set[String], sg: ScopeGraph): Seq[CutCandidate] =
+  /** Internal edges whose removal resolves the cycle, sorted by weight ascending
+    * (stable tiebreak), top N. Every internal edge is simulated — a cheap edge
+    * that does not break the cycle is not a recommendation, and a resolving edge
+    * is reported even when it is not among the lowest weights. */
+  private def cutCandidates(scc: Set[String], sg: ScopeGraph): Seq[CutCandidate] =
     sg.edges.toSeq
-      .filter(e => cycle.contains(e.source) && cycle.contains(e.target))
+      .filter(e => scc.contains(e.source) && scc.contains(e.target))
+      .map(e => (e, simulateCut(e, scc, sg.edges)))
+      .collect { case (e, ("resolved", _)) => e }
       .sortBy(e => (e.weight, e.source, e.target))
       .take(maxCutCandidates)
-      .map(e => simulateCut(e, cycle, sg.edges))
+      .map(e => CutCandidate(e.source, e.target, e.weight))
 
   /** Removes the edge from a copy of the edge list, reruns Tarjan, and classifies
     * the effect on the component(s) containing the edge's endpoints:
-    * - no multi-member component left -> "resolved"
-    * - a multi-member component remains but is smaller -> "partial" (report the largest)
-    * - same size (endpoints still in one component) -> "none": the edge is redundant
-    *   with the rest of the cycle (e.g. a chord running the ring's direction). */
-  private def simulateCut(e: Edge, cycle: Set[String], edges: Set[Edge]): CutCandidate =
-    val containing = TarjanScc.components(cycle, edges - e)
+    * - no multi-member component left -> ("resolved", 1)
+    * - a multi-member component remains but is smaller -> ("partial", largest size)
+    * - same size (endpoints still in one component) -> ("none", scc.size): the edge
+    *   is redundant with the rest of the cycle (e.g. a chord running the ring's direction). */
+  private def simulateCut(e: Edge, scc: Set[String], edges: Set[Edge]): (String, Int) =
+    val containing = TarjanScc.components(scc, edges - e)
       .filter(c => c.contains(e.source) || c.contains(e.target))
     val multiSizes = containing.map(_.size).filter(_ >= 2)
-    val (effect, newSize) =
-      if multiSizes.isEmpty then ("resolved", 1)
-      else if multiSizes.max < cycle.size then ("partial", multiSizes.max)
-      else ("none", cycle.size)
-    CutCandidate(e.source, e.target, e.weight, effect, newSize)
+    if multiSizes.isEmpty then ("resolved", 1)
+    else if multiSizes.max < scc.size then ("partial", multiSizes.max)
+    else ("none", scc.size)
 
   /** Greedy estimate of the cuts needed to dissolve the cycle: repeatedly apply the
     * best candidate (resolved wins; else the partial with the smallest remaining
@@ -275,15 +277,15 @@ object MetricsCalculator:
         .sortBy(e => (e.weight, e.source, e.target))
         .take(maxCutCandidates)
         .map(e => (e, simulateCut(e, comp, trialEdges)))
-      val improved = candidates.filter { case (_, c) => c.effect != "none" }
+      val improved = candidates.filter { case (_, (effect, _)) => effect != "none" }
       if improved.isEmpty then done = true
       else
-        val (chosen, chosenResult) = improved.minBy { case (e, c) =>
-          (if c.effect == "resolved" then 0 else 1, c.newSize, e.weight, e.source, e.target)
+        val (chosen, (effect, newSize)) = improved.minBy { case (e, (effect, newSize)) =>
+          (if effect == "resolved" then 0 else 1, newSize, e.weight, e.source, e.target)
         }
         trialEdges = trialEdges - chosen
         cuts += 1
-        if chosenResult.effect == "resolved" then comp = Set(comp.min)
+        if effect == "resolved" then comp = Set(comp.min)
         else
           comp = TarjanScc.components(comp, trialEdges)
             .filter(c => (c.contains(chosen.source) || c.contains(chosen.target)) && c.size >= 2)
