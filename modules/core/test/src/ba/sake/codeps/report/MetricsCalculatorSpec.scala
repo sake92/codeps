@@ -198,7 +198,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(cycle.minCutsEstimate, 1) // p3 -> p1 resolves it
   }
 
-  test("cycle: partial cut shrinks a two-ring + chord knot; greedy estimate counts cuts") {
+  test("cycle: resolved-only candidates on joined rings; greedy estimate counts cuts") {
     // a<->b and c<->d rings joined by a->c and d->b (one 4-member SCC)
     val graph = DepsGraph(
       nodes = Set(
@@ -218,14 +218,13 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val cycle = report.cycles.head
     assertEquals(cycle.size, 4)
     assertEquals(cycle.members, Seq("a", "b", "a"))
-    // b -> a strands both endpoints in singleton components (the leftover {c,d} ring
-    // contains neither endpoint, so it does not count); c -> d strands the same way,
-    // leaving {a,b} behind
+    // b -> a and c -> d both resolve for their endpoints: after either cut the
+    // endpoints land in singletons, even though the other ring survives as a
+    // separate cycle (a leftover cycle elsewhere in the SCC does not count)
     assertEquals(cycle.cutCandidates, Seq(CutCandidate("b", "a", 1), CutCandidate("c", "d", 1)))
-    // b -> a resolves the whole 4-knot in one cut: its endpoints land in singleton
-    // components (the leftover {c,d} cycle is a separate component that contains
-    // neither endpoint, so it does not count)
-    assertEquals(cycle.minCutsEstimate, 1)
+    // greedy: cut b -> a first, then one of c -> d / d -> c to dissolve the {c,d}
+    // ring — 2 cuts total (the first cut leaves {c,d} cycling)
+    assertEquals(cycle.minCutsEstimate, 2)
   }
 
   test("cycles sorted by size desc, then ext_fan_in desc, then id") {

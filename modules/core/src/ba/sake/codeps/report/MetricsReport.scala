@@ -37,8 +37,9 @@ case class Cycle(
     cutCandidates: Seq[CutCandidate]
 )
 
-/** An internal edge whose removal resolves the whole cycle (its endpoints end
-  * up in no multi-member component). */
+/** An internal edge whose removal resolves the cycle for its endpoints (they end
+  * up in no multi-member component); a leftover cycle elsewhere in the SCC does
+  * not count. */
 case class CutCandidate(source: String, target: String, weight: Int)
 
 case class SurfaceRow(

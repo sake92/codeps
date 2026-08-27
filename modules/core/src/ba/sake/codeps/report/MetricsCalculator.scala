@@ -197,10 +197,12 @@ object MetricsCalculator:
     dfs(start)
     if found then path.toSeq else scc.toSeq.sorted :+ start
 
-  /** Internal edges whose removal resolves the cycle, sorted by weight ascending
-    * (stable tiebreak), top N. Every internal edge is simulated — a cheap edge
-    * that does not break the cycle is not a recommendation, and a resolving edge
-    * is reported even when it is not among the lowest weights. */
+  /** Internal edges whose removal resolves the cycle for their endpoints (they end
+    * up in no multi-member component; a leftover cycle elsewhere in the SCC does
+    * not count), sorted by weight ascending (stable tiebreak), top N. Every
+    * internal edge is simulated — a cheap edge that does not break the cycle is
+    * not a recommendation, and a resolving edge is reported even when it is not
+    * among the lowest weights. */
   private def cutCandidates(scc: Set[String], sg: ScopeGraph): Seq[CutCandidate] =
     sg.edges.toSeq
       .filter(e => scc.contains(e.source) && scc.contains(e.target))
@@ -226,9 +228,9 @@ object MetricsCalculator:
 
   /** Greedy estimate of the cuts needed to dissolve the cycle: repeatedly apply the
     * best candidate (resolved wins; else the partial with the smallest remaining
-    * size), recompute the SCCs on the mutated trial edge list, repeat against the
-    * shrunk component until it reaches size 1 or nothing improves. A greedy
-    * heuristic, NOT a guaranteed-minimum feedback-edge set. */
+    * size) to the trial edge list, then set `comp` to the largest remaining
+    * multi-member component of the original cycle members; repeat while one exists.
+    * A greedy heuristic, NOT a guaranteed-minimum feedback-edge set. */
   private def minCutsEstimate(cycle: Set[String], sg: ScopeGraph): Int =
     var trialEdges = sg.edges
     var comp = cycle
@@ -243,14 +245,13 @@ object MetricsCalculator:
       val improved = candidates.filter { case (_, (effect, _)) => effect != "none" }
       if improved.isEmpty then done = true
       else
-        val (chosen, (effect, newSize)) = improved.minBy { case (e, (effect, newSize)) =>
+        val (chosen, _) = improved.minBy { case (e, (effect, newSize)) =>
           (if effect == "resolved" then 0 else 1, newSize, e.weight, e.source, e.target)
         }
         trialEdges = trialEdges - chosen
         cuts += 1
-        if effect == "resolved" then comp = Set(comp.min)
-        else
-          comp = TarjanScc.components(comp, trialEdges)
-            .filter(c => (c.contains(chosen.source) || c.contains(chosen.target)) && c.size >= 2)
-            .maxBy(c => (c.size, c.min))
+        comp = TarjanScc.components(comp, trialEdges)
+          .filter(_.size >= 2)
+          .maxByOption(c => (c.size, c.min))
+          .getOrElse(Set.empty)
     cuts

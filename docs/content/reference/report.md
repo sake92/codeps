@@ -73,15 +73,15 @@ components are just acyclic nodes and are never reported.
   stuff is exposed to the cycle's blast radius. Cycles are ranked by `size` first, `ext_fan_in`
   as tiebreaker.
 - `cut_candidates` — the cycle's **internal** edges (both endpoints inside the cycle) whose removal
-  **resolves** the whole cycle. Each is **simulated**: the edge is removed from a copy of the edge
-  list and Tarjan reruns; only edges whose endpoints end up in no multi-member component
-  (`resolved`) are listed, sorted by `weight` ascending, up to 6. Edges that merely shrink the
-  cycle (`partial`) or leave it unchanged (`none`) are deliberately not listed — they don't
-  dissolve the cycle.
+  **resolves the cycle for their endpoints** (the endpoints end up in no multi-member component; a
+  leftover cycle elsewhere in the SCC does not count). Each is **simulated**: the edge is removed
+  from a copy of the edge list and Tarjan reruns; only edges with effect `resolved` are listed,
+  sorted by `weight` ascending, up to 6. Edges that merely shrink the cycle (`partial`) or leave
+  it unchanged (`none`) are deliberately not listed — they don't dissolve the cycle.
 - `min_cuts_estimate` — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly
-  apply the best `resolved`-or-largest-reduction candidate, recompute against the shrunk component,
-  until it reaches size 1 or nothing improves. A heuristic, not a guaranteed-minimum feedback-edge
-  set.
+  apply the best `resolved`-or-largest-reduction candidate, recompute against the largest remaining
+  multi-member component of the cycle, until no such component remains. A heuristic, not a
+  guaranteed-minimum feedback-edge set.
 
 ## Surface
 

@@ -4,7 +4,7 @@ class ReportTableSpec extends munit.FunSuite:
 
   private val report = MetricsReport(
     scope = "packages",
-    generatedAt = "2026-08-27T10:00:00+02:00",
+    generatedAt = "2026-08-27T10:00:00Z",
     summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1, criticalPathLength = 1),
     cycles = Seq(Cycle("scc:cache", Seq("cache", "scheduler", "cache"), 2, 5, 1,
       Seq(CutCandidate("scheduler", "cache", 4)))),

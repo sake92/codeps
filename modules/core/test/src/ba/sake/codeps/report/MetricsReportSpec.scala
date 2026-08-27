@@ -7,7 +7,7 @@ class MetricsReportSpec extends munit.FunSuite:
   test("report json uses the exact snake_case shape from the spec") {
     val report = MetricsReport(
       scope = "packages",
-      generatedAt = "2026-08-27T10:00:00+02:00",
+      generatedAt = "2026-08-27T10:00:00Z",
       summary = Summary(nodes = 100, edges = 214, nodesInCycles = 34, orphans = 3, criticalPathLength = 7),
       cycles = Seq(Cycle(
         id = "scc:cache",
@@ -22,7 +22,7 @@ class MetricsReportSpec extends munit.FunSuite:
     )
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"scope\":\"packages\""))
-    assert(json.contains("\"generated_at\":\"2026-08-27T10:00:00+02:00\""))
+    assert(json.contains("\"generated_at\":\"2026-08-27T10:00:00Z\""))
     assert(json.contains("\"nodes_in_cycles\":34"))
     assert(json.contains("\"critical_path_length\":7"))
     assert(json.contains("\"ext_fan_in\":5"))
