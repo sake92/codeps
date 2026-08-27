@@ -30,23 +30,28 @@ class MainSpec extends munit.FunSuite:
     assertEquals(res.exitCode, 0)
     out
 
-  test("export --from semanticdb emits the common json format") {
+  test("export --from semanticdb emits package and file nodes only") {
     val content = os.read(exportJson("deps.json"))
     assert(content.contains("\"kind\": \"package\""))
-    assert(content.contains("\"kind\": \"type\""))
-    assert(content.contains("\"kind\": \"member\""))
     assert(content.contains("\"kind\": \"file\""))
-    assert(content.contains("\"com.example.modules.module1.Service1\""))
+    assert(!content.contains("\"kind\": \"type\""))
+    assert(!content.contains("\"kind\": \"member\""))
+    assert(!content.contains("com.example.modules.module1.Service1")) // types are gone
+    assert(content.contains("com.example.modules.module1")) // packages remain
+    assert(content.contains("src/com/example/util/Helper.scala")) // files remain
+    assert(content.contains("\"parentId\": \"com.example.util\"")) // file -> package link
   }
 
-  test("export --from jdeps emits type-level json") {
+  test("export --from jdeps emits package-level json") {
     val out = os.pwd / "tmp" / "cli-test" / "deps-jdeps.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val res = runCli("export", "--from", "jdeps", FixtureCompiler.jdepsFile.toString, "-o", out.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
-    assert(content.contains("\"com.example.modules.module2.Service2\""))
+    assert(content.contains("\"com.example.modules.module2\""))
+    assert(content.contains("\"kind\": \"package\""))
+    assert(!content.contains("\"kind\": \"type\""))
     assert(!content.contains("\"kind\": \"member\""))
     assert(!content.contains("\"kind\": \"file\""))
   }

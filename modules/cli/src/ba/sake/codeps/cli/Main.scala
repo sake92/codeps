@@ -1,6 +1,6 @@
 package ba.sake.codeps.cli
 
-import ba.sake.codeps.graph.{Collapser, TestFilter}
+import ba.sake.codeps.graph.{Aggregator, Collapser, TestFilter}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
 import ba.sake.codeps.report.{MetricsCalculator, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
@@ -129,7 +129,7 @@ object Main:
                       SemanticDbParser.parse(os.read.bytes(f), workspaceRoot.toNIO) match
                         case Right(d)  => deps = deps.merge(d)
                         case Left(err) => System.err.println(s"warning: $err")
-                    writeOutput(deps.withoutDanglingEdges.toJson(spaces = 2, sort = true), out)
+                    writeOutput(Aggregator.fileLevel(deps.withoutDanglingEdges).toJson(spaces = 2, sort = true), out)
                     0
             case InputFormat.Jdeps =>
               paths.find(!os.isFile(_)) match
@@ -140,7 +140,7 @@ object Main:
                   var deps = DepsGraph.empty
                   for f <- paths do
                     deps = deps.merge(JdepsParser.parse(os.read(f)))
-                  writeOutput(deps.toJson(spaces = 2, sort = true), out)
+                  writeOutput(Aggregator.fileLevel(deps).toJson(spaces = 2, sort = true), out)
                   0
 
   @main
