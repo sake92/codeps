@@ -29,7 +29,7 @@ scala-cli compile --server=false --semanticdb -d classes src/
 # -> classes/META-INF/semanticdb/**/*.semanticdb
 ```
 
-Then export the graph to the common JSON format:
+Then export the graph to the standard JSON export format:
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
@@ -68,7 +68,7 @@ codeps report --scope files -i com.example.modules.module1 deps.json
 ```
 
 The report contains cycles with simulated cut candidates, exposed-surface metrics
-(`ports`/`mut_ports`/`exposure`/`utilization`) and orphans — see the
+(`ports`/`mutPorts`/`exposure`/`utilization`) and orphans — see the
 [Metrics report](/reference/report.html) for the full field reference. It renders
 as plain aligned text by default; `--format json` emits machine-readable JSON.
 
@@ -76,4 +76,4 @@ as plain aligned text by default; `--format json` emits machine-readable JSON.
 
 - Filter and collapse packages: [CLI reference](/reference/cli.html)
 - Understand the metrics: [Metrics report](/reference/report.html)
-- Understand the internals: [Architecture](/reference/architecture.html)
+- The export JSON schema: [Standard JSON export format](/reference/json-input.html)

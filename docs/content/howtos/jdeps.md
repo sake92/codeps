@@ -14,7 +14,7 @@ Your build already produced the `.class` files; the only extra step is piping `j
 jdeps data is class-level: it has no file information, so `export` collapses it to package
 nodes and edges, and `codeps report --scope files` errors on it (`no file nodes found in
 the input`) — use `--scope packages` instead.
-It also carries no access information, so all nodes have `ports`/`mut_ports` 0 and
+It also carries no access information, so all nodes have `ports`/`mutPorts` 0 and
 `utilization` `null` — a known gap, not silently meaningful.
 
 ## Generating the input
@@ -29,7 +29,7 @@ jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 ## Exporting the graph
 
 `codeps export` parses the text file and emits the
-[common JSON graph format](/reference/json-input.html) (`nodes` + `edges`):
+[standard JSON export format](/reference/json-input.html) (`nodes` + `edges`):
 
 ```shell
 codeps export --from jdeps jdeps.txt -o deps.json
@@ -53,7 +53,7 @@ or in one pipe:
 codeps export --from jdeps jdeps.txt | codeps report --scope packages -
 ```
 
-Cycles come with simulated cut candidates, and the surface lists fan_in/fan_out
+Cycles come with simulated cut candidates, and the surface lists fanIn/fanOut
 and orphans — see the [Metrics report](/reference/report.html).
 
 ## Filtering JDK noise

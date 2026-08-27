@@ -8,65 +8,70 @@ pagination:
 # codeps
 
 codeps is a **code dependency analyzer** for JVM projects (Java and Scala).
-It works in two steps: `codeps export` parses existing compiler output —
-[SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` —
-into a [common JSON graph format](/reference/json-input.html); then `codeps report`
-emits a flat [metrics report](/reference/report.html) — cycles with simulated
-cut candidates, per-node exposed-surface metrics and orphans —
-over the **packages** of the whole graph, or over the **files** of the packages you select.
+It works in two steps:
 
-No build-system integration needed: your local build tools already produce the inputs —
-`.semanticdb` files from a Scala compiler with SemanticDB enabled, and `.class` files for the JDK's `jdeps` —
-codeps just reads them.
+1. **`codeps export`** parses output your compiler already produced —
+   [SemanticDB](/howtos/semdb.html) (`.semanticdb` files from Scala) or
+   [jdeps](/howtos/jdeps.html) (the JDK's own analyzer) — and spits out a
+   dependency graph as JSON: the [standard JSON export format](/reference/json-input.html).
+2. **`codeps report`** takes that JSON (a file, or stdin via `-`) and spits out the
+   [metrics report](/reference/report.html): a plain-text table by default, or JSON
+   with `--format json` — handy for agents, other tools and CI.
+
+It works on two levels:
+
+- **`--scope packages`** — the whole package graph: the level you use when
+  **splitting modules**. Find the cycles that keep modules welded together,
+  with simulated cut candidates, plus per-package exposed surface and orphans.
+- **`--scope files`** — the file graph of the packages selected with `-i`: the
+  granularity that matters when you **optimize compile times** (zinc and other
+  incremental compilers recompile by file).
+
+Cycles are bad in both: at package level they make modules inseparable; at file
+level they degrade incremental compilation.
+
+## Example
+
+```shell
+codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps report --scope packages deps.json
+```
+
+Real output of `codeps report --scope packages` on the repo's
+[cyclic test fixture](https://github.com/sake92/codeps/blob/main/testFixtures/cyclic.json)
+(`module1` ↔ `module2`):
+
+```text
+scope: packages    generatedAt: 2026-08-27T18:36:47Z
+
+Summary
+  nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
+
+Cycles (size desc, extFanIn desc)
+id                               size  extFanIn  minCutsEstimate  cut candidates
+scc:com.example.modules.module1  2     1         1                com.example.modules.module1 -> com.example.modules.module2 (w=1), com.example.modules.module2 -> com.example.modules.module1 (w=1)
+Surface (utilization asc; — = no fan-in)
+node                         fanIn  fanOut  ports  mutPorts  exposure  utilization
+com.example.modules.module2  1      2       4      0         4         0.25
+org.thirdparty               1      0       4      0         4         0.25
+com.example.modules.module1  2      1       4      0         4         0.50
+com.example.app              0      1       4      0         4         —
+Orphans
+  (none)
+```
 
 ## Features
 
-- **Two input formats:**
-  - [SemanticDB](/howtos/semdb.html) — detailed, from Scala compiler output (`.semanticdb` files): package/file/type/member nodes
-  - [jdeps](/howtos/jdeps.html) — from the JDK's own `jdeps -verbose:class` output, no extra tooling needed
-- **Two scopes** — `--scope packages` for the whole package graph, `--scope files` for the file graph of the packages you select with `-i`
-- **Cycles with simulated cuts** — every multi-member strongly connected component is reported as a closed cycle path with `ext_fan_in`, the internal edges whose removal resolves it (top 6 by weight), and a greedy `min_cuts_estimate`
-- **Exposed-surface metrics** — per-node `ports` / `mut_ports` / `exposure` / `utilization` (sealed/given/var rules resolved by the SemanticDB exporter)
+- **Two input formats** — [SemanticDB](/howtos/semdb.html) (detailed, from Scala compiler output) and [jdeps](/howtos/jdeps.html) (JDK-only, no extra tooling)
+- **Cycles with simulated cuts** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`, the internal edges whose removal resolves it, and a greedy `minCutsEstimate`
+- **Exposed-surface metrics** — per-node `ports` / `mutPorts` / `exposure` / `utilization` (sealed/given/var rules resolved by the SemanticDB exporter)
 - **Orphans** — dead-code-removal candidates
-- **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`)
+- **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`); skip tests with `--skip-tests`
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
 - **Two output formats** — `table` (default, plain aligned text) and `json` (machine-readable)
 
-## Quick example
-
-```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
-```
-
-```json
-{
-  "scope": "packages",
-  "generated_at": "2026-08-27T10:00:00Z",
-  "summary": {
-    "nodes": 5,
-    "edges": 4,
-    "nodes_in_cycles": 2,
-    "orphans": 1,
-    "critical_path_length": 2
-  },
-  "cycles": [
-    {
-      "id": "scc:com.example.modules.module1",
-      "members": ["com.example.modules.module1", "com.example.modules.module2", "com.example.modules.module1"],
-      "size": 2,
-      "ext_fan_in": 1,
-      "min_cuts_estimate": 1,
-      "cut_candidates": [
-        { "edge": ["com.example.modules.module2", "com.example.modules.module1"], "weight": 2 }
-      ]
-    }
-  ],
-  "surface": [
-    { "node": "com.example.app", "fan_in": 0, "fan_out": 1, "ports": 3, "mut_ports": 0, "exposure": 3, "utilization": null }
-  ],
-  "orphans": ["org.thirdparty"]
-}
-```
+No build-system integration needed: your local build tools already produce the inputs,
+codeps just reads them.
 
 ## Site Map
 - [Tutorials](/tutorials) — step-by-step guides to get things working

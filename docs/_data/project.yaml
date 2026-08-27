@@ -13,7 +13,5 @@ references:
     url: "/reference/cli.html"
   - label: "Metrics report"
     url: "/reference/report.html"
-  - label: "Common JSON format"
+  - label: "Standard JSON export format"
     url: "/reference/json-input.html"
-  - label: "Architecture"
-    url: "/reference/architecture.html"

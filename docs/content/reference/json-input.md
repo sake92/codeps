@@ -1,16 +1,16 @@
 ---
 layout: reference.html
-title: Common JSON format
-description: the common JSON graph format produced by codeps export and consumed by codeps report
+title: Standard JSON export format
+description: the standard JSON graph format produced by codeps export and consumed by codeps report
 ---
 
-# Common JSON format
+# Standard JSON export format
 
-The common JSON format is the contract between the two codeps steps: `codeps export`
+The standard JSON export format is the contract between the two codeps steps: `codeps export`
 *produces* it, `codeps report` *consumes* it. It is a self-contained dependency
 graph produced by `codeps export` as `package` and `file` nodes only — the exporters
 collapse type/member symbols into their file (or root package for file-less jdeps
-types), with `ports`/`mut_ports` summed and edges aggregated at file level with
+types), with `ports`/`mutPorts` summed and edges aggregated at file level with
 summed weights. `type`/`member` kinds are still *accepted* on input for backward
 compatibility with old graphs (the analyzer aggregates them), but exporters never
 emit them.
@@ -69,7 +69,7 @@ Edge fields:
   `com.example.a.topLevelHelper` (a package member; `parentId` = the package, no `#`).
 
 `export` collapses type/member symbols into their file node (or root package for
-file-less jdeps types), sums their `ports`/`mut_ports`, and aggregates edges at
+file-less jdeps types), sums their `ports`/`mutPorts`, and aggregates edges at
 file level with summed weights — so the graphs it emits only ever contain
 package and file nodes. The granular package → type → member hierarchy remains
 the *internal* parser contract; the analyzer aggregates such old graphs the same

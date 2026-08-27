@@ -3,10 +3,10 @@
 Code package dependency analyzer.
 
 Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` output
-into a [common JSON graph format](https://sake92.github.io/codeps/reference/json-input.html),
+into the [standard JSON export format](https://sake92.github.io/codeps/reference/json-input.html),
 then emits a flat [metrics report](https://sake92.github.io/codeps/reference/report.html):
 cycles with simulated cut candidates, per-node exposed-surface metrics
-(`ports`/`mut_ports`/`exposure`/`utilization`) and orphans —
+(`ports`/`mutPorts`/`exposure`/`utilization`) and orphans —
 over the package graph, or the file graph of the packages you select.
 
 - [Documentation](https://sake92.github.io/codeps/)
@@ -39,12 +39,12 @@ java -jar codeps.jar report --scope packages deps.json
 
 ### Other languages
 
-For any other ecosystem, produce the [JSON input format](https://sake92.github.io/codeps/reference/json-input.html)
+For any other ecosystem, produce the [standard JSON export format](https://sake92.github.io/codeps/reference/json-input.html)
 with a tool of your choice (madge, pydeps, `go list`, ...) and feed it to `report` —
 codeps never parses that source code itself:
 
 ```shell
-madge --json src | jq '... shape it into the common JSON format ...' | java -jar codeps.jar report --scope packages -
+madge --json src | jq '... shape it into the standard JSON export format ...' | java -jar codeps.jar report --scope packages -
 ```
 
 The metrics are language-agnostic once the node/edge list carries per-node `isExposed`/`ports`/`mutPorts`

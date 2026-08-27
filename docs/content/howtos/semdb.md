@@ -11,11 +11,11 @@ produced by the Scala compiler (`-Xsemanticdb` flag) or tools like scala-cli.
 
 Scala data is the richest codeps input: it carries package/file/type/member symbols, and
 `export` collapses them into `package` and `file` nodes with file-level edges
-(ports/mut_ports resolved at export time), so the analyzer can produce metrics at both
+(ports/mutPorts resolved at export time), so the analyzer can produce metrics at both
 scopes — the package graph and the file graph of a selected package. It also carries
 per-symbol access/kind information, which the exporter turns into the
 [exposed-surface metrics](/reference/report.html#exposed-surface)
-(`ports`/`mut_ports`: sealed hierarchies, givens, vars and mutable collections are all
+(`ports`/`mutPorts`: sealed hierarchies, givens, vars and mutable collections are all
 resolved at export time). Only the project's **own symbols** are exported — references to
 external libraries and the JDK are dropped by the exporter.
 
@@ -41,7 +41,7 @@ Other ways to get SemanticDB output:
 ## Exporting the graph
 
 `codeps export` walks the directory, reads every `*.semanticdb` file and emits the
-[common JSON graph format](/reference/json-input.html) (`nodes` + `edges`):
+[standard JSON export format](/reference/json-input.html) (`nodes` + `edges`):
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
@@ -68,7 +68,7 @@ codeps report --scope packages deps.json
 ```
 
 - `--scope packages` — metrics over the whole package graph: cycles with simulated
-  cut candidates, per-package exposed-surface (`ports`/`mut_ports`/`exposure`/`utilization`),
+  cut candidates, per-package exposed-surface (`ports`/`mutPorts`/`exposure`/`utilization`),
   and orphans
 - `--scope files` — the same metrics over the **file graph** of the packages selected with
   `-i`; e.g. `-i com.example` descends into `com.example` and everything below it

@@ -3,7 +3,7 @@ package ba.sake.codeps.model
 import ba.sake.tupson.JsonRW
 
 /**
-  * The common JSON format: a self-contained dependency graph with package/file/type/member
+  * The standard JSON export format: a self-contained dependency graph with package/file/type/member
   * nodes and directed edges between node ids.
   * `{"nodes": [{"id": ..., "kind": ..., "parentId": ..., "file": ...}], "edges": [{"source": ..., "target": ...}]}`
   */

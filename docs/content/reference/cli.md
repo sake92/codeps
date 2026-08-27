@@ -10,7 +10,7 @@ description: codeps CLI reference
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
-   emits the [common JSON graph format](/reference/json-input.html). No analysis.
+   emits the [standard JSON export format](/reference/json-input.html). No analysis.
 2. [`report`](#report) — the *analyzer*: consumes that JSON (a file or stdin) and emits the
    flat [metrics report](/reference/report.html): cycles with simulated cut candidates,
    per-node exposed-surface metrics and orphans.
@@ -36,7 +36,7 @@ codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --sc
 codeps export --from semanticdb|jdeps [--root <dir>] [-o out] <inputs...>
 ```
 
-Pure producer: parses the raw input and emits the common JSON graph
+Pure producer: parses the raw input and emits the standard JSON export graph
 (`{"nodes": [...], "edges": [...]}`) to stdout, or to the `-o` file.
 There are no include/exclude/collapse flags here — filtering and aggregation are
 the analyzer's job.
@@ -72,7 +72,7 @@ warning: failed to parse semanticdb: ...
 codeps report --scope <packages|files> [--format <json|table>] [-i inc] [-e exc] [-c collapse] [--skip-tests] [-o out] <file|->
 ```
 
-Pure analyzer: reads the common JSON graph (a file, or stdin via `-`) and runs the pipeline
+Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
 (filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the
 flat [Metrics report](/reference/report.html), always exits `0` on success.
 
@@ -102,17 +102,17 @@ codeps export --from jdeps jdeps.txt | codeps report --scope packages --format t
 The `table` format:
 
 ```text
-scope: packages    generated_at: 2026-08-27T10:00:00Z
+scope: packages    generatedAt: 2026-08-27T10:00:00Z
 
 Summary
-  nodes: 100    edges: 214    nodes_in_cycles: 34    orphans: 3    critical_path_length: 7
+  nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
-Cycles (size desc, ext_fan_in desc)
-  id           size  ext_fan_in  min_cuts_estimate  cut candidates
-  scc:cache    2     5           1                  scheduler -> cache (w=4)
+Cycles (size desc, extFanIn desc)
+  id           size  extFanIn  minCutsEstimate  cut candidates
+  scc:cache    2     5         1                scheduler -> cache (w=4)
 
 Surface (utilization asc; — = no fan-in)
-  node     fan_in  fan_out  ports  mut_ports  exposure  utilization
+  node     fanIn  fanOut  ports  mutPorts  exposure  utilization
   cache    3       2        9      5          24        0.33
   ...
 
