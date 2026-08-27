@@ -6,15 +6,14 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with three subcommands
+`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with two subcommands
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
    emits the [common JSON graph format](/reference/json-input.html). No analysis.
-2. [`draw`](#draw) — the *renderer*: consumes that JSON (a file or stdin) and renders
-   dot or mermaid at any granularity.
-3. [`report`](#report) — the *analyzer*: consumes that JSON and emits a multi-level
-   [cycle analysis report](/reference/report.html).
+2. [`report`](#report) — the *analyzer*: consumes that JSON (a file or stdin) and emits the
+   flat [metrics report](/reference/report.html): knots with simulated cut candidates,
+   per-node exposed-surface metrics, orphans and articulation points.
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
@@ -25,10 +24,10 @@ java -jar codeps.jar <subcommand> [options] <inputs...>
 
 The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 
-The steps pipe together — `export` writes the graph to stdout, `draw`/`report` read it from stdin (`-`):
+The steps pipe together — `export` writes the graph to stdout, `report` reads it from stdin (`-`):
 
 ```shell
-codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
 ```
 
 ## export
@@ -67,62 +66,68 @@ the run continues:
 warning: failed to parse semanticdb: ...
 ```
 
-## draw
+## report
 
 ```shell
-codeps draw -g <package|file|type|member> -f <dot|mermaid> [-i inc] [-e exc] [-c collapse] [-o out] <file|->
+codeps report --scope <packages|files> [--format <json|table>] [-i inc] [-e exc] [-c collapse] [--skip-tests] [-o out] <file|->
 ```
 
-Pure renderer: reads the common JSON graph (a file, or stdin via `-`) and renders it
-in the requested format at the requested granularity. Pipeline:
-parse → filter → aggregate to `-g` → collapse → build graph → cycle detection → render.
+Pure analyzer: reads the common JSON graph (a file, or stdin via `-`) and runs the pipeline
+(filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the
+flat [Metrics report](/reference/report.html), always exits `0` on success.
 
-`-g` is required — there is no default granularity.
+`--scope` is required: `packages` analyzes the whole package graph; `files` analyzes the file
+graph of the packages selected with `-i` (jdeps data has no file-level info and errors here).
 
 | Option | Description |
 |---|---|
-| `-g` / `--granularity` | Aggregation level: `package`, `file`, `type` or `member`. Required. |
-| `-f` / `--format` | Output format: `dot` or `mermaid`. Required. |
+| `-s` / `--scope` | `packages` or `files`. Required. |
+| `-f` / `--format` | `json` (default) or `table` — the table renders the exact same data as plain aligned text, nothing is recomputed. |
 | `-i` / `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
+| `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
-| `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
-| `-o` / `--out` | Write output to this file instead of stdout. |
+| `-o` / `--out` | Write the report to this file instead of stdout. |
 
 Exactly one input is required — a JSON file, or `-` for stdin, so `export` output
-can be piped straight into `draw`:
+can be piped straight into `report`:
 
 ```shell
-codeps draw -g package -f dot deps.json
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g type -f mermaid -
-codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
+codeps report --scope packages deps.json -o report.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope files -i com.example - > files.json
+codeps export --from jdeps jdeps.txt | codeps report --scope packages --format table -
 ```
 
-### Granularity
+The `table` format:
 
-The `-g` level says what the graph's nodes are after aggregation. Finer-grained
-nodes are lifted to their nearest ancestor at that level; when the data has no
-nodes at the requested level (or above it), the level falls back:
+```text
+scope: packages    generated_at: 2026-08-27T10:00:00+02:00
 
-| `-g` | semanticdb data | jdeps data |
-|---|---|---|
-| `member` | identity (types, members, packages, files) | identity (types only) |
-| `type` | members → their type (package members → the package); files and package nodes dropped | types only (package nodes dropped) |
-| `file` | types/members → their `file` attribute; fallback: root package; package nodes dropped | root package (jdeps has no files) |
-| `package` | everything → root package; files dropped | everything → root package |
+Summary
+  nodes: 100    edges: 214    nodes_in_cycles: 34    orphans: 3    critical_path_length: 7
 
-Nodes coarser than the requested level are dropped: file nodes at `type`/`package`,
-package nodes at `type`/`file`. A package can still appear at a finer level as a
-fallback — members whose parent is a package map to that package at `-g type`, and
-file-less nodes map to their root package at `-g file` (jdeps data has no file or
-member nodes, so on jdeps data `-g member` is the identity, `-g type` keeps the
-types, and `-g file` behaves like `-g package`).
+Knots (size desc, ext_fan_in desc)
+  id           size  ext_fan_in  min_cuts_estimate  cut candidates
+  scc:cache    2     5           1                  scheduler -> cache (w=4, resolved -> 1)
+
+Surface (utilization asc; — = no fan-in)
+  node     fan_in  fan_out  ports  mut_ports  exposure  utilization
+  cache    3       2        9      5          24        0.33
+  ...
+
+Orphans
+  DeadUtil.scala
+
+Articulation points
+  config, core
+```
 
 Errors (exit 1): `exactly one input is required (a json file, or '-' for stdin)`,
 `expected exactly one input (a json file, or '-' for stdin)`,
-`input path does not exist: <path>`, `no nodes remain after filtering`, invalid
-collapse rules, unknown granularity/format values — and malformed or type-invalid
+`input path does not exist: <path>`, `no nodes remain after filtering`,
+`no file nodes found in the input (jdeps data has no file-level info)`, invalid
+collapse rules, unknown scope/format values — and malformed or type-invalid
 JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
 
 ## Include / exclude patterns
@@ -136,13 +141,16 @@ its root package matches one, and its root package matches no exclude pattern
 resulting universe (self-edges are dropped). With no `-i`, all nodes are kept.
 
 ```shell
-# keep only com.example and subpackages, minus internal helpers
-codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
+# only com.example packages, minus internal helpers
+codeps report --scope packages -i com.example -e com.example.internal deps.json
+
+# file scope: descend into one package
+codeps report --scope files -i com.example.modules.module1 deps.json
 ```
 
 ## Skip tests
 
-`--skip-tests` (on `draw` and `report`) excludes nodes defined in test files: `file`
+`--skip-tests` (on `report`) excludes nodes defined in test files: `file`
 nodes whose id matches a pattern, and `type`/`member` nodes whose `file` attribute
 matches. Package nodes and file-less nodes (all of jdeps data) never match, so on
 jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and
@@ -165,13 +173,13 @@ escape false positives (e.g. a main `*Spec.scala` DSL file) or to cover exotic
 layouts. Passing it without `--skip-tests` is an error.
 
 ```shell
-codeps draw -g package -f dot --skip-tests deps.json
-codeps report --skip-tests --test-pattern '**/specs/**' deps.json
+codeps report --scope packages --skip-tests deps.json
+codeps report --scope files --skip-tests --test-pattern '**/specs/**' deps.json
 ```
 
 ## Collapse rules
 
-Collapse rules merge nodes into a single node, making large graphs readable.
+Collapse rules merge nodes into a single node, keeping big graphs readable.
 Only trailing wildcards are supported:
 
 | Rule | Effect |
@@ -180,45 +188,14 @@ Only trailing wildcards are supported:
 | `org.lib.*` | nodes directly below `org.lib` collapse into `org.lib.<level>` (one level only) |
 
 Rules match node ids by prefix, kind-agnostically — they apply to whatever ids
-exist after aggregation (packages, files, types or members). When multiple rules
-match a node, the **longest prefix wins** (ties: first rule in the sequence).
-Loops created by collapsing are dropped; edges landing on the same pair are merged with summed weights.
+exist after aggregation (packages, or files — `src.**` collapses `src/one/A.scala`
+into `src`). When multiple rules match a node, the **longest prefix wins** (ties:
+first rule in the sequence). Loops created by collapsing are dropped; edges landing
+on the same pair are merged with summed weights.
 
 ```shell
-codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
+codeps report --scope packages -c com.example.modules.** deps.json
 ```
-
-## report
-
-```shell
-codeps report [-i inc] [-e exc] [-c collapse] [-o out] <file|->
-```
-
-Pure analyzer: reads the common JSON graph (a file, or stdin via `-`) and runs the
-pipeline (filter → aggregate → collapse → build graph → cycle detection) at **all four
-granularities in one pass**, grading every cycle and computing metrics and suggestions.
-Emits one self-contained JSON document (see [Cycle analysis report](/reference/report.html)),
-always exits `0` on success.
-
-| Option | Description |
-|---|---|
-| `-i` / `--include` | Same as `draw` — applied at every granularity. |
-| `-e` / `--exclude` | Same as `draw`. |
-| `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
-| `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
-| `-c` / `--collapse` | Same as `draw`. |
-| `-o` / `--out` | Write the report JSON to this file instead of stdout. |
-
-There is no `-g`: the report covers package, file, type and member levels at once.
-
-```shell
-codeps report deps.json -o report.json
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report - > report.json
-```
-
-The report JSON is the input for the [interactive demo](/demo/cytoscape-graph.html)'s
-report mode (cycle highlighting, severity grades, suggestions) and is shaped for agents
-to consume directly.
 
 ## Exit codes and errors
 
@@ -232,7 +209,7 @@ so a partial run still succeeds:
 warning: failed to parse semanticdb: ...
 ```
 
-For `draw`, malformed or type-invalid JSON input is a hard error (exit 1):
+For `report`, malformed or type-invalid JSON input is a hard error (exit 1):
 
 ```text
 error: failed to parse json: ...
@@ -245,5 +222,5 @@ see the [README](https://github.com/sake92/codeps#development):
 
 ```shell
 deder exec -t run -m cli export --from semanticdb <dir> -o deps.json
-deder exec -t run -m cli draw -g package -f dot deps.json
+deder exec -t run -m cli report --scope packages deps.json
 ```

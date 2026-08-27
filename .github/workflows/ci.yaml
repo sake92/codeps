@@ -37,7 +37,7 @@ jobs:
       - name: Run tests
         shell: bash -eo pipefail {0}
         run: |
-          deder exec -t test -m core-test -m parser-semanticdb-test -m parser-jdeps-test -m export-test -m cli-test
+          deder exec -t test -m core-test -m parser-semanticdb-test -m parser-jdeps-test -m cli-test
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v6
         if: success() || failure()

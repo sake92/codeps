@@ -23,7 +23,7 @@ object Collapser:
         .toSet
       (newNodes, newEdges)
 
-  private def resolveWith(rules: Seq[CollapseRule]): String => String =
+  def resolveWith(rules: Seq[CollapseRule]): String => String =
     pkg =>
       var best: Option[String] = None
       var bestLen              = -1

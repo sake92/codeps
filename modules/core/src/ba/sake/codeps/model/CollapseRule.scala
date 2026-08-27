@@ -11,10 +11,14 @@ enum CollapseRule:
     case Wild(p)        => p.length
     case SingleLevel(p) => p.length
 
-  /** Result of applying this rule to a package; None if the rule does not match. */
+  /** Result of applying this rule to a node id; None if the rule does not match.
+    * Wild matches both dotted (package) and slash-separated (file path) ids below
+    * the prefix, so `src.**` collapses `src/one/A.scala` like `com.x.**` collapses
+    * `com.x.y`. */
   def apply(pkg: String): Option[String] = this match
     case Wild(prefix) =>
-      if pkg == prefix || pkg.startsWith(prefix + ".") then Some(prefix) else None
+      if pkg == prefix || pkg.startsWith(prefix + ".") || pkg.startsWith(prefix + "/") then Some(prefix)
+      else None
     case SingleLevel(prefix) =>
       if pkg.startsWith(prefix + ".") then
         val rest  = pkg.drop(prefix.length + 1)

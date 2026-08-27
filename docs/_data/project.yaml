@@ -7,16 +7,12 @@ howtos:
     url: "/howtos/semdb.html"
   - label: "Export & analyze Java/JVM projects with jdeps"
     url: "/howtos/jdeps.html"
-  - label: "How to export the graph"
-    url: "/howtos/exporting.html"
 
 references:
   - label: "CLI"
     url: "/reference/cli.html"
-  - label: "Cycle analysis report"
+  - label: "Metrics report"
     url: "/reference/report.html"
-  - label: "Export formats"
-    url: "/reference/export-formats.html"
   - label: "Common JSON format"
     url: "/reference/json-input.html"
   - label: "Architecture"

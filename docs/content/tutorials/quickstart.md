@@ -49,23 +49,31 @@ See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with 
 
 ## Analyze
 
-Render the graph at package granularity as Mermaid:
+Emit the metrics report over the whole package graph:
 
 ```shell
-codeps draw -g package -f mermaid deps.json
+codeps report --scope packages deps.json
 ```
 
-or pipe export straight into draw:
+or pipe export straight into report:
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f mermaid -
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
 ```
 
-For deeper views use `-g type` or `-g file` (and `-g member` on Scala data).
-DOT is equally easy — just swap `-f mermaid` for `-f dot`.
+For a file-level view of one package, use `--scope files` with an include pattern:
+
+```shell
+codeps report --scope files -i com.example.modules.module1 deps.json
+```
+
+The report contains cycle knots with simulated cut candidates, exposed-surface metrics
+(`ports`/`mut_ports`/`exposure`/`utilization`), orphans and articulation points — see the
+[Metrics report](/reference/report.html) for the full field reference. `--format table`
+renders the same data as plain aligned text.
 
 ## What's next?
 
 - Filter and collapse packages: [CLI reference](/reference/cli.html)
-- Explore a graph interactively: drop `deps.json` onto the [demo](/demo/cytoscape-graph.html)
+- Understand the metrics: [Metrics report](/reference/report.html)
 - Understand the internals: [Architecture](/reference/architecture.html)

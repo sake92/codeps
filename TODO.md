@@ -1,3 +1,2 @@
-
-- deploy ghpages with docs and cytoscape demo
+- deploy ghpages with docs
 - add skill?

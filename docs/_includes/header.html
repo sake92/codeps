@@ -9,7 +9,6 @@
         </form></li></ul>
         {% endif %}
         <ul>
-            <li><a href="/demo/cytoscape-graph.html">Demo</a></li>
             {% for catKey, catValue in site.categories.items() %}
             {% if page.lang.url == "/" %}
                 <li><a href="/{{ catKey }}">{{ catValue.label }}</a></li>

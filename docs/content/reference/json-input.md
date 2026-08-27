@@ -1,13 +1,13 @@
 ---
 layout: reference.html
 title: Common JSON format
-description: the common JSON graph format produced by codeps export and consumed by codeps draw
+description: the common JSON graph format produced by codeps export and consumed by codeps report
 ---
 
 # Common JSON format
 
 The common JSON format is the contract between the two codeps steps: `codeps export`
-*produces* it, `codeps draw` *consumes* it. It is a self-contained dependency
+*produces* it, `codeps report` *consumes* it. It is a self-contained dependency
 graph with `package`/`file`/`type`/`member` nodes and directed edges between node ids.
 
 ```json
@@ -40,6 +40,13 @@ Node fields:
 | `kind` | string | `package`, `file`, `type` or `member` (lowercase) |
 | `parentId` | string (optional) | nearest enclosing node; `package` and `file` nodes are standalone (no `parentId`) |
 | `file` | string (optional) | on `type`/`member` nodes: the id of their source `file` node |
+| `isExposed` | boolean (optional) | part of the externally visible surface; resolved by the extraction backend (SemanticDB export), default `true` for graphs without exposure info |
+| `ports` | number (optional) | the node's own weighted exposure contribution (types 3, defs/vals 1, sealed-hierarchy members 0.5, givens/implicits +1); the report sums these per scope node, default `0` |
+| `mutPorts` | number (optional) | the node's own mutable-state exposure contribution (`var`s, mutable-collection-typed vals/defs), default `0` |
+
+The exposure weight rules are Scala-specific and live in the SemanticDB exporter — see the
+[Metrics report](/reference/report.html) for the definitions. A jdeps graph carries no access
+info, so its nodes are all `isExposed: true` with `ports`/`mutPorts` 0.
 
 Edge fields:
 
@@ -79,25 +86,25 @@ codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
 ```
 
 External tools can emit nodes+edges JSON directly (matching the schema above)
-and pipe it into `codeps draw ... -`. The examples below are sketches; adapt
-them to your tool's output. The key points: give every node a unique `id` and a
+and pipe it into `codeps report --scope packages ... -`. The examples below are sketches;
+adapt them to your tool's output. The key points: give every node a unique `id` and a
 valid `kind`, and reference only existing ids in `edges`.
 
 JavaScript/TypeScript (file-level deps from [madge](https://github.com/pahen/madge)
 mapped to file/package nodes, e.g. by tsconfig `rootDir`):
 
 ```shell
-madge --json src | jq '...' | codeps draw -g file -f mermaid -
+madge --json src | jq '...' | codeps report --scope files -
 ```
 
 Python (module-level deps from [pydeps](https://github.com/thebjorn/pydeps)):
 
 ```shell
-pydeps --json mypackage | jq '...' | codeps draw -g package -f dot -
+pydeps --json mypackage | jq '...' | codeps report --scope packages -
 ```
 
 Go (`go list` already emits package-level import deps):
 
 ```shell
-go list -json ./... | jq '...' | codeps draw -g package -f dot -
+go list -json ./... | jq '...' | codeps report --scope packages -
 ```

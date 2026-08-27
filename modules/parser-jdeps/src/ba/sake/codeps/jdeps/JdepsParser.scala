@@ -11,7 +11,7 @@ object JdepsParser:
     * Own classes = the sources of detail lines; only edges between own classes are kept
     * (project-internal dependencies); JDK/library/`not found` targets are dropped.
     * Self-edges (e.g. `Outer -> Outer$`) are intentionally kept here; the analyzer's
-    * consumers (Filter/Aggregator/Collapser/GraphBuilder) drop them later.
+    * consumers (Filter/TestFilter/Collapser/MetricsCalculator) drop them later.
     * Inner classes map `$` -> `#`; Scala object classes lose their trailing `$`.
     */
   def parse(content: String): DepsGraph =

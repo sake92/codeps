@@ -61,3 +61,11 @@ class CollapserSpec extends munit.FunSuite:
     assertEquals(n, Set("a.b"))
     assertEquals(e, Set.empty[Edge])
   }
+
+  test("wild matches path-style ids (files) as well as dotted ids") {
+    val nodes = Set("src/one/A.scala", "src/two/B.scala", "lib/other.scala")
+    val edges = Set(Edge("src/one/A.scala", "src/two/B.scala"), Edge("lib/other.scala", "src/one/A.scala"))
+    val (n, e) = Collapser.collapse(nodes, edges, Seq(CollapseRule.Wild("src")))
+    assertEquals(n, Set("src", "lib/other.scala"))
+    assertEquals(e, Set(Edge("lib/other.scala", "src")))
+  }

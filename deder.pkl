@@ -20,7 +20,6 @@ local const coreModules = new CreateScalaModules {
   id = "core"
   template = (baseModule) {
     deps {
-      "org.jgrapht:jgrapht-core:1.5.3"
       "ba.sake::tupson:0.20.0"
     }
   }
@@ -80,22 +79,6 @@ local const parserJdepsModules = new CreateScalaModules {
   }
 }.get
 
-local const exportModules = new CreateScalaModules {
-  root = "modules/export"
-  id = "export"
-  template = (baseModule) {
-    moduleDeps { coreModules.main }
-  }
-  testTemplate = (template.asTest()) {
-    junitXmlReport {
-      enabled = true
-    }
-    deps {
-      "org.scalameta::munit:1.3.4"
-    }
-  }
-}.get
-
 local const cliModules = new CreateScalaModules {
   root = "modules/cli"
   id = "cli"
@@ -104,7 +87,6 @@ local const cliModules = new CreateScalaModules {
       coreModules.main
       parserSemanticdbModules.main
       parserJdepsModules.main
-      exportModules.main
     }
     deps {
       "com.lihaoyi::mainargs:0.7.8"
@@ -127,7 +109,6 @@ modules {
   ...coreModules.all
   ...parserSemanticdbModules.all
   ...parserJdepsModules.all
-  ...exportModules.all
   ...cliModules.all
   testUtils
 }

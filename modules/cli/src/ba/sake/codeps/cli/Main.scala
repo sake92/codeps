@@ -1,9 +1,8 @@
 package ba.sake.codeps.cli
 
-import ba.sake.codeps.exporting.{DotExporter, MermaidExporter, OutputFormat}
-import ba.sake.codeps.graph.{Aggregator, Collapser, CycleDetector, Filter, GraphBuilder, TestFilter}
+import ba.sake.codeps.graph.{Collapser, TestFilter}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
-import ba.sake.codeps.report.Reporter
+import ba.sake.codeps.report.{MetricsCalculator, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
@@ -15,7 +14,19 @@ object Main:
 
   /** Testable entry point: returns the process exit code. */
   def run(args: Array[String]): Int =
-    ParserForMethods(this).runEither(reorder(args)) match
+    val parser = ParserForMethods(this)
+    // mainargs 0.7.8 strips the subcommand name only when there are 2+ @main methods;
+    // with a single main it expects the args without it. We keep the subcommand-first
+    // CLI contract either way, stripping the leading command token here when mainargs won't.
+    val effective =
+      if parser.mains.value.size == 1 then
+        args.toSeq match
+          case Seq() => Seq()
+          case head +: tail =>
+            if parser.mains.value.exists(_.name(mainargs.Util.nullNameMapper).contains(head)) then reorderRest(tail)
+            else reorderRest(args.toSeq)
+      else reorder(args)
+    parser.runEither(effective) match
       case Left(err) =>
         System.err.println(err)
         1
@@ -29,8 +40,8 @@ object Main:
     else args(0) +: reorderRest(args.drop(1))
 
   private def reorderRest(rest: Seq[String]): Seq[String] =
-    val valueFlags = Set("-i", "--include", "-e", "--exclude", "-c", "--collapse", "-f", "--format",
-      "-g", "--granularity", "-o", "--out", "--from", "--root", "--test-pattern")
+    val valueFlags = Set("-i", "--include", "-e", "--exclude", "-c", "--collapse",
+      "-f", "--format", "-s", "--scope", "-o", "--out", "--from", "--root", "--test-pattern")
     val named    = Seq.newBuilder[String]
     val leftover = Seq.newBuilder[String]
     var i = 0
@@ -58,25 +69,29 @@ object Main:
         case Seq(other)        => Left(s"unknown input format: $other (expected semanticdb or jdeps)")
         case _                 => Left("expected exactly one input format")
 
-  given TokensReader.Simple[Aggregator.Level] with
-    def shortName: String = "granularity"
-    def read(strs: Seq[String]): Either[String, Aggregator.Level] =
-      strs match
-        case Seq("package") => Right(Aggregator.Level.Package)
-        case Seq("file")    => Right(Aggregator.Level.File)
-        case Seq("type")    => Right(Aggregator.Level.Type)
-        case Seq("member")  => Right(Aggregator.Level.Member)
-        case Seq(other)     => Left(s"unknown granularity: $other (expected package, file, type or member)")
-        case _              => Left("expected exactly one granularity")
+  enum ReportScope:
+    case Packages, Files
 
-  given TokensReader.Simple[OutputFormat] with
-    def shortName: String = "format"
-    def read(strs: Seq[String]): Either[String, OutputFormat] =
+  given TokensReader.Simple[ReportScope] with
+    def shortName: String = "scope"
+    def read(strs: Seq[String]): Either[String, ReportScope] =
       strs match
-        case Seq("dot")     => Right(OutputFormat.Dot)
-        case Seq("mermaid") => Right(OutputFormat.Mermaid)
-        case Seq(other)     => Left(s"unknown format: $other (expected dot or mermaid)")
-        case _              => Left("expected exactly one format")
+        case Seq("packages") => Right(ReportScope.Packages)
+        case Seq("files")    => Right(ReportScope.Files)
+        case Seq(other)      => Left(s"unknown scope: $other (expected packages or files)")
+        case _               => Left("expected exactly one scope")
+
+  enum ReportFormat:
+    case Json, Table
+
+  given TokensReader.Simple[ReportFormat] with
+    def shortName: String = "format"
+    def read(strs: Seq[String]): Either[String, ReportFormat] =
+      strs match
+        case Seq("json")  => Right(ReportFormat.Json)
+        case Seq("table") => Right(ReportFormat.Table)
+        case Seq(other)   => Left(s"unknown format: $other (expected json or table)")
+        case _            => Left("expected exactly one format")
 
   @main
   def `export`(
@@ -129,41 +144,9 @@ object Main:
                   0
 
   @main
-  def draw(
-      @arg(short = 'g') granularity: Aggregator.Level,
-      @arg(short = 'f') format: OutputFormat,
-      @arg(short = 'i') include: Seq[String],
-      @arg(short = 'e') exclude: Seq[String],
-      @arg(short = 'c') collapse: Seq[String],
-      @arg(name = "skip-tests") skipTests: mainargs.Flag,
-      @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
-      @arg(short = 'o') out: Option[String],
-      leftover: Leftover[String]
-  ): Int =
-    testPatternsOrError(skipTests.value, testPattern) match
-      case Left(err) =>
-        System.err.println(s"error: $err")
-        1
-      case Right(patterns) =>
-        runOnGraph(leftover.value, out) { graph =>
-          val filtered = Filter(graph, include, exclude)
-          val withoutTests = patterns.map(TestFilter.skipTests(filtered, _)).getOrElse(filtered)
-          if withoutTests.nodes.isEmpty then Left("no nodes remain after filtering")
-          else
-            parseRules(collapse).flatMap { rules =>
-              val (nodes, edges) = Aggregator.aggregate(withoutTests, granularity)
-              val (collapsedNodes, collapsedEdges) = Collapser.collapse(nodes, edges, rules)
-              val g = GraphBuilder.build(collapsedNodes, collapsedEdges)
-              val cycles = CycleDetector.detect(g)
-              val content = format match
-                case OutputFormat.Dot     => DotExporter.render(g, cycles)
-                case OutputFormat.Mermaid => MermaidExporter.render(g, cycles)
-              Right(content)
-            }
-        }
-
-  @main
   def report(
+      @arg(short = 's', name = "scope") scope: ReportScope,
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Json,
       @arg(short = 'i') include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],
@@ -177,14 +160,19 @@ object Main:
         System.err.println(s"error: $err")
         1
       case Right(patterns) =>
+        val metricsScope = scope match
+          case ReportScope.Packages => MetricsCalculator.Scope.Packages
+          case ReportScope.Files    => MetricsCalculator.Scope.Files
         runOnGraph(leftover.value, out) { graph =>
-          val filtered = Filter(graph, include, exclude)
-          val withoutTests = patterns.map(TestFilter.skipTests(filtered, _)).getOrElse(filtered)
-          if withoutTests.nodes.isEmpty then Left("no nodes remain after filtering")
-          else
-            parseRules(collapse).map { rules =>
-              Reporter.run(graph, include, exclude, rules, patterns).toJson(spaces = 2, sort = true)
-            }
+          parseRules(collapse).flatMap { rules =>
+            MetricsCalculator.run(graph, metricsScope, include, exclude, rules, patterns) match
+              case Left(err) => Left(err)
+              case Right(metricsReport) =>
+                val content = format match
+                  case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
+                  case ReportFormat.Table => ReportTable.render(metricsReport)
+                Right(content)
+          }
         }
 
   /** Reads one json input (file or stdin) and runs `f` on it; errors go to stderr, exit 1. */

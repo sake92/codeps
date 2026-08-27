@@ -1,7 +1,7 @@
 package ba.sake.codeps.semanticdb
 
 import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
-import scala.meta.internal.semanticdb.{Access, PrivateAccess, PrivateThisAccess, Range, SymbolInformation, TextDocument, TextDocuments}
+import scala.meta.internal.semanticdb.*
 
 object SemanticDbParser:
 
@@ -28,36 +28,109 @@ object SemanticDbParser:
 
   private def documentNodes(doc: TextDocument, root: java.nio.file.Path): Set[Node] =
     val file = fileId(doc.uri, root)
+    // raw symbols of all sealed types: members whose owner chain (or class parents)
+    // contains one of these belong to a sealed hierarchy
+    val sealedOwners = doc.symbols.iterator.filter(_.isSealed).map(_.symbol).toSet
     var nodes = Set.empty[Node]
     nodes += Node(file, NodeKind.file)
     for s <- doc.symbols do
-      symbolNodeId(s).foreach { case (id, kind, parentId) =>
-        kind match
-          case NodeKind.`package` | NodeKind.file => nodes += Node(id, kind)
-          case _                                  => nodes += Node(id, kind, parentId, Some(file))
-      }
+      symbolNode(s, file, sealedOwners).foreach(nodes += _)
     // package declarations (e.g. "com/example/util/") are emitted as definition occurrences, not symbols
     for occ <- doc.occurrences do
       if occ.role.isDefinition && occ.symbol.endsWith("/") then
         nodes += Node(occ.symbol.stripSuffix("/").replace('/', '.'), NodeKind.`package`)
     nodes
 
-  /** Node (id, kind, parentId) of a defined symbol, if it is not noise (locals, params, constructors).
+  /** Node of a defined symbol, if it is not noise (locals, params, constructors).
     * Class-scoped private symbols (`private`, `private[this]`) are skipped entirely: they are
     * implementation details that can never create cross-package dependencies, so they only add
     * noise at the member/type levels. Their references are collapsed into the nearest non-private
-    * ancestor (see `collapseUp`). Package-private (`private[pkg]`) and `protected` symbols are kept:
-    * they can be referenced across files/packages.
-    */
-  private def symbolNodeId(s: SymbolInformation): Option[(String, NodeKind, Option[String])] =
+    * ancestor (see `collapseUp`). Package-private (`private[pkg]`) and `protected` symbols are kept,
+    * but are NOT exposed (`isExposed = false`): they are not part of the externally visible surface.
+    * `isExposed`/`ports`/`mutPorts` are resolved here — the Scala adapter's weight rules
+    * (sealed/given/var/...) never leak into the metrics layer. */
+  private def symbolNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Option[Node] =
     val sym = s.symbol
-    if sym.endsWith("/") then Some((sym.stripSuffix("/").replace('/', '.'), NodeKind.`package`, None)) // package decl
+    if sym.endsWith("/") then Some(Node(sym.stripSuffix("/").replace('/', '.'), NodeKind.`package`))
     else if isClassPrivate(s.access) then None
     else if s.kind.isLocal then None
     else if isConstructor(sym) then None
-    else if isTypeKind(s.kind) then Some((typeId(sym), NodeKind.`type`, parentOf(sym)))
-    else if isMemberKind(s.kind) then Some((memberId(sym), NodeKind.member, parentOf(sym)))
+    else if isTypeKind(s.kind) then Some(typeNode(s, file, sealedOwners))
+    else if isMemberKind(s.kind) then Some(memberNode(s, file, sealedOwners))
     else None // PARAMETER, SELF_PARAMETER, TYPE_PARAMETER, ... — also PACKAGE_OBJECT: package objects ("foo.package.") are deliberately not emitted as nodes, so references to them dangle and are pruned by withoutDanglingEdges; acceptable because they are rare and their members still surface
+
+  private def typeNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Node =
+    Node(typeId(s.symbol), NodeKind.`type`, parentOf(s.symbol), Some(file),
+      isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s))
+
+  private def memberNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Node =
+    Node(memberId(s.symbol), NodeKind.member, parentOf(s.symbol), Some(file),
+      isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s))
+
+  // ---------- exposure (the Scala adapter's weight rules) ----------
+
+  /** Public API surface: default (no modifier) or explicit `public` access counts as
+    * exposed. `private[pkg]` and `protected` members are internal to the package or
+    * subclass world and are NOT part of the externally visible surface. Var setters
+    * (`x_=`) are compiler accessors for a `var` — the getter represents the member,
+    * so the setter is never part of the surface (it still exists as a node, so
+    * assignment edges stay visible). */
+  private def isExposed(s: SymbolInformation): Boolean =
+    if s.displayName.endsWith("_=") then false
+    else
+      s.access match
+        case Access.Empty | _: PublicAccess => true
+        case _                             => false
+
+  /** Weighted exposure contribution: types 3, defs/vals 1, members of a sealed
+    * hierarchy 0.5 (external code cannot extend them, so the effective surface is
+    * smaller), givens/implicits a flat +1 (ambiently public via implicit search —
+    * separate accounting, never folded into the type/def weight). */
+  private def portsOf(s: SymbolInformation, sealedOwners: Set[String]): Double =
+    if !isExposed(s) then 0.0
+    else if s.isGiven || s.isImplicit then 1.0
+    else if s.isSealed || inSealedHierarchy(s, sealedOwners) then 0.5
+    else if s.kind.isField || s.kind.isMethod || s.kind.isMacro then 1.0
+    else 3.0 // types
+
+  /** Mutable-state exposure: a `var`, or a val/def whose type is a known mutable
+    * collection (`scala.collection.mutable.*`, `scala.Array`) — a coupling channel
+    * that never shows up as a graph edge. Givens/implicits are never mutable state:
+    * the compiler marks them `VAR` spuriously, and Scala 3 does not allow `given var`. */
+  private def mutPortsOf(s: SymbolInformation): Double =
+    if !isExposed(s) || s.isGiven || s.isImplicit then 0.0
+    else if s.isVar then 1.0
+    else if isMutableCollectionType(s.signature) then 1.0
+    else 0.0
+
+  /** True when the symbol is sealed itself, its owner chain contains a sealed type
+    * (a member of a sealed hierarchy), or one of its class parents is sealed (a
+    * subtype within the hierarchy). */
+  private def inSealedHierarchy(s: SymbolInformation, sealedOwners: Set[String]): Boolean =
+    var cur = rawOwnerOf(s.symbol)
+    var guard = 0
+    while cur.nonEmpty && guard < 100 do
+      if sealedOwners.contains(cur.get) then return true
+      cur = rawOwnerOf(cur.get)
+      guard += 1
+    s.signature match
+      case sig: ClassSignature =>
+        sig.parents.exists {
+          case tr: TypeRef => sealedOwners.contains(tr.symbol)
+          case _           => false
+        }
+      case _ => false
+
+  private def isMutableCollectionType(sig: Signature): Boolean = sig match
+    case v: ValueSignature     => isMutableCollection(v.tpe)
+    case m: MethodSignature    => isMutableCollection(m.returnType) // the return type
+    case _                     => false
+
+  private def isMutableCollection(tpe: Type): Boolean = tpe match
+    case tr: TypeRef =>
+      tr.symbol == "scala/Array#" || tr.symbol.startsWith("scala/collection/mutable/")
+    case bt: ByNameType => isMutableCollection(bt.tpe) // def without parens: by-name value
+    case _              => false
 
   /** True for class-scoped private access (`private`, `private[this]`); `private[pkg]` and `protected` are kept. */
   private def isClassPrivate(access: Access): Boolean =

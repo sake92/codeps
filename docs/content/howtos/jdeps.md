@@ -11,9 +11,10 @@ It ships with every JDK, so this workflow needs **no extra tooling** — great f
 or when you can't (or don't want to) enable SemanticDB.
 Your build already produced the `.class` files; the only extra step is piping `jdeps` output to a text file.
 
-jdeps data is type-level only: it has no file or member nodes, so on jdeps graphs
-`-g type` and `-g member` are the identity, `-g file` behaves like `-g package`
-(see the [granularity table](/reference/cli.html#granularity)).
+jdeps data is type-level only: it has no file or member nodes, so `codeps report --scope files`
+errors on jdeps data (`no file nodes found in the input`) — use `--scope packages` instead.
+It also carries no access information, so all nodes have `ports`/`mut_ports` 0 and
+`utilization` `null` — a known gap, not silently meaningful.
 
 ## Generating the input
 
@@ -38,30 +39,21 @@ that are not themselves defined in the input.
 
 ## Analyzing
 
-`codeps draw` renders the graph at the granularity you pick:
+`codeps report` reads the JSON graph and emits the flat metrics report over the
+package graph:
 
 ```shell
-codeps draw -g type -f dot deps.json
+codeps report --scope packages deps.json
 ```
 
 or in one pipe:
 
 ```shell
-codeps export --from jdeps jdeps.txt | codeps draw -g type -f dot -
+codeps export --from jdeps jdeps.txt | codeps report --scope packages -
 ```
 
-For cycle analysis at every granularity in one run, use `codeps report` —
-see the [Cycle analysis report](/reference/report.html).
-
-Example output:
-
-```dot
-digraph deps {
-  "com.example.app" -> "com.example.modules.module2";
-  "com.example.modules.module1" -> "com.example.util";
-  "com.example.modules.module2" -> "com.example.modules.module1";
-}
-```
+Cycle knots come with simulated cut candidates, and the surface lists fan_in/fan_out,
+orphans and articulation points — see the [Metrics report](/reference/report.html).
 
 ## Filtering JDK noise
 
@@ -69,7 +61,7 @@ The raw `jdeps -verbose:class` output includes edges to `java.*`, `scala.*` and 
 platform classes. Exclude them to keep the graph focused on your code:
 
 ```shell
-codeps draw -g type -f dot -i com.example -e java.** -e scala.** deps.json
+codeps report --scope packages -i com.example -e java.** -e scala.** deps.json
 ```
 
 > Note: excludes are package patterns matched against each node's root package —
@@ -80,7 +72,7 @@ codeps draw -g type -f dot -i com.example -e java.** -e scala.** deps.json
 Just like with SemanticDB input, `-c/--collapse` rules apply:
 
 ```shell
-codeps draw -g package -f dot -c com.example.modules.** deps.json
+codeps report --scope packages -i com.example -c com.example.modules.** deps.json
 ```
 
 See [CLI reference](/reference/cli.html) for the full option list.

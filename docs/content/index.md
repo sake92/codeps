@@ -10,49 +10,62 @@ pagination:
 codeps is a **code dependency analyzer** for JVM projects (Java and Scala).
 It works in two steps: `codeps export` parses existing compiler output —
 [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` —
-into a [common JSON graph format](/reference/json-input.html); then `codeps draw`
-renders it as [DOT or Mermaid](/reference/export-formats.html) at any granularity
-(package, file, type or member), and `codeps report` emits a multi-level
-[cycle analysis report](/reference/report.html) with grades and suggestions.
+into a [common JSON graph format](/reference/json-input.html); then `codeps report`
+emits a flat [metrics report](/reference/report.html) — cycle knots with simulated
+cut candidates, per-node exposed-surface metrics, orphans and articulation points —
+over the **packages** of the whole graph, or over the **files** of the packages you select.
 
 No build-system integration needed: your local build tools already produce the inputs —
 `.semanticdb` files from a Scala compiler with SemanticDB enabled, and `.class` files for the JDK's `jdeps` —
 codeps just reads them.
-
-**Try it right now** — the interactive graph viewer runs in your browser, no install needed.
-Load a graph JSON produced by `codeps export`, or an analysis report from `codeps report`
-(with cycle highlighting, severity grades and suggestions). Then explore: layouts, DSM matrix
-view, filtering, degree analysis, and scoped drill-down (double-click a node, click an edge,
-breadcrumbs back).
-
-<p role="group">
-  <a href="/demo/cytoscape-graph.html" role="button">Open the interactive demo</a>
-  <a href="/tutorials/quickstart.html" role="button" class="secondary">Quickstart</a>
-</p>
 
 ## Features
 
 - **Two input formats:**
   - [SemanticDB](/howtos/semdb.html) — detailed, from Scala compiler output (`.semanticdb` files): package/file/type/member nodes
   - [jdeps](/howtos/jdeps.html) — from the JDK's own `jdeps -verbose:class` output, no extra tooling needed
-- **Four granularities** — render the graph at `package`, `file`, `type` or `member` level with `-g`
-- **Cycle analysis** — `codeps report` grades every cycle at every granularity (`bad` / `meh` / `fine`) with suggestions what to fix
+- **Two scopes** — `--scope packages` for the whole package graph, `--scope files` for the file graph of the packages you select with `-i`
+- **Cycle knots with simulated cuts** — every multi-member strongly connected component is reported with its `ext_fan_in`, the cheapest internal edges to test, and what actually happens when you cut them (`resolved` / `partial` / `none`) — plus a greedy `min_cuts_estimate`
+- **Exposed-surface metrics** — per-node `ports` / `mut_ports` / `exposure` / `utilization` (sealed/given/var rules resolved by the SemanticDB exporter)
+- **Orphans and articulation points** — dead-code-removal candidates and the narrowest waists of the dependency graph
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`)
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
-- **Two output formats** — [DOT and Mermaid](/reference/export-formats.html)
-- **Interactive demo** — a standalone [graph viewer](/demo/cytoscape-graph.html): layouts, filtering, degree analysis, cycle highlighting, package suggestions, scoped drill-down (double-click a node, click an edge, breadcrumbs back)
+- **Two output formats** — `json` (default, machine-readable) and `table` (plain aligned text)
 
 ## Quick example
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g package -f dot -
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
 ```
 
-```dot
-digraph deps {
-  "com.example.app" -> "com.example.modules.module2";
-  "com.example.modules.module1" -> "com.example.util";
-  "com.example.modules.module2" -> "com.example.modules.module1";
+```json
+{
+  "scope": "packages",
+  "generated_at": "2026-08-27T10:00:00+02:00",
+  "summary": {
+    "nodes": 5,
+    "edges": 4,
+    "nodes_in_cycles": 2,
+    "orphans": 1,
+    "critical_path_length": 2
+  },
+  "knots": [
+    {
+      "id": "scc:com.example.modules.module1",
+      "members": ["com.example.modules.module1", "com.example.modules.module2"],
+      "size": 2,
+      "ext_fan_in": 1,
+      "min_cuts_estimate": 1,
+      "cut_candidates": [
+        { "edge": ["com.example.modules.module2", "com.example.modules.module1"], "weight": 2, "effect": "resolved", "new_size": 1 }
+      ]
+    }
+  ],
+  "surface": [
+    { "node": "com.example.app", "fan_in": 0, "fan_out": 1, "ports": 3, "mut_ports": 0, "exposure": 3, "utilization": null }
+  ],
+  "orphans": ["org.thirdparty"],
+  "articulation_points": ["com.example.modules.module1"]
 }
 ```
 
@@ -66,4 +79,3 @@ digraph deps {
 - [Reference](/reference) — complete descriptions of commands, config, and internals
   {% for tut in site.data.project.references %}- [{{ tut.label }}]({{ tut.url}})
   {% endfor %}
-

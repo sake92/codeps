@@ -2,7 +2,7 @@ package ba.sake.codeps.semanticdb
 
 import ba.sake.codeps.testing.FixtureCompiler
 import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
-import scala.meta.internal.semanticdb.{Access, PrivateAccess, PrivateThisAccess, PrivateWithinAccess, ProtectedAccess, PublicAccess, Range, SymbolInformation, SymbolOccurrence, TextDocument, TextDocuments}
+import scala.meta.internal.semanticdb.{Access, ByNameType, ClassSignature, PrivateAccess, PrivateThisAccess, PrivateWithinAccess, ProtectedAccess, PublicAccess, Range, Signature, SymbolInformation, SymbolOccurrence, TextDocument, TextDocuments, Type, TypeRef, ValueSignature}
 
 class SemanticDbParserSpec extends munit.FunSuite:
 
@@ -32,13 +32,14 @@ class SemanticDbParserSpec extends munit.FunSuite:
     assert(ids.contains("org.thirdparty.Ext#name"))
     // files: workspace-relative paths, one per source file
     val files = deps.nodes.filter(_.kind == NodeKind.file).map(_.id)
-    assertEquals(files.size, 7)
+    assertEquals(files.size, 8) // 7 original + Exposure.scala
     assert(files.exists(_.endsWith("/com/example/app/Main.scala")))
     assert(files.exists(_.endsWith("/org/thirdparty/Ext.scala")))
     assert(files.exists(_.endsWith("/com/example/util/HelperSpec.scala")))
     assert(files.exists(_.endsWith("/com/example/specs/OnlyTestsHereSpec.scala")))
+    assert(files.exists(_.endsWith("/com/example/util/Exposure.scala")))
     // type nodes carry parent package and file
-    assert(deps.nodes.contains(Node("com.example.util.Helper", NodeKind.`type`, Some("com.example.util"), Some(files.find(_.endsWith("Helper.scala")).get))))
+    assert(deps.nodes.contains(Node("com.example.util.Helper", NodeKind.`type`, Some("com.example.util"), Some(files.find(_.endsWith("Helper.scala")).get), isExposed = true, ports = 3.0, mutPorts = 0.0)))
   }
 
   test("edges are member-level and internal only after pruning") {
@@ -89,13 +90,13 @@ class SemanticDbParserSpec extends munit.FunSuite:
     )
     val deps = SemanticDbParser.parse(TextDocuments(Seq(doc)).toByteArray, root).toOption.get.withoutDanglingEdges
     // top-level member: no '#' in the id, parent is the package
-    assert(deps.nodes.contains(Node("com.example.a.topLevelHelper", NodeKind.member, Some("com.example.a"), Some(file))))
+    assert(deps.nodes.contains(Node("com.example.a.topLevelHelper", NodeKind.member, Some("com.example.a"), Some(file), isExposed = true, ports = 1.0, mutPorts = 0.0)))
     // object member: dot of the object separator becomes '#', parent is the object
-    assert(deps.nodes.contains(Node("com.example.app.Main#main", NodeKind.member, Some("com.example.app.Main"), Some(file))))
+    assert(deps.nodes.contains(Node("com.example.app.Main#main", NodeKind.member, Some("com.example.app.Main"), Some(file), isExposed = true, ports = 1.0, mutPorts = 0.0)))
     // the object itself is a type node
-    assert(deps.nodes.contains(Node("com.example.app.Main", NodeKind.`type`, Some("com.example.app"), Some(file))))
+    assert(deps.nodes.contains(Node("com.example.app.Main", NodeKind.`type`, Some("com.example.app"), Some(file), isExposed = true, ports = 3.0, mutPorts = 0.0)))
     // the reference anchored on the object resolves to the object's type node id, not a dangling '#' id
-    assert(deps.nodes.contains(Node("com.example.app.Deps", NodeKind.`type`, Some("com.example.app"), Some(file))))
+    assert(deps.nodes.contains(Node("com.example.app.Deps", NodeKind.`type`, Some("com.example.app"), Some(file), isExposed = true, ports = 3.0, mutPorts = 0.0)))
     assert(deps.edges.contains(Edge("com.example.app.Main", "com.example.app.Deps")))
   }
 
@@ -159,4 +160,72 @@ class SemanticDbParserSpec extends munit.FunSuite:
     assert(deps.edges.contains(Edge("com.example.a.Priv#prot", "com.example.a.Priv")))
     // reference to the private top-level object produces no edge
     assert(!deps.edges.exists(_.target == "com.example.a.Hidden"))
+  }
+
+  test("exposure fields: public/private access, sealed, given, var, mutable collections") {
+    val root = os.pwd.toNIO
+    val file = "src/com/example/a/Exp.scala"
+    def sym(symbol: String, kind: SymbolInformation.Kind, access: Access = Access.Empty,
+            properties: Int = 0, signature: Signature = Signature.Empty, displayName: String = ""): SymbolInformation =
+      SymbolInformation(symbol = symbol, kind = kind, displayName = displayName, access = access,
+        properties = properties, signature = signature)
+    val doc = TextDocument(
+      uri = file,
+      symbols = Seq(
+        sym("com/example/a/Exp#", SymbolInformation.Kind.CLASS),
+        sym("com/example/a/Exp#plain().", SymbolInformation.Kind.METHOD, displayName = "plain"),
+        sym("com/example/a/Exp#hidden().", SymbolInformation.Kind.METHOD, access = PrivateAccess(), displayName = "hidden"),
+        sym("com/example/a/Exp#prot().", SymbolInformation.Kind.METHOD, access = ProtectedAccess(), displayName = "prot"),
+        sym("com/example/a/Sealed#", SymbolInformation.Kind.TRAIT, properties = SymbolInformation.Property.SEALED.value),
+        sym("com/example/a/Sealed#m().", SymbolInformation.Kind.METHOD, displayName = "m"),
+        sym("com/example/a/Impl#", SymbolInformation.Kind.CLASS,
+          signature = ClassSignature(None, Seq(TypeRef(Type.Empty, "com/example/a/Sealed#", Nil)), Type.Empty, None)),
+        sym("com/example/a/Exp#counter.", SymbolInformation.Kind.FIELD, properties = SymbolInformation.Property.VAR.value, displayName = "counter"),
+        sym("com/example/a/Exp#counter_=().", SymbolInformation.Kind.METHOD, displayName = "counter_="),
+        sym("com/example/a/Exp#buffer.", SymbolInformation.Kind.FIELD, displayName = "buffer",
+          signature = ValueSignature(TypeRef(Type.Empty, "scala/collection/mutable/ArrayBuffer#", Nil))),
+        sym("com/example/a/Exp#fresh().", SymbolInformation.Kind.METHOD, displayName = "fresh",
+          signature = ValueSignature(ByNameType(TypeRef(Type.Empty, "scala/collection/mutable/Buffer#", Nil)))),
+        sym("com/example/a/Exp#givenOrd.", SymbolInformation.Kind.METHOD,
+          properties = SymbolInformation.Property.IMPLICIT.value | SymbolInformation.Property.VAR.value, displayName = "givenOrd")
+      ),
+      occurrences = Seq.empty
+    )
+    val nodes = SemanticDbParser.parse(TextDocuments(Seq(doc)).toByteArray, root).toOption.get.nodes
+    def node(id: String) = nodes.find(_.id == id).get
+    assertEquals(node("com.example.a.Exp"), Node("com.example.a.Exp", NodeKind.`type`, Some("com.example.a"), Some(file), isExposed = true, ports = 3.0, mutPorts = 0.0))
+    assertEquals(node("com.example.a.Exp#plain"), Node("com.example.a.Exp#plain", NodeKind.member, Some("com.example.a.Exp"), Some(file), isExposed = true, ports = 1.0, mutPorts = 0.0))
+    assert(!nodes.exists(_.id == "com.example.a.Exp#hidden")) // class-private: dropped, as before
+    assertEquals(node("com.example.a.Exp#prot").isExposed, false) // protected: not exposed
+    assertEquals(node("com.example.a.Sealed"), Node("com.example.a.Sealed", NodeKind.`type`, Some("com.example.a"), Some(file), isExposed = true, ports = 0.5, mutPorts = 0.0))
+    assertEquals(node("com.example.a.Sealed#m"), Node("com.example.a.Sealed#m", NodeKind.member, Some("com.example.a.Sealed"), Some(file), isExposed = true, ports = 0.5, mutPorts = 0.0)) // in sealed hierarchy
+    assertEquals(node("com.example.a.Impl").ports, 0.5) // extends a sealed trait: part of the sealed hierarchy
+    assertEquals(node("com.example.a.Exp#counter").mutPorts, 1.0) // var
+    assertEquals(node("com.example.a.Exp#counter_=").isExposed, false) // var setter: accessor, not surface
+    assertEquals(node("com.example.a.Exp#buffer").mutPorts, 1.0) // mutable collection val
+    assertEquals(node("com.example.a.Exp#fresh").mutPorts, 1.0) // getter returning mutable (by-name signature)
+    assertEquals(node("com.example.a.Exp#givenOrd"), Node("com.example.a.Exp#givenOrd", NodeKind.member, Some("com.example.a.Exp"), Some(file), isExposed = true, ports = 1.0, mutPorts = 0.0)) // given: flat +1, and never mut (compiler marks givens VAR spuriously)
+  }
+
+  test("real fixture: Exposure.scala resolves exposure on compiled output") {
+    val root = os.pwd.toNIO
+    val deps = FixtureCompiler.semanticdbFiles.foldLeft(DepsGraph.empty) { case (d, f) =>
+      d.merge(SemanticDbParser.parse(os.read.bytes(f), root).toOption.get)
+    }
+    val nodes = deps.nodes.map(n => n.id -> n).toMap
+    assertEquals(nodes("com.example.util.SealedBase").ports, 0.5) // sealed trait
+    assertEquals(nodes("com.example.util.SealedBase#sealedMethod").ports, 0.5) // member of sealed hierarchy
+    assertEquals(nodes("com.example.util.SealedImpl").ports, 0.5) // extends the sealed trait
+    assertEquals(nodes("com.example.util.Exposure#counter").mutPorts, 1.0) // var
+    assertEquals(nodes("com.example.util.Exposure#`counter_=`").isExposed, false) // var setter: not surface
+    assertEquals(nodes("com.example.util.Exposure#buffer").mutPorts, 1.0) // mutable val
+    assertEquals(nodes("com.example.util.Exposure#fresh").mutPorts, 1.0) // mutable getter (by-name signature)
+    assertEquals(nodes("com.example.util.Exposure#plain").ports, 1.0)
+    assertEquals(nodes("com.example.util.Exposure#pkgPriv").isExposed, false) // private[util]
+    assertEquals(nodes("com.example.util.Exposure#prot").isExposed, false) // protected
+    assert(!nodes.contains("com.example.util.Exposure#hidden")) // private: dropped
+    assertEquals(nodes("com.example.util.Exposure").ports, 3.0) // the class itself
+    assertEquals(nodes("com.example.util.Exposure#intOrdering").ports, 1.0) // given: flat +1
+    assertEquals(nodes("com.example.util.Exposure#intOrdering").mutPorts, 0.0) // givens are not mutable state
+    assertEquals(nodes("com.example.util.Exposure#stringConv").ports, 1.0) // implicit def
   }

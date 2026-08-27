@@ -10,9 +10,12 @@ SemanticDB is a data format describing the semantic information of Scala (and Ja
 produced by the Scala compiler (`-Xsemanticdb` flag) or tools like scala-cli.
 
 Scala data is the richest codeps input: it carries `package`, `file`, `type` and `member`
-nodes, so the analyzer can render the graph at any of the four granularities
-(`-g package|file|type|member`). Only the project's **own symbols** are exported —
-references to external libraries and the JDK are dropped by the exporter.
+nodes, so the analyzer can produce metrics at both scopes — the package graph and the file
+graph of a selected package. It also carries per-symbol access/kind information, which the
+exporter turns into the [exposed-surface metrics](/reference/report.html#exposed-surface)
+(`ports`/`mut_ports`: sealed hierarchies, givens, vars and mutable collections are all
+resolved at export time). Only the project's **own symbols** are exported — references to
+external libraries and the JDK are dropped by the exporter.
 
 ## Generating SemanticDB files
 
@@ -55,49 +58,29 @@ codeps export --from semanticdb classes/META-INF/semanticdb --root . -o deps.jso
 
 ## Analyzing
 
-`codeps draw` reads the JSON graph and renders it at the granularity you pick:
+`codeps report` reads the JSON graph and emits the flat metrics report:
 
 ```shell
 codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps draw -g package -f dot deps.json
+codeps report --scope packages deps.json
 ```
 
-- `-g` is the aggregation level — all four are available on SemanticDB data: `package`
-  (the classic package view), `file`, `type` or `member`
-- `-f` is the output format: `dot` or `mermaid`
+- `--scope packages` — metrics over the whole package graph: cycle knots with simulated
+  cut candidates, per-package exposed-surface (`ports`/`mut_ports`/`exposure`/`utilization`),
+  orphans and articulation points
+- `--scope files` — the same metrics over the **file graph** of the packages selected with
+  `-i`; e.g. `-i com.example` descends into `com.example` and everything below it
 - `-i`/`-e`/`-c` filter and collapse, e.g. `-i com.example` keeps only your packages
+- `--format table` renders the same data as plain aligned text
 
-No intermediate file needed — pipe `export` straight into `draw` (the `-` tells
-`draw` to read the JSON from stdin):
-
-```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps draw -g type -f mermaid -
-```
-
-Example `-g package` output:
-
-```dot
-digraph deps {
-  "com.example.app" -> "com.example.modules.module2";
-  "com.example.modules.module1" -> "com.example.util";
-  "com.example.modules.module2" -> "com.example.modules.module1";
-}
-```
-
-Circular dependencies are reported as `// cycles:` / `%% cycles:` comments in the output
-(see [Export formats](/reference/export-formats.html)).
-
-For a deeper look at cycles, `codeps report` analyzes the graph at **all four
-granularities in one run** and grades every cycle (`bad` / `meh` / `fine`) with
-suggestions what to fix:
+No intermediate file needed — pipe `export` straight into `report` (the `-` tells
+`report` to read the JSON from stdin):
 
 ```shell
-codeps report deps.json -o report.json
+codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
 ```
 
-The report JSON can be loaded into the [interactive demo](/demo/cytoscape-graph.html)
-for cycle highlighting, and is shaped for agents to consume directly — see the
-[Cycle analysis report](/reference/report.html).
+See the [Metrics report](/reference/report.html) for the full field reference.
 
 ## Filtering and collapsing
 
@@ -106,16 +89,16 @@ itself and everything below it; excludes win over includes.
 
 ```shell
 # only com.example packages, no third-party or JDK noise
-codeps draw -g package -f dot -i com.example deps.json
+codeps report --scope packages -i com.example deps.json
 
 # com.example.* minus internal helpers
-codeps draw -g package -f dot -i com.example -e com.example.internal deps.json
+codeps report --scope packages -i com.example -e com.example.internal deps.json
 ```
 
 Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:
 
 ```shell
-codeps draw -g package -f dot -i com.example -c com.example.modules.** deps.json
+codeps report --scope packages -i com.example -c com.example.modules.** deps.json
 ```
 
 When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.

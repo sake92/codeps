@@ -59,3 +59,18 @@ class ModelSpec extends munit.FunSuite:
     )
     assertEquals(g.withoutDanglingEdges.edges, Set(Edge("com.example.a", "com.example.a")))
   }
+
+  test("node exposure fields round-trip through json") {
+    val n = Node("p.a.Foo", NodeKind.`type`, Some("p.a"), Some("src/Foo.scala"), isExposed = false, ports = 3.0, mutPorts = 1.0)
+    val json = JsonRW[Node].write(n).render()
+    assert(json.contains("\"isExposed\":false"))
+    assert(json.contains("\"ports\":3"))
+    assert(json.contains("\"mutPorts\":1"))
+    val back = json.parseJson[Node]
+    assertEquals(back, n)
+  }
+
+  test("node exposure fields default when missing in json") {
+    val n = """{"id":"p.a","kind":"package"}""".parseJson[Node]
+    assertEquals(n, Node("p.a", NodeKind.`package`))
+  }
