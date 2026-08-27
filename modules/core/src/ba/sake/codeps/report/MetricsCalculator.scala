@@ -113,7 +113,7 @@ object MetricsCalculator:
       scope = scope match
         case Scope.Packages => "packages"
         case Scope.Files    => "files",
-      generatedAt = java.time.OffsetDateTime.now().toString,
+      generatedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString,
       summary = Summary(
         nodes = sg.nodes.size,
         edges = sg.edges.size,

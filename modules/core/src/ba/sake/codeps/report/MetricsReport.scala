@@ -8,7 +8,7 @@ import org.typelevel.jawn.ast.{JNull, JNum, JObject, JValue}
   * node/edge list on each run, never cached. */
 case class MetricsReport(
     scope: String, // "packages" | "files"
-    generatedAt: String, // ISO8601
+    generatedAt: String, // ISO8601, UTC, second precision (trailing Z)
     summary: Summary,
     cycles: Seq[Cycle],
     surface: Seq[SurfaceRow],
