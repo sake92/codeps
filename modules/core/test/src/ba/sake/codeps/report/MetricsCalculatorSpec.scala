@@ -227,7 +227,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(cycle.minCutsEstimate, 2)
   }
 
-  test("cycles sorted by size desc, then ext_fan_in desc, then id") {
+  test("cycles sorted by size desc, then extFanIn desc, then id") {
     val graph = DepsGraph(
       nodes = Set(
         Node("p1", NodeKind.`package`), Node("p2", NodeKind.`package`),

@@ -19,7 +19,7 @@ class ReportTableSpec extends munit.FunSuite:
     val text = ReportTable.render(report)
     assert(text.contains("scope: packages"))
     assert(text.contains("nodes: 2"))
-    assert(text.contains("critical_path_length: 1"))
+    assert(text.contains("criticalPathLength: 1"))
     assert(text.contains("scc:cache"))
     assert(text.contains("scheduler -> cache (w=4)"))
     assert(text.contains("0.33"))

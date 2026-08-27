@@ -6,19 +6,19 @@ object ReportTable:
 
   def render(report: MetricsReport): String =
     val sb = new StringBuilder
-    sb.append(s"scope: ${report.scope}    generated_at: ${report.generatedAt}\n\n")
+    sb.append(s"scope: ${report.scope}    generatedAt: ${report.generatedAt}\n\n")
     sb.append("Summary\n")
     val s = report.summary
     sb.append(
-      s"  nodes: ${s.nodes}    edges: ${s.edges}    nodes_in_cycles: ${s.nodesInCycles}" +
-        s"    orphans: ${s.orphans}    critical_path_length: ${s.criticalPathLength}\n\n"
+      s"  nodes: ${s.nodes}    edges: ${s.edges}    nodesInCycles: ${s.nodesInCycles}" +
+        s"    orphans: ${s.orphans}    criticalPathLength: ${s.criticalPathLength}\n\n"
     )
 
-    sb.append("Cycles (size desc, ext_fan_in desc)\n")
+    sb.append("Cycles (size desc, extFanIn desc)\n")
     if report.cycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
-        Seq("id", "size", "ext_fan_in", "min_cuts_estimate", "cut candidates"),
+        Seq("id", "size", "extFanIn", "minCutsEstimate", "cut candidates"),
         report.cycles.map { k =>
           val cuts = if k.cutCandidates.isEmpty then "—"
           else k.cutCandidates.map(c => s"${c.source} -> ${c.target} (w=${c.weight})").mkString(", ")
@@ -29,7 +29,7 @@ object ReportTable:
 
     sb.append("Surface (utilization asc; — = no fan-in)\n")
     sb.append(table(
-      Seq("node", "fan_in", "fan_out", "ports", "mut_ports", "exposure", "utilization"),
+      Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "utilization"),
       report.surface.map(r => Seq(
         r.node,
         r.fanIn.toString,

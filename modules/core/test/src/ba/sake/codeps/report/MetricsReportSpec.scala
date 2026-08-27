@@ -4,7 +4,7 @@ import ba.sake.tupson.{*, given}
 
 class MetricsReportSpec extends munit.FunSuite:
 
-  test("report json uses the exact snake_case shape from the spec") {
+  test("report json uses the exact camelCase shape from the spec") {
     val report = MetricsReport(
       scope = "packages",
       generatedAt = "2026-08-27T10:00:00Z",
@@ -22,18 +22,20 @@ class MetricsReportSpec extends munit.FunSuite:
     )
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"scope\":\"packages\""))
-    assert(json.contains("\"generated_at\":\"2026-08-27T10:00:00Z\""))
-    assert(json.contains("\"nodes_in_cycles\":34"))
-    assert(json.contains("\"critical_path_length\":7"))
-    assert(json.contains("\"ext_fan_in\":5"))
-    assert(json.contains("\"min_cuts_estimate\":1"))
+    assert(json.contains("\"generatedAt\":\"2026-08-27T10:00:00Z\""))
+    assert(json.contains("\"nodesInCycles\":34"))
+    assert(json.contains("\"criticalPathLength\":7"))
+    assert(json.contains("\"extFanIn\":5"))
+    assert(json.contains("\"minCutsEstimate\":1"))
     assert(json.contains("\"cycles\""))
-    assert(json.contains("\"cut_candidates\""))
+    assert(json.contains("\"cutCandidates\""))
     assert(json.contains("\"edge\":[\"scheduler\",\"cache\"]"))
     assert(!json.contains("\"effect\""))
     assert(!json.contains("\"new_size\""))
-    assert(json.contains("\"mut_ports\":5"))
-    assert(json.contains("\"fan_in\":3"))
+    assert(json.contains("\"mutPorts\":5"))
+    assert(json.contains("\"fanIn\":3"))
+    assert(!json.contains("\"mut_ports\""))
+    assert(!json.contains("\"fan_in\""))
     assert(json.contains("\"exposure\":24"))
     assert(json.contains("\"utilization\":0.33"))
     assert(!json.contains("articulation_points"))

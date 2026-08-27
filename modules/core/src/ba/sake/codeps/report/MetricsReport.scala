@@ -4,7 +4,7 @@ import ba.sake.tupson.JsonRW
 import org.typelevel.jawn.ast.{JNull, JNum, JObject, JValue}
 
 /** The flat metrics report — codeps's only user-facing output (v2.md §5).
-  * Field names are snake_case; every value is derived fresh from the scope's
+  * Field names are camelCase; every value is derived fresh from the scope's
   * node/edge list on each run, never cached. */
 case class MetricsReport(
     scope: String, // "packages" | "files"
@@ -57,7 +57,7 @@ object MetricsReport:
     override def write(value: MetricsReport): JValue =
       obj(
         "scope" -> JsonRW[String].write(value.scope),
-        "generated_at" -> JsonRW[String].write(value.generatedAt),
+        "generatedAt" -> JsonRW[String].write(value.generatedAt),
         "summary" -> JsonRW[Summary].write(value.summary),
         "cycles" -> JsonRW[Seq[Cycle]].write(value.cycles),
         "surface" -> JsonRW[Seq[SurfaceRow]].write(value.surface),
@@ -72,9 +72,9 @@ object Summary:
       obj(
         "nodes" -> JsonRW[Int].write(value.nodes),
         "edges" -> JsonRW[Int].write(value.edges),
-        "nodes_in_cycles" -> JsonRW[Int].write(value.nodesInCycles),
+        "nodesInCycles" -> JsonRW[Int].write(value.nodesInCycles),
         "orphans" -> JsonRW[Int].write(value.orphans),
-        "critical_path_length" -> JsonRW[Int].write(value.criticalPathLength)
+        "criticalPathLength" -> JsonRW[Int].write(value.criticalPathLength)
       )
     override def parse(path: String, jValue: JValue): Summary =
       throw new UnsupportedOperationException("metrics reports are write-only")
@@ -86,9 +86,9 @@ object Cycle:
         "id" -> JsonRW[String].write(value.id),
         "members" -> JsonRW[Seq[String]].write(value.members),
         "size" -> JsonRW[Int].write(value.size),
-        "ext_fan_in" -> JsonRW[Int].write(value.extFanIn),
-        "min_cuts_estimate" -> JsonRW[Int].write(value.minCutsEstimate),
-        "cut_candidates" -> JsonRW[Seq[CutCandidate]].write(value.cutCandidates)
+        "extFanIn" -> JsonRW[Int].write(value.extFanIn),
+        "minCutsEstimate" -> JsonRW[Int].write(value.minCutsEstimate),
+        "cutCandidates" -> JsonRW[Seq[CutCandidate]].write(value.cutCandidates)
       )
     override def parse(path: String, jValue: JValue): Cycle =
       throw new UnsupportedOperationException("metrics reports are write-only")
@@ -108,10 +108,10 @@ object SurfaceRow:
     override def write(value: SurfaceRow): JValue =
       obj(
         "node" -> JsonRW[String].write(value.node),
-        "fan_in" -> JsonRW[Int].write(value.fanIn),
-        "fan_out" -> JsonRW[Int].write(value.fanOut),
+        "fanIn" -> JsonRW[Int].write(value.fanIn),
+        "fanOut" -> JsonRW[Int].write(value.fanOut),
         "ports" -> num(value.ports),
-        "mut_ports" -> num(value.mutPorts),
+        "mutPorts" -> num(value.mutPorts),
         "exposure" -> num(value.exposure),
         "utilization" -> (value.utilization match
           case None    => JNull

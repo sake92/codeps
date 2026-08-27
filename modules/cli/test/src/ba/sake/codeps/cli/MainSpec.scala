@@ -70,10 +70,10 @@ class MainSpec extends munit.FunSuite:
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
     assert(content.contains("\"scope\": \"packages\""))
-    assert(content.contains("\"generated_at\""))
-    assert(""""generated_at": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"""".r.findFirstIn(content).nonEmpty) // second precision, UTC
+    assert(content.contains("\"generatedAt\""))
+    assert(""""generatedAt": "\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"""".r.findFirstIn(content).nonEmpty) // second precision, UTC
     assert(content.contains("\"summary\""))
-    assert(content.contains("\"nodes_in_cycles\""))
+    assert(content.contains("\"nodesInCycles\""))
     assert(content.contains("\"cycles\""))
     assert(!content.contains("\"knots\""))
     assert(content.contains("\"surface\""))
@@ -121,6 +121,27 @@ class MainSpec extends munit.FunSuite:
     assert(res.out.text().startsWith("scope: packages"))
     assert(res.out.text().contains("Summary"))
     assert(res.out.text().contains("Cycles"))
+  }
+
+  test("report on the checked-in cyclic fixture finds the module cycle (homepage example)") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val outJson = os.pwd / "tmp" / "cli-test" / "report-cyclic-fixture.json"
+    os.makeDir.all(outJson / os.up)
+    os.remove.all(outJson)
+    val jsonRes = runCli("report", "--scope", "packages", "--format", "json", cyclic.toString, "-o", outJson.toString)
+    assertEquals(jsonRes.exitCode, 0)
+    val content = os.read(outJson)
+    assert(content.contains("\"scope\": \"packages\""))
+    assert(content.contains("\"id\": \"scc:com.example.modules.module1\""))
+    assert(content.contains("\"cutCandidates\""))
+    assert(content.contains("\"mutPorts\": 0"))
+    assert(content.contains("\"nodesInCycles\": 2"))
+    // table format renders the same cycle with camelCase headers
+    val tableRes = runCli("report", "--scope", "packages", cyclic.toString)
+    assertEquals(tableRes.exitCode, 0)
+    assert(tableRes.out.text().contains("scc:com.example.modules.module1"))
+    assert(tableRes.out.text().contains("mutPorts"))
+    assert(!tableRes.out.text().contains("mut_ports"))
   }
 
   test("report --skip-tests excludes test nodes") {
