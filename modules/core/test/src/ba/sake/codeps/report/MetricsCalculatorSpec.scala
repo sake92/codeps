@@ -133,6 +133,17 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     report.surface.foreach(r => assertEquals(r.utilization, None))
   }
 
+  test("packages scope on package-only graph (jdeps export) reports the packages") {
+    val graph = DepsGraph(
+      Set(Node("com.a", NodeKind.`package`), Node("com.b", NodeKind.`package`)),
+      Set(Edge("com.a", "com.b"))
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    assertEquals(report.summary.nodes, 2)
+    assertEquals(report.summary.edges, 1)
+    assertEquals(report.surface.map(_.node), Seq("com.a", "com.b"))
+  }
+
   test("include/exclude filter the scope before aggregation") {
     val graph = DepsGraph(
       nodes = Set(

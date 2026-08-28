@@ -77,3 +77,11 @@ class TestFilterSpec extends munit.FunSuite:
       )
     )
   }
+
+  test("package-only graph (jdeps export): skip-tests is a no-op") {
+    val pkgOnly = DepsGraph(
+      Set(Node("com.a", NodeKind.`package`), Node("com.b", NodeKind.`package`)),
+      Set(Edge("com.a", "com.b"))
+    )
+    assertEquals(TestFilter.skipTests(pkgOnly, TestFilter.defaultPatterns), pkgOnly)
+  }
