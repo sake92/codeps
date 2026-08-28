@@ -203,6 +203,7 @@ object Main:
       else
         val path = os.Path(input, os.pwd)
         if !os.exists(path) then return Left(s"input path does not exist: $path")
+        if !os.isFile(path) then return Left(s"not a file: $path")
         os.read(path)
     try Right(text.parseJson[DepsGraph])
     catch

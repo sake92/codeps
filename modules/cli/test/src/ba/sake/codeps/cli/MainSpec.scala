@@ -198,6 +198,13 @@ class MainSpec extends munit.FunSuite:
     assert(res.err.text().contains("failed to parse json"))
   }
 
+  test("report on a directory input exits 1 with a clean error") {
+    val res = runCli("report", "--scope", "packages", "testFixtures")
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("not a file"))
+    assert(!res.err.text().contains("Is a directory")) // no raw stack trace
+  }
+
   test("report reads from stdin with '-'") {
     val json = os.read(exportJson("deps.json"))
     val out = os.pwd / "tmp" / "cli-test" / "report-stdin.json"
