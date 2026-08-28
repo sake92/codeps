@@ -101,6 +101,13 @@ class MainSpec extends munit.FunSuite:
     assert(res.err.text().contains("no file nodes found in the input"))
   }
 
+  test("report --scope packages on jdeps data works") {
+    val res = runCli("report", "--scope", "packages", "--format", "json",
+      exportJdepsJson("deps-jdeps-report.json").toString)
+    assertEquals(res.exitCode, 0)
+    assert(res.out.text().contains("com.example.modules.module2"))
+  }
+
   test("report --format table renders the same data as text") {
     val out = os.pwd / "tmp" / "cli-test" / "report-table.txt"
     os.makeDir.all(out / os.up)
