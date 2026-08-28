@@ -12,28 +12,34 @@ that form a two-step pipeline:
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
    emits the [standard JSON export format](/reference/json-input.html). No analysis.
 2. [`report`](#report) — the *analyzer*: consumes that JSON (a file or stdin) and emits the
-   flat [metrics report](/reference/report.html): cycles with simulated cut candidates,
-   per-node exposed-surface metrics and orphans.
+   flat [metrics report](/reference/report.html): cycles with cut solutions, change
+   propagators, per-node exposed-surface metrics and orphans.
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
 ```shell
 curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar <subcommand> [options] <inputs...>
+java -jar codeps.jar <subcommand> [options]
 ```
+
+The CLI is strict: inputs are passed as `--input` flags, there are no positional
+arguments, and unknown flags/values are rejected by the parser itself with a clean
+error and exit 1. `java -jar codeps.jar --version` prints the version (jar manifest
+`Implementation-Version`; `dev` when run from the classpath); `--help` prints usage
+for all subcommands.
 
 The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 
 The steps pipe together — `export` writes the graph to stdout, `report` reads it from stdin (`-`):
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
 ```
 
 ## export
 
 ```shell
-codeps export --from semanticdb|jdeps [--root <dir>] [-o out] <inputs...>
+codeps export --from <semanticdb|jdeps> [--root <dir>] [-o out] --input <path>...
 ```
 
 Pure producer: parses the raw input and emits the standard JSON export graph
@@ -46,15 +52,16 @@ the analyzer's job.
 | `--from` (`-f`) | Input format: `semanticdb` or `jdeps`. Required. |
 | `--root` | semanticdb only. Makes source URIs relative to this directory (default: the current working directory). |
 | `-o` / `--out` | Write the JSON to this file instead of stdout. |
+| `-i` / `--input` | Input path, repeatable. Required (at least one). |
 
-Inputs:
+`--input` values:
 
 - `semanticdb` — **directories**, walked recursively for `*.semanticdb` files.
 - `jdeps` — **files** containing `jdeps -verbose:class` text output.
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps export --from jdeps jdeps.txt
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps export --from jdeps --input jdeps.txt
 ```
 
 Errors (exit 1): `at least one input is required`, `input path does not exist: <path>`,
@@ -69,7 +76,7 @@ warning: failed to parse semanticdb: ...
 ## report
 
 ```shell
-codeps report --scope <packages|files> [--format <json|table>] [-i inc] [-e exc] [-c collapse] [--skip-tests] [-o out] <file|->
+codeps report --scope <packages|files> [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
@@ -77,26 +84,24 @@ Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) a
 flat [Metrics report](/reference/report.html), always exits `0` on success.
 
 `--scope` is required: `packages` analyzes the whole package graph; `files` analyzes the file
-graph of the packages selected with `-i` (jdeps data has no file-level info and errors here).
+graph of the packages selected with `--include` (jdeps data has no file-level info and errors here).
 
 | Option | Description |
 |---|---|
 | `-s` / `--scope` | `packages` or `files`. Required. |
 | `-f` / `--format` | `table` (default) or `json` — the table renders the exact same data as plain aligned text, nothing is recomputed. |
-| `-i` / `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
+| `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
-
-Exactly one input is required — a JSON file, or `-` for stdin, so `export` output
-can be piped straight into `report`:
+| `-i` / `--input` | The JSON graph to analyze — a file, or `-` for stdin, so `export` output can be piped straight in. Required. |
 
 ```shell
-codeps report --scope packages deps.json -o report.json
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope files -i com.example - > files.json
-codeps export --from jdeps jdeps.txt | codeps report --scope packages --format table -
+codeps report --scope packages --input deps.json -o report.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope files --include com.example --input - > files.json
+codeps export --from jdeps --input jdeps.txt | codeps report --scope packages --format table --input -
 ```
 
 The `table` format:
@@ -108,8 +113,12 @@ Summary
   nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
 Cycles (size desc, extFanIn desc)
-  id           size  extFanIn  minCutsEstimate  cut candidates
-  scc:cache    2     5         1                scheduler -> cache (w=4)
+  id           size  extFanIn  minCutsEstimate  solutions
+  scc:cache    2     5         1                1) scheduler -> cache (w=4)  2) cache -> scheduler (w=4)
+
+Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
+  node     fanIn  fanOut  score
+  cache    3      2       2.50
 
 Surface (utilization asc; — = no fan-in)
   node     fanIn  fanOut  ports  mutPorts  exposure  utilization
@@ -120,12 +129,24 @@ Orphans
   DeadUtil.scala
 ```
 
-Errors (exit 1): `exactly one input is required (a json file, or '-' for stdin)`,
-`expected exactly one input (a json file, or '-' for stdin)`,
-`input path does not exist: <path>`, `no nodes remain after filtering`,
+Errors (exit 1): parser errors from mainargs — `Missing argument: --input ...`,
+`Unknown argument(s): ...`, `Duplicate arguments for ...: ...` — and input errors:
+`input path does not exist: <path>`, `not a file: <path>`,
+`no nodes remain after filtering`,
 `no file nodes found in the input (jdeps data has no file-level info)`, invalid
-collapse rules, unknown scope/format values — and malformed or type-invalid
+collapse rules, unknown scope/format values, `invalid SOURCE_DATE_EPOCH: <value>`
+— and malformed or type-invalid
 JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
+
+## Reproducible output
+
+`generatedAt` is the real clock by default. Set `SOURCE_DATE_EPOCH` (the
+[reproducible-builds.org](https://reproducible-builds.org/specs/source-date-epoch/) standard, epoch
+seconds) to pin it for deterministic CI diffs:
+
+```shell
+SOURCE_DATE_EPOCH=1700000000 codeps report --scope packages --input deps.json
+```
 
 ## Include / exclude patterns
 
@@ -135,14 +156,14 @@ topmost package ancestor found by walking `parentId` chains (for a package node,
 that is the package itself). A node is kept when it has no include patterns or
 its root package matches one, and its root package matches no exclude pattern
 (excludes win). An edge is kept only when **both** its endpoints are in the
-resulting universe (self-edges are dropped). With no `-i`, all nodes are kept.
+resulting universe (self-edges are dropped). With no `--include`, all nodes are kept.
 
 ```shell
 # only com.example packages, minus internal helpers
-codeps report --scope packages -i com.example -e com.example.internal deps.json
+codeps report --scope packages --include com.example -e com.example.internal --input deps.json
 
 # file scope: descend into one package
-codeps report --scope files -i com.example.modules.module1 deps.json
+codeps report --scope files --include com.example.modules.module1 --input deps.json
 ```
 
 ## Skip tests
@@ -170,8 +191,8 @@ escape false positives (e.g. a main `*Spec.scala` DSL file) or to cover exotic
 layouts. Passing it without `--skip-tests` is an error.
 
 ```shell
-codeps report --scope packages --skip-tests deps.json
-codeps report --scope files --skip-tests --test-pattern '**/specs/**' deps.json
+codeps report --scope packages --skip-tests --input deps.json
+codeps report --scope files --skip-tests --test-pattern '**/specs/**' --input deps.json
 ```
 
 ## Collapse rules
@@ -191,7 +212,7 @@ first rule in the sequence). Loops created by collapsing are dropped; edges land
 on the same pair are merged with summed weights.
 
 ```shell
-codeps report --scope packages -c com.example.modules.** deps.json
+codeps report --scope packages -c com.example.modules.** --input deps.json
 ```
 
 ## Exit codes and errors
@@ -218,6 +239,6 @@ For developing codeps itself, the repo is built with [deder](https://sake92.gith
 see the [README](https://github.com/sake92/codeps#development):
 
 ```shell
-deder exec -t run -m cli export --from semanticdb <dir> -o deps.json
-deder exec -t run -m cli report --scope packages deps.json
+deder exec -t run -m cli export --from semanticdb -i <dir> -o deps.json
+deder exec -t run -m cli report --scope packages -i deps.json
 ```

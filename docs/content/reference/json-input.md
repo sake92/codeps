@@ -93,11 +93,11 @@ error: failed to parse json: ...
 The easiest way to see the exact shape is to run the exporter:
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 ```
 
 External tools can emit nodes+edges JSON directly (matching the schema above)
-and pipe it into `codeps report --scope packages ... -`. The examples below are sketches;
+and pipe it into `codeps report --scope packages ... --input -`. The examples below are sketches;
 adapt them to your tool's output. The key points: give every node a unique `id` and a
 valid `kind`, and reference only existing ids in `edges`.
 
@@ -105,17 +105,17 @@ JavaScript/TypeScript (file-level deps from [madge](https://github.com/pahen/mad
 mapped to file/package nodes, e.g. by tsconfig `rootDir`):
 
 ```shell
-madge --json src | jq '...' | codeps report --scope files -
+madge --json src | jq '...' | codeps report --scope files --input -
 ```
 
 Python (module-level deps from [pydeps](https://github.com/thebjorn/pydeps)):
 
 ```shell
-pydeps --json mypackage | jq '...' | codeps report --scope packages -
+pydeps --json mypackage | jq '...' | codeps report --scope packages --input -
 ```
 
 Go (`go list` already emits package-level import deps):
 
 ```shell
-go list -json ./... | jq '...' | codeps report --scope packages -
+go list -json ./... | jq '...' | codeps report --scope packages --input -
 ```

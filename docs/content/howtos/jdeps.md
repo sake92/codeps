@@ -32,7 +32,7 @@ jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 [standard JSON export format](/reference/json-input.html) (`nodes` + `edges`):
 
 ```shell
-codeps export --from jdeps jdeps.txt -o deps.json
+codeps export --from jdeps --input jdeps.txt -o deps.json
 ```
 
 Only the project's own classes appear — the exporter drops edges to external classes
@@ -44,16 +44,16 @@ that are not themselves defined in the input.
 package graph:
 
 ```shell
-codeps report --scope packages deps.json
+codeps report --scope packages --input deps.json
 ```
 
 or in one pipe:
 
 ```shell
-codeps export --from jdeps jdeps.txt | codeps report --scope packages -
+codeps export --from jdeps --input jdeps.txt | codeps report --scope packages --input -
 ```
 
-Cycles come with simulated cut candidates, and the surface lists fanIn/fanOut
+Cycles come with cut solutions, and the surface lists fanIn/fanOut
 and orphans — see the [Metrics report](/reference/report.html).
 
 ## Filtering JDK noise
@@ -62,7 +62,7 @@ The raw `jdeps -verbose:class` output includes edges to `java.*`, `scala.*` and 
 platform classes. Exclude them to keep the graph focused on your code:
 
 ```shell
-codeps report --scope packages -i com.example -e java.** -e scala.** deps.json
+codeps report --scope packages --include com.example -e java.** -e scala.** --input deps.json
 ```
 
 > Note: excludes are package patterns matched against each node's root package —
@@ -70,10 +70,10 @@ codeps report --scope packages -i com.example -e java.** -e scala.** deps.json
 
 ## Collapsing
 
-Just like with SemanticDB input, `-c/--collapse` rules apply:
+Just like with SemanticDB input, `--collapse`/`-c` rules apply:
 
 ```shell
-codeps report --scope packages -i com.example -c com.example.modules.** deps.json
+codeps report --scope packages --include com.example -c com.example.modules.** --input deps.json
 ```
 
 See [CLI reference](/reference/cli.html) for the full option list.

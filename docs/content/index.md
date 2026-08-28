@@ -22,8 +22,8 @@ It works on two levels:
 
 - **`--scope packages`** — the whole package graph: the level you use when
   **splitting modules**. Find the cycles that keep modules welded together,
-  with simulated cut candidates, plus per-package exposed surface and orphans.
-- **`--scope files`** — the file graph of the packages selected with `-i`: the
+  with cut solutions, plus per-package exposed surface and orphans.
+- **`--scope files`** — the file graph of the packages selected with `--include`: the
   granularity that matters when you **optimize compile times** (zinc and other
   incremental compilers recompile by file).
 
@@ -33,8 +33,8 @@ level they degrade incremental compilation.
 ## Example
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps report --scope packages deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps report --scope packages --input deps.json
 ```
 
 Real output of `codeps report --scope packages` on the repo's
@@ -42,14 +42,18 @@ Real output of `codeps report --scope packages` on the repo's
 (`module1` ↔ `module2`):
 
 ```text
-scope: packages    generatedAt: 2026-08-27T18:36:47Z
+scope: packages    generatedAt: 2026-08-28T14:20:56Z
 
 Summary
   nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
 
 Cycles (size desc, extFanIn desc)
-id                               size  extFanIn  minCutsEstimate  cut candidates
-scc:com.example.modules.module1  2     1         1                com.example.modules.module1 -> com.example.modules.module2 (w=1), com.example.modules.module2 -> com.example.modules.module1 (w=1)
+id                               size  extFanIn  minCutsEstimate  solutions
+scc:com.example.modules.module1  2     1         1                1) com.example.modules.module1 -> com.example.modules.module2 (w=1)  2) com.example.modules.module2 -> com.example.modules.module1 (w=1)
+Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
+node                         fanIn  fanOut  score
+com.example.modules.module1  2      1       1.50
+com.example.modules.module2  1      2       1.50
 Surface (utilization asc; — = no fan-in)
 node                         fanIn  fanOut  ports  mutPorts  exposure  utilization
 com.example.modules.module2  1      2       4      0         4         0.25
@@ -63,7 +67,8 @@ Orphans
 ## Features
 
 - **Two input formats** — [SemanticDB](/howtos/semdb.html) (detailed, from Scala compiler output) and [jdeps](/howtos/jdeps.html) (JDK-only, no extra tooling)
-- **Cycles with simulated cuts** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`, the internal edges whose removal resolves it, and a greedy `minCutsEstimate`
+- **Cycles with cut solutions** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`, up to 3 complete ways to break it (each a set of edges whose removal together dissolves the cycle), and a greedy `minCutsEstimate`
+- **Change propagators** — the nodes whose changes propagate most: a normalized `(fanIn/avgFanIn + fanOut/avgFanOut)/2` score, top 10
 - **Exposed-surface metrics** — per-node `ports` / `mutPorts` / `exposure` / `utilization` (sealed/given/var rules resolved by the SemanticDB exporter)
 - **Orphans** — dead-code-removal candidates
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`); skip tests with `--skip-tests`

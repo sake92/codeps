@@ -44,18 +44,18 @@ Other ways to get SemanticDB output:
 [standard JSON export format](/reference/json-input.html) (`nodes` + `edges`):
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 ```
 
 - `--from semanticdb` selects the SemanticDB producer (required)
-- the input is a **directory** — the whole tree is walked for `*.semanticdb` files
+- `--input` takes a **directory** — the whole tree is walked for `*.semanticdb` files (repeatable)
 - `-o deps.json` writes the graph to a file; without `-o` it goes to stdout
 
 Source file ids are made relative to the current working directory; pass `--root <dir>`
 to make them relative to `<dir>` instead (e.g. the project root):
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb --root . -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb --root . -o deps.json
 ```
 
 ## Analyzing
@@ -63,23 +63,24 @@ codeps export --from semanticdb classes/META-INF/semanticdb --root . -o deps.jso
 `codeps report` reads the JSON graph and emits the flat metrics report:
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps report --scope packages deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps report --scope packages --input deps.json
 ```
 
-- `--scope packages` — metrics over the whole package graph: cycles with simulated
-  cut candidates, per-package exposed-surface (`ports`/`mutPorts`/`exposure`/`utilization`),
+- `--scope packages` — metrics over the whole package graph: cycles with cut
+  solutions, per-package exposed-surface (`ports`/`mutPorts`/`exposure`/`utilization`),
   and orphans
 - `--scope files` — the same metrics over the **file graph** of the packages selected with
-  `-i`; e.g. `-i com.example` descends into `com.example` and everything below it
-- `-i`/`-e`/`-c` filter and collapse, e.g. `-i com.example` keeps only your packages
+  `--include`; e.g. `--include com.example` descends into `com.example` and everything below it
+- `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
+- `--include`/`--exclude`/`--collapse` filter and collapse (see below)
 - `--format json` emits machine-readable JSON (the default `table` renders the same data as plain aligned text)
 
 No intermediate file needed — pipe `export` straight into `report` (the `-` tells
 `report` to read the JSON from stdin):
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
 ```
 
 See the [Metrics report](/reference/report.html) for the full field reference.
@@ -91,16 +92,16 @@ itself and everything below it; excludes win over includes.
 
 ```shell
 # only com.example packages, no third-party or JDK noise
-codeps report --scope packages -i com.example deps.json
+codeps report --scope packages --include com.example --input deps.json
 
 # com.example.* minus internal helpers
-codeps report --scope packages -i com.example -e com.example.internal deps.json
+codeps report --scope packages --include com.example -e com.example.internal --input deps.json
 ```
 
 Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:
 
 ```shell
-codeps report --scope packages -i com.example -c com.example.modules.** deps.json
+codeps report --scope packages --include com.example -c com.example.modules.** --input deps.json
 ```
 
 When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.

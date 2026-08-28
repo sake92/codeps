@@ -6,7 +6,7 @@ import ba.sake.codeps.report.{MetricsCalculator, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
-import mainargs.{arg, main, Leftover, ParserForMethods, TokensReader}
+import mainargs.{arg, main, ParserForMethods, TokensReader}
 
 object Main:
 
@@ -15,47 +15,22 @@ object Main:
   /** Testable entry point: returns the process exit code. */
   def run(args: Array[String]): Int =
     val parser = ParserForMethods(this)
-    // mainargs 0.7.8 strips the subcommand name only when there are 2+ @main methods;
-    // with a single main it expects the args without it. We keep the subcommand-first
-    // CLI contract either way, stripping the leading command token here when mainargs won't.
-    val effective =
-      if parser.mains.value.size == 1 then
-        args.toSeq match
-          case Seq() => Seq()
-          case head +: tail =>
-            if parser.mains.value.exists(_.name(mainargs.Util.nullNameMapper).contains(head)) then reorderRest(tail)
-            else reorderRest(args.toSeq)
-      else reorder(args)
-    parser.runEither(effective) match
-      case Left(err) =>
-        System.err.println(err)
-        1
-      case Right(code: Int) => code
-      case Right(_)         => 0 // unreachable: subcommands return Int
+    if args.headOption.contains("--version") then
+      println(version)
+      0
+    else if args.contains("--help") then
+      println(parser.helpText())
+      0
+    else
+      parser.runEither(args.toSeq) match
+        case Left(err) =>
+          System.err.println(err)
+          1
+        case Right(code: Int) => code
+        case Right(_)         => 0 // unreachable: subcommands return Int
 
-  /** mainargs 0.7.x requires named args to precede Leftover positionals; move bare tokens to the end. */
-  private def reorder(args: Seq[String]): Seq[String] =
-    if args.isEmpty then args
-    else if args(0).startsWith("-") then args
-    else args(0) +: reorderRest(args.drop(1))
-
-  private def reorderRest(rest: Seq[String]): Seq[String] =
-    val valueFlags = Set("-i", "--include", "-e", "--exclude", "-c", "--collapse",
-      "-f", "--format", "-s", "--scope", "-o", "--out", "--from", "--root", "--test-pattern")
-    val named    = Seq.newBuilder[String]
-    val leftover = Seq.newBuilder[String]
-    var i = 0
-    while i < rest.length do
-      val a = rest(i)
-      if a == "-" then leftover += a // stdin marker, not a flag
-      else if a.startsWith("-") then
-        named += a
-        if valueFlags.contains(a) && i + 1 < rest.length then
-          named += rest(i + 1)
-          i += 1
-      else leftover += a
-      i += 1
-    named.result() ++ leftover.result()
+  private def version: String =
+    Option(getClass.getPackage.getImplementationVersion).getOrElse("dev")
 
   enum InputFormat:
     case Semanticdb, Jdeps
@@ -98,9 +73,8 @@ object Main:
       @arg(short = 'f', name = "from") from: InputFormat,
       @arg(name = "root") root: Option[String],
       @arg(short = 'o') out: Option[String],
-      leftover: Leftover[String]
+      @arg(short = 'i', name = "input") inputs: Seq[String]
   ): Int =
-    val inputs = leftover.value
     if inputs.isEmpty then
       System.err.println("error: at least one input is required")
       1
@@ -147,13 +121,13 @@ object Main:
   def report(
       @arg(short = 's', name = "scope") scope: ReportScope,
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
-      @arg(short = 'i') include: Seq[String],
+      @arg(name = "include") include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(short = 'o') out: Option[String],
-      leftover: Leftover[String]
+      @arg(short = 'i', name = "input") input: String
   ): Int =
     testPatternsOrError(skipTests.value, testPattern) match
       case Left(err) =>
@@ -163,39 +137,24 @@ object Main:
         val metricsScope = scope match
           case ReportScope.Packages => MetricsCalculator.Scope.Packages
           case ReportScope.Files    => MetricsCalculator.Scope.Files
-        runOnGraph(leftover.value, out) { graph =>
-          parseRules(collapse).flatMap { rules =>
-            MetricsCalculator.run(graph, metricsScope, include, exclude, rules, patterns) match
-              case Left(err) => Left(err)
-              case Right(metricsReport) =>
-                val content = format match
+        readGraphInput(input) match
+          case Left(err) =>
+            System.err.println(s"error: $err")
+            1
+          case Right(graph) =>
+            parseRules(collapse).flatMap { rules =>
+              MetricsCalculator.run(graph, metricsScope, include, exclude, rules, patterns).map { metricsReport =>
+                format match
                   case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
                   case ReportFormat.Table => ReportTable.render(metricsReport)
-                Right(content)
-          }
-        }
-
-  /** Reads one json input (file or stdin) and runs `f` on it; errors go to stderr, exit 1. */
-  private def runOnGraph(inputs: Seq[String], out: Option[String])(f: DepsGraph => Either[String, String]): Int =
-    if inputs.isEmpty then
-      System.err.println("error: exactly one input is required (a json file, or '-' for stdin)")
-      1
-    else if inputs.size > 1 then
-      System.err.println("error: expected exactly one input (a json file, or '-' for stdin)")
-      1
-    else
-      readGraphInput(inputs.head) match
-        case Left(err) =>
-          System.err.println(s"error: $err")
-          1
-        case Right(graph) =>
-          f(graph) match
-            case Left(err) =>
-              System.err.println(s"error: $err")
-              1
-            case Right(content) =>
-              writeOutput(content, out)
-              0
+              }
+            } match
+              case Left(err) =>
+                System.err.println(s"error: $err")
+                1
+              case Right(content) =>
+                writeOutput(content, out)
+                0
 
   private def readGraphInput(input: String): Either[String, DepsGraph] =
     val text =

@@ -8,14 +8,15 @@ description: the codeps report JSON format — cycles, surface, orphans
 
 `codeps report` consumes the [standard JSON export format](/reference/json-input.html) (a file, or stdin via `-`)
 and emits a single flat JSON document: per-scope metrics over the graph's **packages**, or over the
-**files** of the packages selected with `-i`.
+**files** of the packages selected with `--include`.
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages --format json - > report.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --format json --input - > report.json
 ```
 
 Every value is computed fresh from the graph's node/edge list on every run — the report is a pure
-function of the input, which is what makes diffing reports over time meaningful.
+function of the input, which is what makes diffing reports over time meaningful. Set the
+`SOURCE_DATE_EPOCH` env var (epoch seconds) to pin `generatedAt` for deterministic CI diffs.
 
 ## Structure
 
@@ -37,10 +38,13 @@ function of the input, which is what makes diffing reports over time meaningful.
       "size": 2,
       "extFanIn": 5,
       "minCutsEstimate": 1,
-      "cutCandidates": [
-        { "edge": ["scheduler", "cache"], "weight": 4 }
+      "solutions": [
+        { "cuts": [{ "edge": ["scheduler", "cache"], "weight": 4 }] }
       ]
     }
+  ],
+  "propagators": [
+    { "node": "cache", "fanIn": 3, "fanOut": 2, "score": 2.5 }
   ],
   "surface": [
     { "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24, "utilization": 0.33 }
@@ -72,16 +76,29 @@ components are just acyclic nodes and are never reported.
 - `extFanIn` — edges whose target is in the SCC and whose source is outside: how much outside
   stuff is exposed to the cycle's blast radius. Cycles are ranked by `size` first, `extFanIn`
   as tiebreaker.
-- `cutCandidates` — the cycle's **internal** edges (both endpoints inside the cycle) whose removal
-  **resolves the cycle for their endpoints** (the endpoints end up in no multi-member component; a
-  leftover cycle elsewhere in the SCC does not count). Each is **simulated**: the edge is removed
-  from a copy of the edge list and Tarjan reruns; only edges with effect `resolved` are listed,
-  sorted by `weight` ascending, up to 6. Edges that merely shrink the cycle (`partial`) or leave
-  it unchanged (`none`) are deliberately not listed — they don't dissolve the cycle.
+- `solutions` — up to 3 **complete** ways to break the cycle, simplest first. Each solution is
+  a list of `cuts` (`{edge, weight}`); removing ALL of them together dissolves the cycle (no
+  multi-member component remains among its members). A solution can be 1 edge or several — dense
+  interlocking cycles often need 2-3 cuts together, and a cycle with no single-edge fix lists only
+  multi-cut solutions. Ranked by: fewest cuts, then cheapest (lowest total weight), then
+  lexicographic. Sets containing a smaller working solution are never listed. Search bounds: set
+  size ≤ `minCutsEstimate` (capped at 4); SCCs with more than 60 internal edges fall back to the
+  greedy plan as a single solution. An empty list means nothing was found within those bounds —
+  it is never an error.
 - `minCutsEstimate` — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly
   apply the best `resolved`-or-largest-reduction candidate, recompute against the largest remaining
   multi-member component of the cycle, until no such component remains. A heuristic, not a
   guaranteed-minimum feedback-edge set.
+
+## Change propagators
+
+Top 10 nodes by a normalized propagation score:
+
+- `score` — `(fanIn / avgFanIn + fanOut / avgFanOut) / 2`, where `avgFanIn`/`avgFanOut`
+  are the graph-wide means (`edges / nodes`). An exactly average node scores `1.0`; a hub with
+  twice the average fan-in and no fan-out scores `2.0`. Only nodes above `1.0` are listed,
+  sorted by score descending, top 10. A graph with no edges has no propagators.
+- `fanIn`/`fanOut` — the raw counts (same values as in `surface`), shown for context.
 
 ## Surface
 

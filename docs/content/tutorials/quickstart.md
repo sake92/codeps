@@ -32,17 +32,17 @@ scala-cli compile --server=false --semanticdb -d classes src/
 Then export the graph to the standard JSON export format:
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 ```
 
 If your build tool already enables SemanticDB (sbt/Maven with the `semanticdb` compiler plugin),
-the `.semanticdb` files are already on disk — just point `export` at the directory that contains them.
+the `.semanticdb` files are already on disk — just point `export --input` at the directory that contains them.
 
 **Java or mixed** — use the JDK's own analyzer:
 
 ```shell
 jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
-codeps export --from jdeps jdeps.txt -o deps.json
+codeps export --from jdeps --input jdeps.txt -o deps.json
 ```
 
 See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with jdeps](/howtos/jdeps.html) for details.
@@ -52,22 +52,22 @@ See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with 
 Emit the metrics report over the whole package graph:
 
 ```shell
-codeps report --scope packages deps.json
+codeps report --scope packages --input deps.json
 ```
 
 or pipe export straight into report:
 
 ```shell
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
 ```
 
 For a file-level view of one package, use `--scope files` with an include pattern:
 
 ```shell
-codeps report --scope files -i com.example.modules.module1 deps.json
+codeps report --scope files --include com.example.modules.module1 --input deps.json
 ```
 
-The report contains cycles with simulated cut candidates, exposed-surface metrics
+The report contains cycles with cut solutions, exposed-surface metrics
 (`ports`/`mutPorts`/`exposure`/`utilization`) and orphans — see the
 [Metrics report](/reference/report.html) for the full field reference. It renders
 as plain aligned text by default; `--format json` emits machine-readable JSON.

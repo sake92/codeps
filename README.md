@@ -5,7 +5,7 @@ Code package dependency analyzer.
 Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` output
 into the [standard JSON export format](https://sake92.github.io/codeps/reference/json-input.html),
 then emits a flat [metrics report](https://sake92.github.io/codeps/reference/report.html):
-cycles with simulated cut candidates, per-node exposed-surface metrics
+cycles with cut solutions, per-node exposed-surface metrics
 (`ports`/`mutPorts`/`exposure`/`utilization`) and orphans —
 over the package graph, or the file graph of the packages you select.
 
@@ -31,9 +31,9 @@ scala-cli compile --server=false --semanticdb -d classes src/
 jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 
 # Export the graph, then analyze it
-java -jar codeps.jar export --from semanticdb classes/META-INF/semanticdb -o deps.json
-# or: java -jar codeps.jar export --from jdeps jdeps.txt -o deps.json
-java -jar codeps.jar report --scope packages deps.json
+java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+# or: java -jar codeps.jar export --from jdeps --input jdeps.txt -o deps.json
+java -jar codeps.jar report --scope packages --input deps.json
 # the default output is the plain-text table; pass --format json for machine-readable JSON
 ```
 
@@ -44,7 +44,7 @@ with a tool of your choice (madge, pydeps, `go list`, ...) and feed it to `repor
 codeps never parses that source code itself:
 
 ```shell
-madge --json src | jq '... shape it into the standard JSON export format ...' | java -jar codeps.jar report --scope packages -
+madge --json src | jq '... shape it into the standard JSON export format ...' | java -jar codeps.jar report --scope packages --input -
 ```
 
 The metrics are language-agnostic once the node/edge list carries per-node `isExposed`/`ports`/`mutPorts`
@@ -57,8 +57,8 @@ Developing codeps itself requires [deder](https://sake92.github.io/deder/) (`bre
 
 ```shell
 deder test      # run all tests
-deder exec -t run -m cli export --from semanticdb tmp/examples/example1/classes/META-INF/semanticdb -o /tmp/deps.json
-deder exec -t run -m cli report --scope packages /tmp/deps.json
+deder exec -t run -m cli export --from semanticdb --input tmp/examples/example1/classes/META-INF/semanticdb -o /tmp/deps.json
+deder exec -t run -m cli report --scope packages --input /tmp/deps.json
 ```
 
 The website is built with [flatmark](https://github.com/sake92/flatmark):

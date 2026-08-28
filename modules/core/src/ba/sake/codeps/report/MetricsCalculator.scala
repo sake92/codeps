@@ -76,13 +76,25 @@ object MetricsCalculator:
       collapseRules: Seq[CollapseRule] = Nil,
       testPatterns: Option[Seq[String]] = None
   ): Either[String, MetricsReport] =
-    val filtered = Filter(graph, includes, excludes)
-    val scoped = testPatterns match
-      case Some(patterns) => TestFilter.skipTests(filtered, patterns)
-      case None           => filtered
-    scopeGraph(scoped, scope).map { sg => compute(collapse(sg, collapseRules), scope) }
+    for
+      generatedAt <- generatedAt()
+      filtered = Filter(graph, includes, excludes)
+      scoped = testPatterns match
+        case Some(patterns) => TestFilter.skipTests(filtered, patterns)
+        case None           => filtered
+      sg <- scopeGraph(scoped, scope)
+    yield compute(collapse(sg, collapseRules), scope, generatedAt)
 
-  private def compute(sg: ScopeGraph, scope: Scope): MetricsReport =
+  /** Real clock by default; SOURCE_DATE_EPOCH (reproducible-builds.org standard,
+    * epoch seconds) pins generatedAt for deterministic CI diffs. */
+  private def generatedAt(): Either[String, String] =
+    sys.env.get("SOURCE_DATE_EPOCH") match
+      case None => Right(java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString)
+      case Some(raw) => raw.toLongOption match
+        case Some(epoch) => Right(java.time.Instant.ofEpochSecond(epoch).toString)
+        case None        => Left(s"invalid SOURCE_DATE_EPOCH: $raw (expected epoch seconds)")
+
+  private def compute(sg: ScopeGraph, scope: Scope, generatedAt: String): MetricsReport =
     val fanIn = sg.edges.groupMapReduce(_.target)(_ => 1)(_ + _)
     val fanOut = sg.edges.groupMapReduce(_.source)(_ => 1)(_ + _)
     def fanInOf(id: String): Int = fanIn.getOrElse(id, 0)
@@ -127,7 +139,7 @@ object MetricsCalculator:
       scope = scope match
         case Scope.Packages => "packages"
         case Scope.Files    => "files",
-      generatedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString,
+      generatedAt = generatedAt,
       summary = Summary(
         nodes = sg.nodes.size,
         edges = sg.edges.size,
