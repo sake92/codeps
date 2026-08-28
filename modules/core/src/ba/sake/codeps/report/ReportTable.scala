@@ -18,12 +18,23 @@ object ReportTable:
     if report.cycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
-        Seq("id", "size", "extFanIn", "minCutsEstimate", "cut candidates"),
+        Seq("id", "size", "extFanIn", "minCutsEstimate", "solutions"),
         report.cycles.map { k =>
-          val cuts = if k.cutCandidates.isEmpty then "—"
-          else k.cutCandidates.map(c => s"${c.source} -> ${c.target} (w=${c.weight})").mkString(", ")
-          Seq(k.id, k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, cuts)
+          val sols = if k.solutions.isEmpty then "—"
+          else k.solutions.zipWithIndex.map { (s, i) =>
+            s"${i + 1}) " + s.cuts.map(c => s"${c.source} -> ${c.target} (w=${c.weight})").mkString(", ")
+          }.mkString("  ")
+          Seq(k.id, k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, sols)
         }
+      ))
+    sb.append("\n")
+
+    sb.append("Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)\n")
+    if report.propagators.isEmpty then sb.append("  (none)\n")
+    else
+      sb.append(table(
+        Seq("node", "fanIn", "fanOut", "score"),
+        report.propagators.map(p => Seq(p.node, p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f"))
       ))
     sb.append("\n")
 
@@ -37,7 +48,7 @@ object ReportTable:
         num(r.ports),
         num(r.mutPorts),
         num(r.exposure),
-        r.utilization.map(u => f"$u%.2f").getOrElse("—")
+        r.utilization.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
       ))
     ))
     sb.append("\n")

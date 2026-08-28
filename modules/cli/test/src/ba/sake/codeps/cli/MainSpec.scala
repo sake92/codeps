@@ -140,7 +140,7 @@ class MainSpec extends munit.FunSuite:
     val content = os.read(outJson)
     assert(content.contains("\"scope\": \"packages\""))
     assert(content.contains("\"id\": \"scc:com.example.modules.module1\""))
-    assert(content.contains("\"cutCandidates\""))
+    assert(content.contains("\"solutions\""))
     assert(content.contains("\"mutPorts\": 0"))
     assert(content.contains("\"nodesInCycles\": 2"))
     // table format renders the same cycle with camelCase headers

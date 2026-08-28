@@ -15,8 +15,9 @@ class MetricsReportSpec extends munit.FunSuite:
         size = 2,
         extFanIn = 5,
         minCutsEstimate = 1,
-        cutCandidates = Seq(CutCandidate("scheduler", "cache", 4))
+        solutions = Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4))))
       )),
+      propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
       surface = Seq(SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33))),
       orphans = Seq("DeadUtil.scala")
     )
@@ -28,7 +29,15 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"extFanIn\":5"))
     assert(json.contains("\"minCutsEstimate\":1"))
     assert(json.contains("\"cycles\""))
-    assert(json.contains("\"cutCandidates\""))
+    assert(json.contains("\"solutions\""))
+    // object key order is hash-based, so assert each camelCase key-value pair independently
+    assert(json.contains("\"cuts\":[{"))
+    assert(json.contains("\"edge\":[\"scheduler\",\"cache\"]"))
+    assert(json.contains("\"weight\":4"))
+    assert(json.contains("\"propagators\":[{"))
+    assert(json.contains("\"node\":\"cache\""))
+    assert(json.contains("\"score\":2"))
+    assert(!json.contains("cutCandidates"))
     assert(json.contains("\"edge\":[\"scheduler\",\"cache\"]"))
     assert(!json.contains("\"effect\""))
     assert(!json.contains("\"new_size\""))

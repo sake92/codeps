@@ -184,8 +184,11 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(cycle.size, 3)
     assertEquals(cycle.extFanIn, 1) // outside -> p1 only
     assertEquals(cycle.minCutsEstimate, 1) // cutting any ring edge resolves a 3-ring
-    assertEquals(cycle.cutCandidates.toSet, Set(
-      CutCandidate("p1", "p2", 1), CutCandidate("p2", "p3", 1), CutCandidate("p3", "p1", 1)))
+    assertEquals(cycle.solutions, Seq(
+      Solution(Seq(CutCandidate("p1", "p2", 1))),
+      Solution(Seq(CutCandidate("p2", "p3", 1))),
+      Solution(Seq(CutCandidate("p3", "p1", 1)))
+    ))
   }
 
   test("cycle: chord edge cut has effect none (redundant with the ring)") {
@@ -205,7 +208,12 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val cycle = report.cycles.head
     assertEquals(cycle.members, Seq("p1", "p2", "p3", "p1"))
-    assertEquals(cycle.cutCandidates, Seq(CutCandidate("p3", "p1", 1))) // only the fully resolving cut
+    // p3 -> p1 dissolves alone; the remaining slots are the cheapest 2-cut plans
+    assertEquals(cycle.solutions, Seq(
+      Solution(Seq(CutCandidate("p3", "p1", 1))),
+      Solution(Seq(CutCandidate("p1", "p2", 1), CutCandidate("p1", "p3", 1))),
+      Solution(Seq(CutCandidate("p1", "p3", 1), CutCandidate("p2", "p3", 1)))
+    ))
     assertEquals(cycle.minCutsEstimate, 1) // p3 -> p1 resolves it
   }
 
@@ -229,13 +237,15 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val cycle = report.cycles.head
     assertEquals(cycle.size, 4)
     assertEquals(cycle.members, Seq("a", "b", "a"))
-    // b -> a and c -> d both resolve for their endpoints: after either cut the
-    // endpoints land in singletons, even though the other ring survives as a
-    // separate cycle (a leftover cycle elsewhere in the SCC does not count)
-    assertEquals(cycle.cutCandidates, Seq(CutCandidate("b", "a", 1), CutCandidate("c", "d", 1)))
-    // greedy: cut b -> a first, then one of c -> d / d -> c to dissolve the {c,d}
-    // ring — 2 cuts total (the first cut leaves {c,d} cycling)
+    // no single edge dissolves the whole SCC ({a,b} and {c,d} are two interlocking
+    // rings), so every solution is a pair: one edge from each ring. The pair
+    // {a -> b, d -> c} does NOT work: b -> a -> c -> d -> b survives as a 4-cycle.
     assertEquals(cycle.minCutsEstimate, 2)
+    assertEquals(cycle.solutions, Seq(
+      Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("c", "d", 1))),
+      Solution(Seq(CutCandidate("b", "a", 1), CutCandidate("c", "d", 1))),
+      Solution(Seq(CutCandidate("b", "a", 1), CutCandidate("d", "c", 1)))
+    ))
   }
 
   test("cycles sorted by size desc, then extFanIn desc, then id") {
@@ -277,8 +287,102 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val cycle = report.cycles.head
-    assertEquals(cycle.cutCandidates.head.source, "p2") // p2 -> p3 (weight 1) before p3 -> p1 (tiebreak source)
-    assertEquals(cycle.cutCandidates.map(_.weight), Seq(1, 1, 10))
+    assertEquals(cycle.solutions, Seq(
+      Solution(Seq(CutCandidate("p2", "p3", 1))),
+      Solution(Seq(CutCandidate("p3", "p1", 1))),
+      Solution(Seq(CutCandidate("p1", "p2", 10)))
+    ))
+  }
+
+  test("cycle: dense knot has no single-edge fix; 3-cut solutions are listed") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("a", NodeKind.`package`), Node("b", NodeKind.`package`), Node("c", NodeKind.`package`),
+        Node("a.A", NodeKind.`type`, Some("a"), None),
+        Node("b.B", NodeKind.`type`, Some("b"), None),
+        Node("c.C", NodeKind.`type`, Some("c"), None)
+      ),
+      edges = Set(
+        Edge("a.A", "b.B"), Edge("b.B", "a.A"),
+        Edge("a.A", "c.C"), Edge("c.C", "a.A"),
+        Edge("b.B", "c.C"), Edge("c.C", "b.B")
+      )
+    )
+    val cycle = MetricsCalculator.run(graph, Scope.Packages).toOption.get.cycles.head
+    assertEquals(cycle.size, 3)
+    assertEquals(cycle.minCutsEstimate, 3) // greedy cuts three chords one by one
+    // no 1- or 2-cut set breaks all three 2-cycles; the 3-cut solutions pick one
+    // direction from each bidirectional pair, arranged acyclically
+    assertEquals(cycle.solutions, Seq(
+      Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("a", "c", 1), CutCandidate("b", "c", 1))),
+      Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("a", "c", 1), CutCandidate("c", "b", 1))),
+      Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("c", "a", 1), CutCandidate("c", "b", 1)))
+    ))
+  }
+
+  test("propagators: empty on a balanced ring (every node is average)") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("p1", NodeKind.`package`), Node("p2", NodeKind.`package`),
+        Node("p3", NodeKind.`package`), Node("p4", NodeKind.`package`),
+        Node("p1.A", NodeKind.`type`, Some("p1"), None),
+        Node("p2.B", NodeKind.`type`, Some("p2"), None),
+        Node("p3.C", NodeKind.`type`, Some("p3"), None),
+        Node("p4.D", NodeKind.`type`, Some("p4"), None)
+      ),
+      edges = Set(Edge("p1.A", "p2.B"), Edge("p2.B", "p3.C"), Edge("p3.C", "p4.D"), Edge("p4.D", "p1.A"))
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    assertEquals(report.propagators, Seq.empty) // score == 1.0 everywhere, not > 1
+  }
+
+  test("propagators: hub with many dependents scores high") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("a", NodeKind.`package`), Node("b", NodeKind.`package`),
+        Node("c", NodeKind.`package`), Node("d", NodeKind.`package`),
+        Node("a.A", NodeKind.`type`, Some("a"), None),
+        Node("b.B", NodeKind.`type`, Some("b"), None),
+        Node("c.C", NodeKind.`type`, Some("c"), None),
+        Node("d.D", NodeKind.`type`, Some("d"), None)
+      ),
+      edges = Set(Edge("b.B", "a.A"), Edge("c.C", "a.A"), Edge("d.D", "a.A"))
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    // avgFanIn = avgFanOut = 3/4 = 0.75; a: (3/0.75 + 0)/2 = 2.0; others 0.67
+    assertEquals(report.propagators, Seq(PropagatorRow("a", 3, 0, 2.0)))
+  }
+
+  test("propagators: sorted by score desc, capped at top 10") {
+    val mids = (1 to 12).map(i => f"m$i%02d")
+    val leaves = (1 to 24).map(i => f"l$i%02d")
+    val midNodes = mids.map(m => Node(m, NodeKind.`package`)) ++
+      mids.map(m => Node(s"$m.T", NodeKind.`type`, Some(m), None))
+    val leafNodes = leaves.map(l => Node(s"$l.L", NodeKind.`type`, Some(l), None))
+    val rootNodes = Seq(Node("root", NodeKind.`package`), Node("root.R", NodeKind.`type`, Some("root"), None))
+    val leafEdges = (1 to 24).map(i => Edge(s"l$i%02d.L", s"m${
+      ((i - 1) % 12) + 1
+    }%02d.T"))
+    val rootEdges = mids.map(m => Edge(s"$m.T", "root.R"))
+    val graph = DepsGraph(
+      (midNodes ++ leafNodes ++ rootNodes ++ mids.map(m => Node(m, NodeKind.`package`)) ++
+        leaves.map(l => Node(l, NodeKind.`package`))).toSet,
+      (leafEdges ++ rootEdges).toSet
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val props = report.propagators
+    assertEquals(props.size, 10) // root + 12 mids qualify; capped at 10
+    assertEquals(props.head.node, "root") // score 37/6, highest
+    assertEquals(props.tail.map(_.node), Seq("m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09"))
+  }
+
+  test("propagators: empty when the graph has no edges") {
+    val graph = DepsGraph(
+      Set(Node("p1", NodeKind.`package`), Node("p2", NodeKind.`package`)),
+      Set.empty
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    assertEquals(report.propagators, Seq.empty) // avgFanIn == 0 -> score undefined for everyone
   }
 
   test("files scope: include selects the package's files (descend into it)") {
