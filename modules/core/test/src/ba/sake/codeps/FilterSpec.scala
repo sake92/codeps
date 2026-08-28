@@ -88,6 +88,28 @@ class FilterSpec extends munit.FunSuite:
     assert(!Filter(withChildless, Nil, Nil).nodes.map(_.id).contains("com.example.orphan"))
   }
 
+  test("package-only graph (jdeps export shape): packages are content, nothing pruned") {
+    val pkgOnly = DepsGraph(
+      Set(Node("com.a", NodeKind.`package`), Node("com.b", NodeKind.`package`)),
+      Set(Edge("com.a", "com.b"))
+    )
+    assertEquals(Filter(pkgOnly, Nil, Nil), pkgOnly)
+  }
+
+  test("package-only graph with include keeps the matching packages") {
+    val pkgOnly = DepsGraph(
+      Set(
+        Node("com.a", NodeKind.`package`),
+        Node("com.b", NodeKind.`package`),
+        Node("org.c", NodeKind.`package`)
+      ),
+      Set(Edge("com.a", "com.b"), Edge("com.a", "org.c"))
+    )
+    val filtered = Filter(pkgOnly, Seq("com"), Nil)
+    assertEquals(filtered.nodes.map(_.id), Set("com.a", "com.b"))
+    assertEquals(filtered.edges, Set(Edge("com.a", "com.b")))
+  }
+
   test("a package whose children are all excluded is pruned; others survive") {
     val filtered = Filter(graph, Nil, Seq("com.example.modules.module2"))
     assert(!filtered.nodes.map(_.id).contains("com.example.modules.module2"))
