@@ -49,6 +49,7 @@
           <li><a href="#structure">Structure</a></li>
           <li><a href="#summary">Summary</a></li>
           <li><a href="#cycles">Cycles</a></li>
+          <li><a href="#change-propagators">Change propagators</a></li>
           <li><a href="#surface">Surface</a></li>
           <li><a href="#exposed-surface">Exposed surface</a></li>
           <li><a href="#orphans">Orphans</a></li>
@@ -62,10 +63,10 @@
     <div></div>
    </div>
    <h1 id="metrics-report">Metrics report<a href="#metrics-report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps report</code> consumes the <a href="https://sake92.github.io/codeps/reference/json-input.html">standard JSON export format</a> (a file, or stdin via <code>-</code>) and emits a single flat JSON document: per-scope metrics over the graph's <strong>packages</strong>, or over the <strong>files</strong> of the packages selected with <code>-i</code>.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages --format json - &gt; report.json
+   <p><code>codeps report</code> consumes the <a href="https://sake92.github.io/codeps/reference/json-input.html">standard JSON export format</a> (a file, or stdin via <code>-</code>) and emits a single flat JSON document: per-scope metrics over the graph's <strong>packages</strong>, or over the <strong>files</strong> of the packages selected with <code>--include</code>.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --format json --input - &gt; report.json
 </code></pre>
-   <p>Every value is computed fresh from the graph's node/edge list on every run — the report is a pure function of the input, which is what makes diffing reports over time meaningful.</p>
+   <p>Every value is computed fresh from the graph's node/edge list on every run — the report is a pure function of the input, which is what makes diffing reports over time meaningful. Set the <code>SOURCE_DATE_EPOCH</code> env var (epoch seconds) to pin <code>generatedAt</code> for deterministic CI diffs.</p>
    <h2 id="structure">Structure<a href="#structure" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"scope"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"packages"</span><span class="hljs-punctuation">,</span>
@@ -84,10 +85,13 @@
       <span class="hljs-attr">"size"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"extFanIn"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"minCutsEstimate"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"cutCandidates"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-        <span class="hljs-punctuation">{</span> <span class="hljs-attr">"edge"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"scheduler"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"cache"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"weight"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span> <span class="hljs-punctuation">}</span>
+      <span class="hljs-attr">"solutions"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+        <span class="hljs-punctuation">{</span> <span class="hljs-attr">"cuts"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span> <span class="hljs-attr">"edge"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"scheduler"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"cache"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"weight"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span> <span class="hljs-punctuation">}</span>
       <span class="hljs-punctuation">]</span>
     <span class="hljs-punctuation">}</span>
+  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"propagators"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">{</span> <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cache"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanIn"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanOut"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"score"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2.5</span> <span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"surface"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-punctuation">{</span> <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cache"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanIn"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanOut"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"ports"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">9</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"mutPorts"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"exposure"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">24</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"utilization"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.33</span> <span class="hljs-punctuation">}</span>
@@ -109,8 +113,14 @@
     <li><code>members</code> — a <strong>closed cycle path</strong> through the smallest member: the first node repeated at the end. When the SCC contains several interlocking cycles, <code>size</code> may exceed the path length — the path shows one of the cycles; <code>size</code> counts the full SCC membership.</li>
     <li><code>size</code> — full member count of the SCC (may exceed the path length, see above).</li>
     <li><code>extFanIn</code> — edges whose target is in the SCC and whose source is outside: how much outside stuff is exposed to the cycle's blast radius. Cycles are ranked by <code>size</code> first, <code>extFanIn</code> as tiebreaker.</li>
-    <li><code>cutCandidates</code> — the cycle's <strong>internal</strong> edges (both endpoints inside the cycle) whose removal <strong>resolves the cycle for their endpoints</strong> (the endpoints end up in no multi-member component; a leftover cycle elsewhere in the SCC does not count). Each is <strong>simulated</strong>: the edge is removed from a copy of the edge list and Tarjan reruns; only edges with effect <code>resolved</code> are listed, sorted by <code>weight</code> ascending, up to 6. Edges that merely shrink the cycle (<code>partial</code>) or leave it unchanged (<code>none</code>) are deliberately not listed — they don't dissolve the cycle.</li>
+    <li><code>solutions</code> — up to 3 <strong>complete</strong> ways to break the cycle, simplest first. Each solution is a list of <code>cuts</code> (<code>{edge, weight}</code>); removing ALL of them together dissolves the cycle (no multi-member component remains among its members). A solution can be 1 edge or several — dense interlocking cycles often need 2-3 cuts together, and a cycle with no single-edge fix lists only multi-cut solutions. Ranked by: fewest cuts, then cheapest (lowest total weight), then lexicographic. Sets containing a smaller working solution are never listed. Search bounds: set size ≤ <code>minCutsEstimate</code> (capped at 4); SCCs with more than 60 internal edges fall back to the greedy plan as a single solution. An empty list means nothing was found within those bounds — it is never an error.</li>
     <li><code>minCutsEstimate</code> — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly apply the best <code>resolved</code>-or-largest-reduction candidate, recompute against the largest remaining multi-member component of the cycle, until no such component remains. A heuristic, not a guaranteed-minimum feedback-edge set.</li>
+   </ul>
+   <h2 id="change-propagators">Change propagators<a href="#change-propagators" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Top 10 nodes by a normalized propagation score:</p>
+   <ul>
+    <li><code>score</code> — <code>(fanIn / avgFanIn + fanOut / avgFanOut) / 2</code>, where <code>avgFanIn</code>/<code>avgFanOut</code> are the graph-wide means (<code>edges / nodes</code>). An exactly average node scores <code>1.0</code>; a hub with twice the average fan-in and no fan-out scores <code>2.0</code>. Only nodes above <code>1.0</code> are listed, sorted by score descending, top 10. A graph with no edges has no propagators.</li>
+    <li><code>fanIn</code>/<code>fanOut</code> — the raw counts (same values as in <code>surface</code>), shown for context.</li>
    </ul>
    <h2 id="surface">Surface<a href="#surface" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>One row per scope node:</p>

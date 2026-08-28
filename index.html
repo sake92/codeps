@@ -66,23 +66,27 @@
    </ol>
    <p>It works on two levels:</p>
    <ul>
-    <li><strong><code>--scope packages</code></strong> — the whole package graph: the level you use when <strong>splitting modules</strong>. Find the cycles that keep modules welded together, with simulated cut candidates, plus per-package exposed surface and orphans.</li>
-    <li><strong><code>--scope files</code></strong> — the file graph of the packages selected with <code>-i</code>: the granularity that matters when you <strong>optimize compile times</strong> (zinc and other incremental compilers recompile by file).</li>
+    <li><strong><code>--scope packages</code></strong> — the whole package graph: the level you use when <strong>splitting modules</strong>. Find the cycles that keep modules welded together, with cut solutions, plus per-package exposed surface and orphans.</li>
+    <li><strong><code>--scope files</code></strong> — the file graph of the packages selected with <code>--include</code>: the granularity that matters when you <strong>optimize compile times</strong> (zinc and other incremental compilers recompile by file).</li>
    </ul>
    <p>Cycles are bad in both: at package level they make modules inseparable; at file level they degrade incremental compilation.</p>
    <h2 id="example">Example<a href="#example" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps report --scope packages deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps report --scope packages --input deps.json
 </code></pre>
    <p>Real output of <code>codeps report --scope packages</code> on the repo's <a href="https://github.com/sake92/codeps/blob/main/testFixtures/cyclic.json">cyclic test fixture</a> (<code>module1</code> ↔ <code>module2</code>):</p>
-   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">scope: packages    generatedAt: 2026-08-27T18:36:47Z
+   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">scope: packages    generatedAt: 2026-08-28T14:20:56Z
 
 Summary
   nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
 
 Cycles (size desc, extFanIn desc)
-id                               size  extFanIn  minCutsEstimate  cut candidates
-scc:com.example.modules.module1  2     1         1                com.example.modules.module1 -&gt; com.example.modules.module2 (w=1), com.example.modules.module2 -&gt; com.example.modules.module1 (w=1)
+id                               size  extFanIn  minCutsEstimate  solutions
+scc:com.example.modules.module1  2     1         1                1) com.example.modules.module1 -&gt; com.example.modules.module2 (w=1)  2) com.example.modules.module2 -&gt; com.example.modules.module1 (w=1)
+Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score &gt; 1, top 10)
+node                         fanIn  fanOut  score
+com.example.modules.module1  2      1       1.50
+com.example.modules.module2  1      2       1.50
 Surface (utilization asc; — = no fan-in)
 node                         fanIn  fanOut  ports  mutPorts  exposure  utilization
 com.example.modules.module2  1      2       4      0         4         0.25
@@ -95,7 +99,8 @@ Orphans
    <h2 id="features">Features<a href="#features" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li><strong>Two input formats</strong> — <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB</a> (detailed, from Scala compiler output) and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps</a> (JDK-only, no extra tooling)</li>
-    <li><strong>Cycles with simulated cuts</strong> — every multi-member strongly connected component is reported as a closed cycle path with <code>extFanIn</code>, the internal edges whose removal resolves it, and a greedy <code>minCutsEstimate</code></li>
+    <li><strong>Cycles with cut solutions</strong> — every multi-member strongly connected component is reported as a closed cycle path with <code>extFanIn</code>, up to 3 complete ways to break it (each a set of edges whose removal together dissolves the cycle), and a greedy <code>minCutsEstimate</code></li>
+    <li><strong>Change propagators</strong> — the nodes whose changes propagate most: a normalized <code>(fanIn/avgFanIn + fanOut/avgFanOut)/2</code> score, top 10</li>
     <li><strong>Exposed-surface metrics</strong> — per-node <code>ports</code> / <code>mutPorts</code> / <code>exposure</code> / <code>utilization</code> (sealed/given/var rules resolved by the SemanticDB exporter)</li>
     <li><strong>Orphans</strong> — dead-code-removal candidates</li>
     <li><strong>Filtering</strong> — keep only nodes matching <code>--include</code> patterns, drop noise with <code>--exclude</code> (e.g. <code>java.*</code>, <code>scala.*</code>); skip tests with <code>--skip-tests</code></li>

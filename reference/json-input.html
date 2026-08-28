@@ -183,17 +183,17 @@
 </code></pre>
    <h2 id="producing-it">Producing it<a href="#producing-it" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>The easiest way to see the exact shape is to run the exporter:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 </code></pre>
-   <p>External tools can emit nodes+edges JSON directly (matching the schema above) and pipe it into <code>codeps report --scope packages ... -</code>. The examples below are sketches; adapt them to your tool's output. The key points: give every node a unique <code>id</code> and a valid <code>kind</code>, and reference only existing ids in <code>edges</code>.</p>
+   <p>External tools can emit nodes+edges JSON directly (matching the schema above) and pipe it into <code>codeps report --scope packages ... --input -</code>. The examples below are sketches; adapt them to your tool's output. The key points: give every node a unique <code>id</code> and a valid <code>kind</code>, and reference only existing ids in <code>edges</code>.</p>
    <p>JavaScript/TypeScript (file-level deps from <a href="https://github.com/pahen/madge">madge</a> mapped to file/package nodes, e.g. by tsconfig <code>rootDir</code>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '...' | codeps report --scope files -
+   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '...' | codeps report --scope files --input -
 </code></pre>
    <p>Python (module-level deps from <a href="https://github.com/thebjorn/pydeps">pydeps</a>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">pydeps --json mypackage | jq '...' | codeps report --scope packages -
+   <pre><code class="language-shell hljs" data-highlighted="yes">pydeps --json mypackage | jq '...' | codeps report --scope packages --input -
 </code></pre>
    <p>Go (<code>go list</code> already emits package-level import deps):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">go list -json ./... | jq '...' | codeps report --scope packages -
+   <pre><code class="language-shell hljs" data-highlighted="yes">go list -json ./... | jq '...' | codeps report --scope packages --input -
 </code></pre>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/reference/report.html">⬅️ Metrics report</a> <span></span> <span></span>

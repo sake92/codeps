@@ -48,6 +48,7 @@
          <ul>
           <li><a href="#export">export</a></li>
           <li><a href="#report">report</a></li>
+          <li><a href="#reproducible-output">Reproducible output</a></li>
           <li><a href="#include--exclude-patterns">Include / exclude patterns</a></li>
           <li><a href="#skip-tests">Skip tests</a></li>
           <li><a href="#collapse-rules">Collapse rules</a></li>
@@ -66,18 +67,19 @@
    <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>) with two subcommands that form a two-step pipeline:</p>
    <ol>
     <li><a href="#export"><code>export</code></a> — the <em>producer</em>: parses raw input (<code>semanticdb</code> or <code>jdeps</code>) and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">standard JSON export format</a>. No analysis.</li>
-    <li><a href="#report"><code>report</code></a> — the <em>analyzer</em>: consumes that JSON (a file or stdin) and emits the flat <a href="https://sake92.github.io/codeps/reference/report.html">metrics report</a>: cycles with simulated cut candidates, per-node exposed-surface metrics and orphans.</li>
+    <li><a href="#report"><code>report</code></a> — the <em>analyzer</em>: consumes that JSON (a file or stdin) and emits the flat <a href="https://sake92.github.io/codeps/reference/report.html">metrics report</a>: cycles with cut solutions, change propagators, per-node exposed-surface metrics and orphans.</li>
    </ol>
    <p>Download the prebuilt jar (requires a JDK, 11+) and run it with <code>java -jar</code>:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar &lt;subcommand&gt; [options] &lt;inputs...&gt;
+java -jar codeps.jar &lt;subcommand&gt; [options]
 </code></pre>
+   <p>The CLI is strict: inputs are passed as <code>--input</code> flags, there are no positional arguments, and unknown flags/values are rejected by the parser itself with a clean error and exit 1. <code>java -jar codeps.jar --version</code> prints the version (jar manifest <code>Implementation-Version</code>; <code>dev</code> when run from the classpath); <code>--help</code> prints usage for all subcommands.</p>
    <p>The examples below use <code>codeps</code> as shorthand for <code>java -jar codeps.jar</code>.</p>
    <p>The steps pipe together — <code>export</code> writes the graph to stdout, <code>report</code> reads it from stdin (<code>-</code>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
 </code></pre>
    <h2 id="export">export<a href="#export" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb|jdeps [--root &lt;dir&gt;] [-o out] &lt;inputs...&gt;
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from &lt;semanticdb|jdeps&gt; [--root &lt;dir&gt;] [-o out] --input &lt;path&gt;...
 </code></pre>
    <p>Pure producer: parses the raw input and emits the standard JSON export graph (<code>{"nodes": [...], "edges": [...]}</code>) to stdout, or to the <code>-o</code> file. There are no include/exclude/collapse flags here — filtering and aggregation are the analyzer's job.</p>
    <table>
@@ -100,24 +102,28 @@ java -jar codeps.jar &lt;subcommand&gt; [options] &lt;inputs...&gt;
       <td><code>-o</code> / <code>--out</code></td>
       <td>Write the JSON to this file instead of stdout.</td>
      </tr>
+     <tr>
+      <td><code>-i</code> / <code>--input</code></td>
+      <td>Input path, repeatable. Required (at least one).</td>
+     </tr>
     </tbody>
    </table>
-   <p>Inputs:</p>
+   <p><code>--input</code> values:</p>
    <ul>
     <li><code>semanticdb</code> — <strong>directories</strong>, walked recursively for <code>*.semanticdb</code> files.</li>
     <li><code>jdeps</code> — <strong>files</strong> containing <code>jdeps -verbose:class</code> text output.</li>
    </ul>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
-codeps export --from jdeps jdeps.txt
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps export --from jdeps --input jdeps.txt
 </code></pre>
    <p>Errors (exit 1): <code>at least one input is required</code>, <code>input path does not exist: &lt;path&gt;</code>, <code>not a directory: &lt;path&gt;</code> (semanticdb), <code>not a file: &lt;path&gt;</code> (jdeps), <code>no .semanticdb files found</code>. Per-file parse failures are warnings on stderr and the run continues:</p>
    <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">warning: failed to parse semanticdb: ...
 </code></pre>
    <h2 id="report">report<a href="#report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope &lt;packages|files&gt; [--format &lt;json|table&gt;] [-i inc] [-e exc] [-c collapse] [--skip-tests] [-o out] &lt;file|-&gt;
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope &lt;packages|files&gt; [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i &lt;file|-&gt;
 </code></pre>
    <p>Pure analyzer: reads the standard JSON export graph (a file, or stdin via <code>-</code>) and runs the pipeline (filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the flat <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>, always exits <code>0</code> on success.</p>
-   <p><code>--scope</code> is required: <code>packages</code> analyzes the whole package graph; <code>files</code> analyzes the file graph of the packages selected with <code>-i</code> (jdeps data has no file-level info and errors here).</p>
+   <p><code>--scope</code> is required: <code>packages</code> analyzes the whole package graph; <code>files</code> analyzes the file graph of the packages selected with <code>--include</code> (jdeps data has no file-level info and errors here).</p>
    <table>
     <thead>
      <tr>
@@ -135,7 +141,7 @@ codeps export --from jdeps jdeps.txt
       <td><code>table</code> (default) or <code>json</code> — the table renders the exact same data as plain aligned text, nothing is recomputed.</td>
      </tr>
      <tr>
-      <td><code>-i</code> / <code>--include</code></td>
+      <td><code>--include</code></td>
       <td>Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern <code>ba.sake</code> matches <code>ba.sake</code> and everything below it.</td>
      </tr>
      <tr>
@@ -158,12 +164,15 @@ codeps export --from jdeps jdeps.txt
       <td><code>-o</code> / <code>--out</code></td>
       <td>Write the report to this file instead of stdout.</td>
      </tr>
+     <tr>
+      <td><code>-i</code> / <code>--input</code></td>
+      <td>The JSON graph to analyze — a file, or <code>-</code> for stdin, so <code>export</code> output can be piped straight in. Required.</td>
+     </tr>
     </tbody>
    </table>
-   <p>Exactly one input is required — a JSON file, or <code>-</code> for stdin, so <code>export</code> output can be piped straight into <code>report</code>:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages deps.json -o report.json
-codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope files -i com.example - &gt; files.json
-codeps export --from jdeps jdeps.txt | codeps report --scope packages --format table -
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages --input deps.json -o report.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope files --include com.example --input - &gt; files.json
+codeps export --from jdeps --input jdeps.txt | codeps report --scope packages --format table --input -
 </code></pre>
    <p>The <code>table</code> format:</p>
    <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">scope: packages    generatedAt: 2026-08-27T10:00:00Z
@@ -172,8 +181,12 @@ Summary
   nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
 Cycles (size desc, extFanIn desc)
-  id           size  extFanIn  minCutsEstimate  cut candidates
-  scc:cache    2     5         1                scheduler -&gt; cache (w=4)
+  id           size  extFanIn  minCutsEstimate  solutions
+  scc:cache    2     5         1                1) scheduler -&gt; cache (w=4)  2) cache -&gt; scheduler (w=4)
+
+Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score &gt; 1, top 10)
+  node     fanIn  fanOut  score
+  cache    3      2       2.50
 
 Surface (utilization asc; — = no fan-in)
   node     fanIn  fanOut  ports  mutPorts  exposure  utilization
@@ -183,14 +196,18 @@ Surface (utilization asc; — = no fan-in)
 Orphans
   DeadUtil.scala
 </code></pre>
-   <p>Errors (exit 1): <code>exactly one input is required (a json file, or '-' for stdin)</code>, <code>expected exactly one input (a json file, or '-' for stdin)</code>, <code>input path does not exist: &lt;path&gt;</code>, <code>no nodes remain after filtering</code>, <code>no file nodes found in the input (jdeps data has no file-level info)</code>, invalid collapse rules, unknown scope/format values — and malformed or type-invalid JSON is a hard error, not a warning (see <a href="#exit-codes-and-errors">Exit codes</a>).</p>
+   <p>Errors (exit 1): parser errors from mainargs — <code>Missing argument: --input ...</code>, <code>Unknown argument(s): ...</code>, <code>Duplicate arguments for ...: ...</code> — and input errors: <code>input path does not exist: &lt;path&gt;</code>, <code>not a file: &lt;path&gt;</code>, <code>no nodes remain after filtering</code>, <code>no file nodes found in the input (jdeps data has no file-level info)</code>, invalid collapse rules, unknown scope/format values, <code>invalid SOURCE_DATE_EPOCH: &lt;value&gt;</code> — and malformed or type-invalid JSON is a hard error, not a warning (see <a href="#exit-codes-and-errors">Exit codes</a>).</p>
+   <h2 id="reproducible-output">Reproducible output<a href="#reproducible-output" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>generatedAt</code> is the real clock by default. Set <code>SOURCE_DATE_EPOCH</code> (the <a href="https://reproducible-builds.org/specs/source-date-epoch/">reproducible-builds.org</a> standard, epoch seconds) to pin it for deterministic CI diffs:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">SOURCE_DATE_EPOCH=1700000000 codeps report --scope packages --input deps.json
+</code></pre>
    <h2 id="include--exclude-patterns">Include / exclude patterns<a href="#include--exclude-patterns" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to each node's <strong>root package</strong> — the topmost package ancestor found by walking <code>parentId</code> chains (for a package node, that is the package itself). A node is kept when it has no include patterns or its root package matches one, and its root package matches no exclude pattern (excludes win). An edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped). With no <code>-i</code>, all nodes are kept.</p>
+   <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to each node's <strong>root package</strong> — the topmost package ancestor found by walking <code>parentId</code> chains (for a package node, that is the package itself). A node is kept when it has no include patterns or its root package matches one, and its root package matches no exclude pattern (excludes win). An edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped). With no <code>--include</code>, all nodes are kept.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">only com.example packages, minus internal helpers</span>
-codeps report --scope packages -i com.example -e com.example.internal deps.json
+codeps report --scope packages --include com.example -e com.example.internal --input deps.json
 <span class="hljs-meta prompt_">
 # </span><span class="language-bash">file scope: descend into one package</span>
-codeps report --scope files -i com.example.modules.module1 deps.json
+codeps report --scope files --include com.example.modules.module1 --input deps.json
 </code></pre>
    <h2 id="skip-tests">Skip tests<a href="#skip-tests" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>--skip-tests</code> (on <code>report</code>) excludes nodes defined in test files: <code>file</code> nodes whose id matches a pattern, and <code>type</code>/<code>member</code> nodes whose <code>file</code> attribute matches. Package nodes and file-less nodes (all of jdeps data) never match, so on jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and packages left without children are pruned.</p>
@@ -223,8 +240,8 @@ codeps report --scope files -i com.example.modules.module1 deps.json
    </table>
    <p>Glob syntax: <code>**/</code> matches zero or more whole path segments, <code>*</code> does not cross <code>/</code>, <code>?</code> matches one non-<code>/</code> character.</p>
    <p><code>--test-pattern &lt;glob&gt;</code> (repeatable) <strong>replaces</strong> the built-in patterns — use it to escape false positives (e.g. a main <code>*Spec.scala</code> DSL file) or to cover exotic layouts. Passing it without <code>--skip-tests</code> is an error.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages --skip-tests deps.json
-codeps report --scope files --skip-tests --test-pattern '**/specs/**' deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages --skip-tests --input deps.json
+codeps report --scope files --skip-tests --test-pattern '**/specs/**' --input deps.json
 </code></pre>
    <h2 id="collapse-rules">Collapse rules<a href="#collapse-rules" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Collapse rules merge nodes into a single node, keeping big graphs readable. Only trailing wildcards are supported:</p>
@@ -247,7 +264,7 @@ codeps report --scope files --skip-tests --test-pattern '**/specs/**' deps.json
     </tbody>
    </table>
    <p>Rules match node ids by prefix, kind-agnostically — they apply to whatever ids exist after aggregation (packages, or files — <code>src.**</code> collapses <code>src/one/A.scala</code> into <code>src</code>). When multiple rules match a node, the <strong>longest prefix wins</strong> (ties: first rule in the sequence). Loops created by collapsing are dropped; edges landing on the same pair are merged with summed weights.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages -c com.example.modules.** deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages -c com.example.modules.** --input deps.json
 </code></pre>
    <h2 id="exit-codes-and-errors">Exit codes and errors<a href="#exit-codes-and-errors" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
@@ -262,8 +279,8 @@ codeps report --scope files --skip-tests --test-pattern '**/specs/**' deps.json
 </code></pre>
    <h2 id="building-from-source">Building from source<a href="#building-from-source" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>For developing codeps itself, the repo is built with <a href="https://sake92.github.io/deder/">deder</a> — see the <a href="https://github.com/sake92/codeps#development">README</a>:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli export --from semanticdb &lt;dir&gt; -o deps.json
-deder exec -t run -m cli report --scope packages deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">deder exec -t run -m cli export --from semanticdb -i &lt;dir&gt; -o deps.json
+deder exec -t run -m cli report --scope packages -i deps.json
 </code></pre>
    <div role="group">
     <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/report.html">Metrics report ➡️</a>

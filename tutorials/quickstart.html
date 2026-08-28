@@ -76,25 +76,25 @@
 <span class="hljs-meta prompt_"># </span><span class="language-bash">-&gt; classes/META-INF/semanticdb/**/*.semanticdb</span>
 </code></pre>
    <p>Then export the graph to the standard JSON export format:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb -o deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 </code></pre>
-   <p>If your build tool already enables SemanticDB (sbt/Maven with the <code>semanticdb</code> compiler plugin), the <code>.semanticdb</code> files are already on disk — just point <code>export</code> at the directory that contains them.</p>
+   <p>If your build tool already enables SemanticDB (sbt/Maven with the <code>semanticdb</code> compiler plugin), the <code>.semanticdb</code> files are already on disk — just point <code>export --input</code> at the directory that contains them.</p>
    <p><strong>Java or mixed</strong> — use the JDK's own analyzer:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:class -filter:none -cp classes classes &gt; jdeps.txt
-codeps export --from jdeps jdeps.txt -o deps.json
+codeps export --from jdeps --input jdeps.txt -o deps.json
 </code></pre>
    <p>See <a href="https://sake92.github.io/codeps/howtos/semdb.html">Scala/SemanticDB projects</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">Java/JVM projects with jdeps</a> for details.</p>
    <h2 id="analyze">Analyze<a href="#analyze" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Emit the metrics report over the whole package graph:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages --input deps.json
 </code></pre>
    <p>or pipe export straight into report:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb classes/META-INF/semanticdb | codeps report --scope packages -
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
 </code></pre>
    <p>For a file-level view of one package, use <code>--scope files</code> with an include pattern:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope files -i com.example.modules.module1 deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope files --include com.example.modules.module1 --input deps.json
 </code></pre>
-   <p>The report contains cycles with simulated cut candidates, exposed-surface metrics (<code>ports</code>/<code>mutPorts</code>/<code>exposure</code>/<code>utilization</code>) and orphans — see the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the full field reference. It renders as plain aligned text by default; <code>--format json</code> emits machine-readable JSON.</p>
+   <p>The report contains cycles with cut solutions, exposed-surface metrics (<code>ports</code>/<code>mutPorts</code>/<code>exposure</code>/<code>utilization</code>) and orphans — see the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the full field reference. It renders as plain aligned text by default; <code>--format json</code> emits machine-readable JSON.</p>
    <h2 id="whats-next">What's next?<a href="#whats-next" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li>Filter and collapse packages: <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a></li>
