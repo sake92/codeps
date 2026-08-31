@@ -3,6 +3,7 @@ package ba.sake.codeps.report
 import ba.sake.codeps.graph.TestFilter
 import ba.sake.codeps.model.*
 import ba.sake.codeps.report.MetricsCalculator.Scope
+import ba.sake.tupson.*
 
 class MetricsCalculatorSpec extends munit.FunSuite:
 
@@ -180,9 +181,13 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.cycles.size, 1)
     val cycle = report.cycles.head
     assertEquals(cycle.id, "scc:p1")
-    assertEquals(cycle.members, Seq("p1", "p2", "p3", "p1"))
+    assertEquals(cycle.members, Seq("p1", "p2", "p3"))
+    assertEquals(cycle.witnessCycle, Seq("p1", "p2", "p3", "p1"))
     assertEquals(cycle.size, 3)
     assertEquals(cycle.extFanIn, 1) // outside -> p1 only
+    assertEquals(report.surface.find(_.node == "p1").flatMap(_.cycleId), Some("scc:p1"))
+    assertEquals(report.surface.find(_.node == "outside").flatMap(_.cycleId), None)
+    assert(report.toJson().contains("\"schemaVersion\": 2"))
     assertEquals(cycle.minCutsEstimate, 1) // cutting any ring edge resolves a 3-ring
     assertEquals(cycle.solutions, Seq(
       Solution(Seq(CutCandidate("p1", "p2", 1))),
@@ -207,7 +212,8 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val cycle = report.cycles.head
-    assertEquals(cycle.members, Seq("p1", "p2", "p3", "p1"))
+    assertEquals(cycle.members, Seq("p1", "p2", "p3"))
+    assertEquals(cycle.witnessCycle, Seq("p1", "p2", "p3", "p1"))
     // p3 -> p1 dissolves alone; the remaining slots are the cheapest 2-cut plans
     assertEquals(cycle.solutions, Seq(
       Solution(Seq(CutCandidate("p3", "p1", 1))),
@@ -236,7 +242,8 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val cycle = report.cycles.head
     assertEquals(cycle.size, 4)
-    assertEquals(cycle.members, Seq("a", "b", "a"))
+    assertEquals(cycle.members, Seq("a", "b", "c", "d"))
+    assertEquals(cycle.witnessCycle, Seq("a", "b", "a"))
     // no single edge dissolves the whole SCC ({a,b} and {c,d} are two interlocking
     // rings), so every solution is a pair: one edge from each ring. The pair
     // {a -> b, d -> c} does NOT work: b -> a -> c -> d -> b survives as a 4-cycle.

@@ -102,6 +102,7 @@ object MetricsCalculator:
 
     val orphans = sg.nodes.filter(n => fanInOf(n) == 0 && fanOutOf(n) == 0).toSeq.sorted
     val cycleSets = TarjanScc.cycles(sg.nodes, sg.edges)
+    val cycleIdByNode = cycleSets.flatMap(scc => scc.map(_ -> ("scc:" + scc.min))).toMap
     val cycles = cycleSets.map(k => cycleRow(k, sg)).sortBy(k => (-k.size, -k.extFanIn, k.id))
 
     val surface = sg.nodes.toSeq
@@ -116,7 +117,8 @@ object MetricsCalculator:
           ports = p,
           mutPorts = mp,
           exposure = p + mp * 3,
-          utilization = if fi > 0 && p > 0 then Some(fi / p) else None
+          utilization = if fi > 0 && p > 0 then Some(fi / p) else None,
+          cycleId = cycleIdByNode.get(id)
         )
       }
       .sortBy(r => (if r.utilization.isEmpty then 1 else 0, r.utilization.getOrElse(0.0), r.node))
@@ -189,12 +191,13 @@ object MetricsCalculator:
     val (minCuts, greedyPlan) = greedyCutPlan(scc, sg)
     Cycle(
       id = "scc:" + scc.min, // stable key: min member id, NOT a counter
-      members = cyclePath(scc, sg),
+      members = scc.toSeq.sorted,
       size = scc.size,
       extFanIn = extFanIn,
       minCutsEstimate = minCuts,
       solutions = solutions(scc, sg, greedyPlan),
-      internalEdges = internalEdges
+      internalEdges = internalEdges,
+      witnessCycle = cyclePath(scc, sg)
     )
 
   /** A simple cycle through the SCC's smallest member as a closed path (first

@@ -14,18 +14,23 @@ class MetricsReportSpec extends munit.FunSuite:
       summary = Summary(nodes = 100, edges = 214, nodesInCycles = 34, orphans = 3, criticalPathLength = 7),
       cycles = Seq(Cycle(
         id = "scc:cache",
-        members = Seq("cache", "scheduler", "cache"),
+        members = Seq("cache", "scheduler"),
+        witnessCycle = Seq("cache", "scheduler", "cache"),
         size = 2,
         extFanIn = 5,
         minCutsEstimate = 1,
         solutions = Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4))))
       )),
       propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
-      surface = Seq(SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33))),
+      surface = Seq(
+        SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33), Some("scc:cache")),
+        SurfaceRow("outside", 0, 1, 1.0, 0.0, 1.0, None, None)
+      ),
       orphans = Seq("DeadUtil.scala")
     )
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"scope\":\"packages\""))
+    assert(json.contains("\"schemaVersion\":2"))
     assert(json.contains("\"generatedAt\":\"2026-08-27T10:00:00Z\""))
     assert(json.contains("\"nodesInCycles\":34"))
     assert(json.contains("\"criticalPathLength\":7"))
@@ -50,7 +55,17 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(!json.contains("\"fan_in\""))
     assert(json.contains("\"exposure\":24"))
     assert(json.contains("\"utilization\":0.33"))
+    assert(json.contains("\"members\":[\"cache\",\"scheduler\"]"))
+    assert(json.contains("\"witnessCycle\":[\"cache\",\"scheduler\",\"cache\"]"))
+    assert(json.contains("\"cycleId\":\"scc:cache\""))
+    assert(json.contains("\"cycleId\":null"))
     assert(!json.contains("articulation_points"))
+  }
+
+  test("report serialization always emits schema version 2") {
+    val report = MetricsReport("packages", "2026-08-27T10:00:00Z", Summary(0, 0, 0, 0, 0), Nil, Nil, Nil, Nil, schemaVersion = 1)
+    assert(report.toJson(spaces = 0, sort = false).contains("\"schemaVersion\":2"))
+    assert(!report.toJson(spaces = 0, sort = false).contains("\"schemaVersion\":1"))
   }
 
   test("integral doubles render as integers, null utilization renders as null") {
@@ -76,7 +91,7 @@ class MetricsReportSpec extends munit.FunSuite:
     val json = report.toJson(spaces = 0, sort = false)
     val rootKeys = Parser.parseFromString(json).toOption.get.asInstanceOf[JObject].vs.keySet
 
-    assertEquals(rootKeys, Set("scope", "generatedAt", "summary", "cycles", "propagators", "surface", "orphans"))
+    assertEquals(rootKeys, Set("schemaVersion", "scope", "generatedAt", "summary", "cycles", "propagators", "surface", "orphans"))
     assertEquals("\"edge\":".r.findAllIn(json).length, 9)
     assert(json.contains("\"edge\":[\"canonical.source.9\",\"canonical.target.9\"]"))
     assert(!json.contains("internalEdges"))

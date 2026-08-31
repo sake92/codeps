@@ -13,7 +13,8 @@ case class MetricsReport(
     cycles: Seq[Cycle],
     propagators: Seq[PropagatorRow],
     surface: Seq[SurfaceRow],
-    orphans: Seq[String]
+    orphans: Seq[String],
+    schemaVersion: Int = 2
 )
 
 case class Summary(
@@ -25,10 +26,9 @@ case class Summary(
 )
 
 /** One cycle (multi-member SCC). `id` = "scc:" + smallest member id — stable
-  * across recomputations after cuts, unlike a counter. `members` is a closed
-  * cycle path through the smallest member (first node repeated at the end);
-  * `size` is the full SCC member count, which may exceed the path length when
-  * the SCC contains several interlocking cycles. */
+  * across recomputations after cuts, unlike a counter. `members` is exhaustive
+  * sorted SCC membership; `witnessCycle` is one deterministic closed cycle
+  * path through the smallest member. */
 case class Cycle(
     id: String,
     members: Seq[String],
@@ -38,7 +38,8 @@ case class Cycle(
     solutions: Seq[Solution],
     /** Display-only cycle density metadata. It is intentionally not serialized,
       * so the report JSON schema remains stable. */
-    internalEdges: Int = 0
+    internalEdges: Int = 0,
+    witnessCycle: Seq[String] = Nil
 )
 
 /** One complete way to break the cycle: removing ALL `cuts` together dissolves
@@ -58,7 +59,8 @@ case class SurfaceRow(
     ports: Double,
     mutPorts: Double,
     exposure: Double,
-    utilization: Option[Double]
+    utilization: Option[Double],
+    cycleId: Option[String] = None
 )
 
 /** A node that propagates changes to an above-average part of the graph.
@@ -70,6 +72,8 @@ object MetricsReport:
   given JsonRW[MetricsReport] with
     override def write(value: MetricsReport): JValue =
       obj(
+        // Schema version is a wire-level contract; callers cannot emit a different version.
+        "schemaVersion" -> JsonRW[Int].write(2),
         "scope" -> JsonRW[String].write(value.scope),
         "generatedAt" -> JsonRW[String].write(value.generatedAt),
         "summary" -> JsonRW[Summary].write(value.summary),
@@ -103,7 +107,8 @@ object Cycle:
         "size" -> JsonRW[Int].write(value.size),
         "extFanIn" -> JsonRW[Int].write(value.extFanIn),
         "minCutsEstimate" -> JsonRW[Int].write(value.minCutsEstimate),
-        "solutions" -> JsonRW[Seq[Solution]].write(value.solutions)
+        "solutions" -> JsonRW[Seq[Solution]].write(value.solutions),
+        "witnessCycle" -> JsonRW[Seq[String]].write(value.witnessCycle)
       )
     override def parse(path: String, jValue: JValue): Cycle =
       throw new UnsupportedOperationException("metrics reports are write-only")
@@ -139,7 +144,10 @@ object SurfaceRow:
         "exposure" -> num(value.exposure),
         "utilization" -> (value.utilization match
           case None    => JNull
-          case Some(d) => num(d))
+          case Some(d) => num(d)),
+        "cycleId" -> (value.cycleId match
+          case None     => JNull
+          case Some(id) => JsonRW[String].write(id))
       )
     override def parse(path: String, jValue: JValue): SurfaceRow =
       throw new UnsupportedOperationException("metrics reports are write-only")

@@ -22,6 +22,7 @@ function of the input, which is what makes diffing reports over time meaningful.
 
 ```json
 {
+  "schemaVersion": 2,
   "scope": "packages",
   "generatedAt": "<ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z>",
   "summary": {
@@ -34,7 +35,8 @@ function of the input, which is what makes diffing reports over time meaningful.
   "cycles": [
     {
       "id": "scc:cache",
-      "members": ["cache", "scheduler", "cache"],
+      "members": ["cache", "scheduler"],
+      "witnessCycle": ["cache", "scheduler", "cache"],
       "size": 2,
       "extFanIn": 5,
       "minCutsEstimate": 1,
@@ -47,13 +49,15 @@ function of the input, which is what makes diffing reports over time meaningful.
     { "node": "cache", "fanIn": 3, "fanOut": 2, "score": 2.5 }
   ],
   "surface": [
-    { "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24, "utilization": 0.33 }
+    { "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24, "utilization": 0.33, "cycleId": "scc:cache" }
   ],
   "orphans": ["DeadUtil.scala"]
 }
 ```
 
 ## Summary
+
+- `schemaVersion` — integer `2`. This is a schema break; v1 is not an accepted output compatibility target.
 
 - `nodes` / `edges` — size of the scope graph.
 - `nodesInCycles` — total members of all cycles (multi-member strongly connected components).
@@ -71,9 +75,10 @@ components are just acyclic nodes and are never reported.
 
 - `id` — `scc:` + the lexicographically smallest member id. Stable across recomputation after cuts
   (a counter-based id would renumber unpredictably).
-- `members` — a **closed cycle path** through the smallest member: the first node repeated at the
-  end. When the SCC contains several interlocking cycles, `size` may exceed the path length — the
-  path shows one of the cycles; `size` counts the full SCC membership.
+- `members` — the exhaustive, sorted list of every node in the SCC. It is never merely a witness
+  path, including when the SCC contains several interlocking cycles.
+- `witnessCycle` — one deterministic closed cycle path through the smallest member; the first node
+  is repeated at the end. This is a representative cycle, not a membership list.
 - `size` — full member count of the SCC (may exceed the path length, see above).
 - `extFanIn` — edges whose target is in the SCC and whose source is outside: how much outside
   stuff is exposed to the cycle's blast radius. Cycles are ranked by `size` first, `extFanIn`
@@ -121,6 +126,8 @@ One row per scope node:
   `exposure` alone.
 - `utilization` — `fanIn / ports` when `fanIn > 0` and `ports > 0`, else `null`. A `null`
   utilization is meaningful (no consumers), not a 0.
+- `cycleId` — the nullable stable SCC id (`scc:` plus the lexicographically smallest member) for
+  nodes in a reported cycle; `null` for nodes outside all cycles.
 
 Rows are sorted by `utilization` ascending (nulls last): the most exposed-for-its-use nodes first.
 
