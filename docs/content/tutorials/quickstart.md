@@ -52,19 +52,19 @@ See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with 
 Emit the metrics report over the whole package graph:
 
 ```shell
-codeps report --scope packages --input deps.json
+codeps report-packages --input deps.json
 ```
 
-or pipe export straight into report:
+or pipe export straight into `report-packages`:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
 ```
 
-For a file-level view of one package, use `--scope files` with an include pattern:
+For a file-level view of one package, use `report-files` with an include pattern:
 
 ```shell
-codeps report --scope files --include com.example.modules.module1 --input deps.json
+codeps report-files --include com.example.modules.module1 --input deps.json
 ```
 
 The report contains cycles with cut solutions, exposed-surface metrics

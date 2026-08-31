@@ -12,8 +12,8 @@ or when you can't (or don't want to) enable SemanticDB.
 Your build already produced the `.class` files; the only extra step is piping `jdeps` output to a text file.
 
 jdeps data is class-level: it has no file information, so `export` collapses it to package
-nodes and edges, and `codeps report --scope files` errors on it (`no file nodes found in
-the input`) — use `--scope packages` instead.
+nodes and edges, and `codeps report-files` errors on it (`no file nodes found in
+the input`) — use `report-packages` instead.
 It also carries no access information, so all nodes have `ports`/`mutPorts` 0 and
 `utilization` `null` — a known gap, not silently meaningful.
 
@@ -40,17 +40,17 @@ that are not themselves defined in the input.
 
 ## Analyzing
 
-`codeps report` reads the JSON graph and emits the flat metrics report over the
+`codeps report-packages` reads the JSON graph and emits the flat metrics report over the
 package graph:
 
 ```shell
-codeps report --scope packages --input deps.json
+codeps report-packages --input deps.json
 ```
 
 or in one pipe:
 
 ```shell
-codeps export --from jdeps --input jdeps.txt | codeps report --scope packages --input -
+codeps export --from jdeps --input jdeps.txt | codeps report-packages --input -
 ```
 
 Cycles come with cut solutions, and the surface lists fanIn/fanOut
@@ -62,7 +62,7 @@ The raw `jdeps -verbose:class` output includes edges to `java.*`, `scala.*` and 
 platform classes. Exclude them to keep the graph focused on your code:
 
 ```shell
-codeps report --scope packages --include com.example -e java.** -e scala.** --input deps.json
+codeps report-packages --include com.example -e java.** -e scala.** --input deps.json
 ```
 
 > Note: excludes are package patterns matched against each node's root package —
@@ -73,7 +73,7 @@ codeps report --scope packages --include com.example -e java.** -e scala.** --in
 Just like with SemanticDB input, `--collapse`/`-c` rules apply:
 
 ```shell
-codeps report --scope packages --include com.example -c com.example.modules.** --input deps.json
+codeps report-packages --include com.example -c com.example.modules.** --input deps.json
 ```
 
 See [CLI reference](/reference/cli.html) for the full option list.

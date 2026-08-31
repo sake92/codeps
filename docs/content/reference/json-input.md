@@ -1,13 +1,13 @@
 ---
 layout: reference.html
 title: Standard JSON export format
-description: the standard JSON graph format produced by codeps export and consumed by codeps report
+description: the standard JSON graph format produced by codeps export and consumed by codeps report-packages or report-files
 ---
 
 # Standard JSON export format
 
 The standard JSON export format is the contract between the two codeps steps: `codeps export`
-*produces* it, `codeps report` *consumes* it. It is a self-contained dependency
+*produces* it, and `codeps report-packages` or `codeps report-files` *consumes* it. It is a self-contained dependency
 graph produced by `codeps export` as `package` and `file` nodes only — the exporters
 collapse type/member symbols into their file (or root package for file-less jdeps
 types), with `ports`/`mutPorts` summed and edges aggregated at file level with
@@ -97,7 +97,7 @@ codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 ```
 
 External tools can emit nodes+edges JSON directly (matching the schema above)
-and pipe it into `codeps report --scope packages ... --input -`. The examples below are sketches;
+and pipe it into `codeps report-packages ... --input -`. The examples below are sketches;
 adapt them to your tool's output. The key points: give every node a unique `id` and a
 valid `kind`, and reference only existing ids in `edges`.
 
@@ -105,17 +105,17 @@ JavaScript/TypeScript (file-level deps from [madge](https://github.com/pahen/mad
 mapped to file/package nodes, e.g. by tsconfig `rootDir`):
 
 ```shell
-madge --json src | jq '...' | codeps report --scope files --input -
+madge --json src | jq '...' | codeps report-files --input -
 ```
 
 Python (module-level deps from [pydeps](https://github.com/thebjorn/pydeps)):
 
 ```shell
-pydeps --json mypackage | jq '...' | codeps report --scope packages --input -
+pydeps --json mypackage | jq '...' | codeps report-packages --input -
 ```
 
 Go (`go list` already emits package-level import deps):
 
 ```shell
-go list -json ./... | jq '...' | codeps report --scope packages --input -
+go list -json ./... | jq '...' | codeps report-packages --input -
 ```

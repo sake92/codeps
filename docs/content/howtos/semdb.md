@@ -60,28 +60,29 @@ codeps export --from semanticdb --input classes/META-INF/semanticdb --root . -o 
 
 ## Analyzing
 
-`codeps report` reads the JSON graph and emits the flat metrics report:
+`codeps report-packages` reads the JSON graph and emits the flat metrics report over the
+package graph:
 
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-codeps report --scope packages --input deps.json
+codeps report-packages --input deps.json
 ```
 
-- `--scope packages` — metrics over the whole package graph: cycles with cut
+- `report-packages` — metrics over the whole package graph: cycles with cut
   solutions, per-package exposed-surface (`ports`/`mutPorts`/`exposure`/`utilization`),
   and orphans
-- `--scope files` — the same metrics over the **file graph** of the packages selected with
+- `report-files` — the same metrics over the **file graph** of the packages selected with
   `--include`; e.g. `--include com.example` descends into `com.example` and everything below it
 - `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
 - `--include`/`--exclude`/`--collapse` filter and collapse (see below)
 - `--format json` emits machine-readable JSON with complete report data; the default `table` is
   a compact plain-text presentation that may abbreviate cut lists
 
-No intermediate file needed — pipe `export` straight into `report` (the `-` tells
-`report` to read the JSON from stdin):
+No intermediate file needed — pipe `export` straight into `report-packages` (the `-` tells
+it to read the JSON from stdin):
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
 ```
 
 See the [Metrics report](/reference/report.html) for the full field reference.
@@ -93,16 +94,16 @@ itself and everything below it; excludes win over includes.
 
 ```shell
 # only com.example packages, no third-party or JDK noise
-codeps report --scope packages --include com.example --input deps.json
+codeps report-packages --include com.example --input deps.json
 
 # com.example.* minus internal helpers
-codeps report --scope packages --include com.example -e com.example.internal --input deps.json
+codeps report-packages --include com.example -e com.example.internal --input deps.json
 ```
 
 Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:
 
 ```shell
-codeps report --scope packages --include com.example -c com.example.modules.** --input deps.json
+codeps report-packages --include com.example -c com.example.modules.** --input deps.json
 ```
 
 When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.

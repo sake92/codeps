@@ -14,16 +14,16 @@ It works in two steps:
    [SemanticDB](/howtos/semdb.html) (`.semanticdb` files from Scala) or
    [jdeps](/howtos/jdeps.html) (the JDK's own analyzer) — and spits out a
    dependency graph as JSON: the [standard JSON export format](/reference/json-input.html).
-2. **`codeps report`** takes that JSON (a file, or stdin via `-`) and spits out the
-   [metrics report](/reference/report.html): a plain-text table by default, or JSON
-   with `--format json` — handy for agents, other tools and CI.
+2. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
+   via `-`) and spits out the [metrics report](/reference/report.html): a plain-text table by
+   default, or JSON with `--format json` — handy for agents, other tools and CI.
 
 It works on two levels:
 
-- **`--scope packages`** — the whole package graph: the level you use when
+- **`report-packages`** — the whole package graph: the level you use when
   **splitting modules**. Find the cycles that keep modules welded together,
   with cut solutions, plus per-package exposed surface and orphans.
-- **`--scope files`** — the file graph of the packages selected with `--include`: the
+- **`report-files`** — the file graph of the packages selected with `--include`: the
   granularity that matters when you **optimize compile times** (zinc and other
   incremental compilers recompile by file).
 
@@ -34,10 +34,10 @@ level they degrade incremental compilation.
 
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-codeps report --scope packages --input deps.json
+codeps report-packages --input deps.json
 ```
 
-Abbreviated table output of `codeps report --scope packages` on the repo's
+Abbreviated table output of `codeps report-packages` on the repo's
 [cyclic test fixture](https://github.com/sake92/codeps/blob/main/testFixtures/cyclic.json)
 (`module1` ↔ `module2`):
 
