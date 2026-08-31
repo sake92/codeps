@@ -446,3 +446,23 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.surface.head.ports, 4.0)
     assertEquals(report.summary.edges, 0) // intra-src edge collapses to a self-loop
   }
+
+  test("disjoint cycles: each cycle reports its own minCutsEstimate (no whole-graph leakage)") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("a", NodeKind.`package`), Node("b", NodeKind.`package`),
+        Node("c", NodeKind.`package`), Node("d", NodeKind.`package`),
+        Node("a.A", NodeKind.`type`, Some("a"), None),
+        Node("b.B", NodeKind.`type`, Some("b"), None),
+        Node("c.C", NodeKind.`type`, Some("c"), None),
+        Node("d.D", NodeKind.`type`, Some("d"), None)
+      ),
+      edges = Set(Edge("a.A", "b.B"), Edge("b.B", "a.A"), Edge("c.C", "d.D"), Edge("d.D", "c.C"))
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    assertEquals(report.cycles.map(_.minCutsEstimate), Seq(1, 1))
+    assertEquals(report.cycles.map(_.solutions.head.cuts), Seq(
+      Seq(CutCandidate("a", "b", 1)),
+      Seq(CutCandidate("c", "d", 1))
+    ))
+  }

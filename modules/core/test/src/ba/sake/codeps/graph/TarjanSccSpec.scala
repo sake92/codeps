@@ -49,3 +49,9 @@ class TarjanSccSpec extends munit.FunSuite:
     val edges = sorted.map(n => Edge(n, sorted((n.hashCode.abs + 7) % sorted.size))).toSet
     assertEquals(TarjanScc.components(nodes, edges), TarjanScc.components(nodes, edges))
   }
+
+  test("components works on the induced subgraph of nodes: foreign edges are ignored") {
+    val nodes = Set("a", "b")
+    val edges = Set(Edge("a", "b"), Edge("b", "a"), Edge("c", "d"), Edge("d", "c"))
+    assertEquals(TarjanScc.components(nodes, edges), Seq(Set("a", "b")))
+  }

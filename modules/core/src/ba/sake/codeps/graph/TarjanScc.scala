@@ -16,12 +16,17 @@ object TarjanScc:
   /** All components, including singletons, sorted by their lexicographically
     * smallest member id. */
   def components(nodes: Set[String], edges: Set[Edge]): Seq[Set[String]] =
-    val adjacency = edges.toSeq
+    // Induced subgraph on `nodes`: edges with an endpoint outside it are dropped.
+    // Callers pass restricted node sets for cut simulation — leaking foreign
+    // edges corrupted every restricted component computation (minCutsEstimate,
+    // simulateCut, dissolves).
+    val localEdges = edges.filter(e => nodes.contains(e.source) && nodes.contains(e.target))
+    val adjacency = localEdges.toSeq
       .groupMap(_.source)(_.target)
       .view
       .mapValues(_.distinct.sorted)
       .toMap
-    val allNodes = (nodes ++ edges.flatMap(e => Seq(e.source, e.target))).toSeq.sorted
+    val allNodes = nodes.toSeq.sorted
     val disc = mutable.Map.empty[String, Int]
     val low = mutable.Map.empty[String, Int]
     val onStack = mutable.Set.empty[String]
