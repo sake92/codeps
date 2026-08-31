@@ -6,6 +6,14 @@ object ReportTable:
 
   def render(report: MetricsReport): String =
     val sb = new StringBuilder
+    val stripIds: Iterable[String] =
+      report.cycles.flatMap(_.members) ++
+        report.propagators.map(_.node) ++
+        report.surface.map(_.node) ++
+        report.orphans
+    val separator = if report.scope == "files" then '/' else '.'
+    val (strippedPrefix, stripped) = PrefixStripper.strip(stripIds, separator)
+    def disp(id: String): String = stripped.getOrElse(id, id)
     sb.append(s"scope: ${report.scope}    generatedAt: ${report.generatedAt}\n\n")
     sb.append("Summary\n")
     val s = report.summary
@@ -15,6 +23,7 @@ object ReportTable:
     )
 
     sb.append("Cycles (size desc, extFanIn desc)\n")
+    strippedPrefix.foreach(p => sb.append(s"common prefix stripped: $p (full ids via --format json)\n"))
     if report.cycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
@@ -22,9 +31,9 @@ object ReportTable:
         report.cycles.map { k =>
           val sols = if k.solutions.isEmpty then "—"
           else k.solutions.zipWithIndex.map { (s, i) =>
-            s"${i + 1}) " + s.cuts.map(c => s"${c.source} -> ${c.target} (w=${c.weight})").mkString(", ")
+            s"${i + 1}) " + s.cuts.map(c => s"${disp(c.source)} -> ${disp(c.target)} (w=${c.weight})").mkString(", ")
           }.mkString("  ")
-          Seq(k.id, k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, sols)
+          Seq("scc:" + disp(k.members.head), k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, sols)
         }
       ))
     sb.append("\n")
@@ -34,7 +43,7 @@ object ReportTable:
     else
       sb.append(table(
         Seq("node", "fanIn", "fanOut", "score"),
-        report.propagators.map(p => Seq(p.node, p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f"))
+        report.propagators.map(p => Seq(disp(p.node), p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f"))
       ))
     sb.append("\n")
 
@@ -42,7 +51,7 @@ object ReportTable:
     sb.append(table(
       Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "utilization"),
       report.surface.map(r => Seq(
-        r.node,
+        disp(r.node),
         r.fanIn.toString,
         r.fanOut.toString,
         num(r.ports),
@@ -55,7 +64,7 @@ object ReportTable:
 
     sb.append("Orphans\n")
     if report.orphans.isEmpty then sb.append("  (none)\n")
-    else report.orphans.foreach(o => sb.append(s"  $o\n"))
+    else report.orphans.foreach(o => sb.append(s"  ${disp(o)}\n"))
     sb.result()
 
   /** Aligns columns to the widest cell, two-space gaps. */
