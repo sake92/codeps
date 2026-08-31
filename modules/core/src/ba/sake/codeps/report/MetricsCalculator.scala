@@ -185,6 +185,7 @@ object MetricsCalculator:
 
   private def cycleRow(scc: Set[String], sg: ScopeGraph): Cycle =
     val extFanIn = sg.edges.count(e => scc.contains(e.target) && !scc.contains(e.source))
+    val internalEdges = sg.edges.count(e => scc.contains(e.source) && scc.contains(e.target))
     val (minCuts, greedyPlan) = greedyCutPlan(scc, sg)
     Cycle(
       id = "scc:" + scc.min, // stable key: min member id, NOT a counter
@@ -192,7 +193,8 @@ object MetricsCalculator:
       size = scc.size,
       extFanIn = extFanIn,
       minCutsEstimate = minCuts,
-      solutions = solutions(scc, sg, greedyPlan)
+      solutions = solutions(scc, sg, greedyPlan),
+      internalEdges = internalEdges
     )
 
   /** A simple cycle through the SCC's smallest member as a closed path (first

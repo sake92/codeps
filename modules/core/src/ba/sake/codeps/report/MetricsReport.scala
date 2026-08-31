@@ -35,7 +35,10 @@ case class Cycle(
     size: Int,
     extFanIn: Int,
     minCutsEstimate: Int,
-    solutions: Seq[Solution]
+    solutions: Seq[Solution],
+    /** Display-only cycle density metadata. It is intentionally not serialized,
+      * so the report JSON schema remains stable. */
+    internalEdges: Int = 0
 )
 
 /** One complete way to break the cycle: removing ALL `cuts` together dissolves

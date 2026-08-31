@@ -4,6 +4,9 @@ package ba.sake.codeps.report
   * presentation, never a separate computation. */
 object ReportTable:
 
+  private val maxDisplayedCuts = 8
+  private val denseKnotNote = "dense knot: inspect propagators; full cut list via --format json"
+
   def render(report: MetricsReport): String =
     val sb = new StringBuilder
     val stripIds: Iterable[String] =
@@ -27,15 +30,23 @@ object ReportTable:
     if report.cycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
-        Seq("id", "size", "extFanIn", "minCutsEstimate", "solutions"),
+        Seq("id", "size", "extFanIn", "minCutsEstimate"),
         report.cycles.map { k =>
-          val sols = if k.solutions.isEmpty then "—"
-          else k.solutions.zipWithIndex.map { (s, i) =>
-            s"${i + 1}) " + s.cuts.map(c => s"${disp(c.source)} -> ${disp(c.target)} (w=${c.weight})").mkString(", ")
-          }.mkString("  ")
-          Seq("scc:" + disp(k.members.head), k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString, sols)
+          Seq("scc:" + disp(k.members.head), k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString)
         }
       ))
+      report.cycles.foreach { cycle =>
+        sb.append(s"\n  Cycle scc:${disp(cycle.members.head)}\n")
+        if isDenseKnot(cycle) then sb.append(s"    $denseKnotNote\n")
+        else
+          cycle.solutions.zipWithIndex.foreach { (solution, index) =>
+            val displayedCuts = solution.cuts.take(maxDisplayedCuts)
+              .map(c => s"${disp(c.source)} -> ${disp(c.target)} (w=${c.weight})")
+            val omitted = solution.cuts.size - maxDisplayedCuts
+            val suffix = if omitted > 0 then s", … $omitted more (full list in JSON)" else ""
+            sb.append(s"    solution ${index + 1}: ${displayedCuts.mkString(", ")}$suffix\n")
+          }
+      }
     sb.append("\n")
 
     sb.append("Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)\n")
@@ -78,3 +89,8 @@ object ReportTable:
 
   private def num(d: Double): String =
     if !d.isNaN && !d.isInfinite && d == math.rint(d) then d.toLong.toString else d.toString
+
+  private def isDenseKnot(cycle: Cycle): Boolean =
+    cycle.size >= 10 &&
+      cycle.internalEdges >= 20 &&
+      cycle.minCutsEstimate.toDouble / cycle.internalEdges >= 0.15

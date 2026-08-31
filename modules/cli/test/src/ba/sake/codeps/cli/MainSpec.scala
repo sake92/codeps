@@ -153,6 +153,9 @@ class MainSpec extends munit.FunSuite:
     val tableRes = runCli("report", "--scope", "packages", "--input", cyclic.toString)
     assertEquals(tableRes.exitCode, 0)
     assert(tableRes.out.text().contains("scc:com.example.modules.module1"))
+    assert(tableRes.out.text().contains("Cycle scc:com.example.modules.module1"))
+    assert(tableRes.out.text().contains("solution 1:"))
+    assert(tableRes.out.text().contains("minCutsEstimate"))
     assert(tableRes.out.text().contains("mutPorts"))
     assert(!tableRes.out.text().contains("mut_ports"))
   }

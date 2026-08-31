@@ -1,5 +1,8 @@
 package ba.sake.codeps.report
 
+import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
+import ba.sake.codeps.report.MetricsCalculator.Scope
+
 class ReportTableSpec extends munit.FunSuite:
 
   private val report = MetricsReport(
@@ -22,11 +25,61 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("nodes: 2"))
     assert(text.contains("criticalPathLength: 1"))
     assert(text.contains("scc:cache"))
-    assert(text.contains("1) scheduler -> cache (w=4)"))
+    assert(text.contains("Cycle scc:cache"))
+    assert(text.contains("solution 1: scheduler -> cache (w=4)"))
     assert(text.contains("0.33"))
     assert(text.contains("iso"))
     assert(text.contains("Change propagators"))
     assert(text.contains("2.00"))
+  }
+
+  test("cycles table keeps only identifying and count columns; solutions use separate blocks") {
+    val withThreeSolutions = report.copy(cycles = Seq(report.cycles.head.copy(solutions = Seq(
+      Solution(Seq(CutCandidate("scheduler", "cache", 4))),
+      Solution(Seq(CutCandidate("cache", "scheduler", 5))),
+      Solution(Seq(CutCandidate("scheduler", "cache", 6)))
+    ))))
+    val text = ReportTable.render(withThreeSolutions)
+    val cyclesSection = text.substring(text.indexOf("Cycles"), text.indexOf("Change propagators"))
+    val header = cyclesSection.linesIterator.find(_.startsWith("id")).get
+
+    assert(header.contains("id"))
+    assert(header.contains("size"))
+    assert(header.contains("extFanIn"))
+    assert(header.contains("minCutsEstimate"))
+    assert(!header.contains("solutions"))
+    assert(cyclesSection.contains("Cycle scc:cache"))
+    assert(cyclesSection.contains("solution 1: scheduler -> cache (w=4)"))
+    assert(cyclesSection.contains("solution 2: cache -> scheduler (w=5)"))
+    assert(cyclesSection.contains("solution 3: scheduler -> cache (w=6)"))
+  }
+
+  test("large solution displays at most eight cuts and points to the complete JSON list") {
+    val cuts = (1 to 9).map(i => CutCandidate(s"source$i", s"target$i", i))
+    val large = report.copy(cycles = Seq(report.cycles.head.copy(solutions = Seq(Solution(cuts)))))
+    val text = ReportTable.render(large)
+
+    assert(text.contains("source8 -> target8 (w=8)"))
+    assert(!text.contains("source9 -> target9 (w=9)"))
+    assert(text.contains("… 1 more (full list in JSON)"))
+  }
+
+  test("dense knot omits its cut wall and directs the user to propagators and JSON") {
+    val names = (0 until 10).map(i => s"p$i")
+    val graph = DepsGraph(
+      nodes = names.flatMap { name =>
+        Seq(Node(name, NodeKind.`package`), Node(s"$name.T", NodeKind.`type`, Some(name), None))
+      }.toSet,
+      edges = names.indices.flatMap { i =>
+        val next = (i + 1) % names.size
+        Seq(Edge(s"${names(i)}.T", s"${names(next)}.T"), Edge(s"${names(next)}.T", s"${names(i)}.T"))
+      }.toSet
+    )
+    val denseReport = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val text = ReportTable.render(denseReport)
+
+    assert(text.contains("dense knot: inspect propagators; full cut list via --format json"))
+    assert(!text.contains("solution 1:"))
   }
 
   test("tiny utilization renders with more precision") {

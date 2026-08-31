@@ -1,6 +1,9 @@
 package ba.sake.codeps.report
 
 import ba.sake.tupson.{*, given}
+import org.typelevel.jawn.Parser
+import org.typelevel.jawn.ast.JObject
+import org.typelevel.jawn.ast.JValue.facade
 
 class MetricsReportSpec extends munit.FunSuite:
 
@@ -56,4 +59,25 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"ports\":3"))
     assert(!json.contains("3.0"))
     assert(json.contains("\"utilization\":null"))
+  }
+
+  test("report JSON retains complete solutions without display-only metadata") {
+    val cuts = (1 to 9).map(i => CutCandidate(s"canonical.source.$i", s"canonical.target.$i", i))
+    val report = MetricsReport(
+      scope = "packages",
+      generatedAt = "2026-08-27T10:00:00Z",
+      summary = Summary(10, 20, 10, 0, 1),
+      cycles = Seq(Cycle("scc:canonical.source.1", Seq("canonical.source.1", "canonical.target.1"), 10, 0, 3,
+        Seq(Solution(cuts)))),
+      propagators = Seq.empty,
+      surface = Seq.empty,
+      orphans = Seq.empty
+    )
+    val json = report.toJson(spaces = 0, sort = false)
+    val rootKeys = Parser.parseFromString(json).toOption.get.asInstanceOf[JObject].vs.keySet
+
+    assertEquals(rootKeys, Set("scope", "generatedAt", "summary", "cycles", "propagators", "surface", "orphans"))
+    assertEquals("\"edge\":".r.findAllIn(json).length, 9)
+    assert(json.contains("\"edge\":[\"canonical.source.9\",\"canonical.target.9\"]"))
+    assert(!json.contains("internalEdges"))
   }
