@@ -59,6 +59,12 @@ the analyzer's job.
 - `semanticdb` — **directories**, walked recursively for `*.semanticdb` files.
 - `jdeps` — **files** containing `jdeps -verbose:class` text output.
 
+For a mill build, point SemanticDB export at the compiled output for the module you
+want to inspect, for example
+`out/<module>/compiledClassesAndSemanticDbFiles.dest/META-INF/semanticdb`, not the
+whole `out/` tree. The latter also walks mill's build-definition output and can add
+a phantom `build_` package to the report.
+
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 codeps export --from jdeps --input jdeps.txt
@@ -89,7 +95,7 @@ graph of the packages selected with `--include` (jdeps data has no file-level in
 | Option | Description |
 |---|---|
 | `-s` / `--scope` | `packages` or `files`. Required. |
-| `-f` / `--format` | `table` (default) or `json` — the table renders the exact same data as plain aligned text, nothing is recomputed. |
+| `-f` / `--format` | `table` (default) or `json`. The table is a compact presentation; JSON preserves canonical ids and every cut. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
@@ -113,8 +119,12 @@ Summary
   nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
 Cycles (size desc, extFanIn desc)
-  id           size  extFanIn  minCutsEstimate  solutions
-  scc:cache    2     5         1                1) scheduler -> cache (w=4)  2) cache -> scheduler (w=4)
+common prefix stripped: com.example. (full ids via --format json)
+id                 size  extFanIn  minCutsEstimate
+scc:modules.cache  10    5         9
+
+  Cycle scc:modules.cache
+    solution 1: modules.cache.A -> modules.scheduler.B (w=1), modules.cache.B -> modules.scheduler.C (w=1), modules.cache.C -> modules.scheduler.D (w=1), modules.cache.D -> modules.scheduler.E (w=1), modules.cache.E -> modules.scheduler.F (w=1), modules.cache.F -> modules.scheduler.G (w=1), modules.cache.G -> modules.scheduler.H (w=1), modules.cache.H -> modules.scheduler.I (w=1), … 1 more (full list in JSON)
 
 Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
   node     fanIn  fanOut  score
@@ -128,6 +138,20 @@ Surface (utilization asc; — = no fan-in)
 Orphans
   DeadUtil.scala
 ```
+
+The cycle table is deliberately bounded: its rows contain only identity and count
+columns, then each cycle gets separate numbered solution blocks. A table solution
+shows at most 8 cuts; if more exist, its exact omission count points to JSON. Use
+`--format json` when another tool or a review needs every canonical node id and
+every cut. Dense knots print `dense knot: inspect propagators; full cut list via
+--format json` instead of an inline cut wall, because hundreds or thousands of
+cuts are not actionable there.
+
+When the rendered ids share a prefix, table output announces it once. Package
+reports remove only complete dot-separated segments; file reports remove only
+complete slash-separated path segments. JSON always keeps the full canonical ids.
+Mixed SemanticDB source roots can leave file ids without a useful common
+slash-prefix; in that case no prefix is stripped.
 
 Errors (exit 1): parser errors from mainargs — `Missing argument: --input ...`,
 `Unknown argument(s): ...`, `Duplicate arguments for ...: ...` — and input errors:
@@ -157,6 +181,9 @@ that is the package itself). A node is kept when it has no include patterns or
 its root package matches one, and its root package matches no exclude pattern
 (excludes win). An edge is kept only when **both** its endpoints are in the
 resulting universe (self-edges are dropped). With no `--include`, all nodes are kept.
+A nonexistent `--include` leaves no nodes and is a hard exit-1 error
+(`no nodes remain after filtering`), so make pipeline users handle it rather than
+treating an empty stdout as a successful report.
 
 ```shell
 # only com.example packages, minus internal helpers
@@ -173,6 +200,10 @@ nodes whose id matches a pattern, and `type`/`member` nodes whose `file` attribu
 matches. Package nodes and file-less nodes (all of jdeps data) never match, so on
 jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and
 packages left without children are pruned.
+
+In package scope, `--skip-tests` can leave the reported node count unchanged: main
+and test sources often aggregate into the same package nodes. Inspect edges and
+the file-level view when you need to see the removed test sources directly.
 
 Built-in patterns:
 

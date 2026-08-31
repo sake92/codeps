@@ -60,7 +60,9 @@ function of the input, which is what makes diffing reports over time meaningful.
 - `orphans` — count of nodes with zero fan-in and zero fan-out (dead-code-removal candidates).
 - `criticalPathLength` — the longest path, in edges, through the condensation DAG (each SCC
   collapsed to one node). The structural lower bound on best-case parallel build time, whether
-  or not cycles exist.
+  or not cycles exist. A value of `0` for a graph that is one SCC means the condensation graph
+  has one node (and therefore no edges); it does **not** mean the underlying code is healthy or
+  acyclic.
 
 ## Cycles
 
@@ -85,6 +87,9 @@ components are just acyclic nodes and are never reported.
   size ≤ `minCutsEstimate` (capped at 4); SCCs with more than 60 internal edges fall back to the
   greedy plan as a single solution. An empty list means nothing was found within those bounds —
   it is never an error.
+- Table output is intentionally shorter than this JSON schema: it displays at most 8 cuts from
+  each solution and may replace a dense knot's cut list with structural guidance. `--format json`
+  retains every solution, complete canonical ids, and every cut.
 - `minCutsEstimate` — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly
   apply the best `resolved`-or-largest-reduction candidate, recompute against the largest remaining
   multi-member component of the cycle, until no such component remains. A heuristic, not a
