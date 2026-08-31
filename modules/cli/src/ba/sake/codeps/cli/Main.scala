@@ -44,18 +44,6 @@ object Main:
         case Seq(other)        => Left(s"unknown input format: $other (expected semanticdb or jdeps)")
         case _                 => Left("expected exactly one input format")
 
-  enum ReportScope:
-    case Packages, Files
-
-  given TokensReader.Simple[ReportScope] with
-    def shortName: String = "scope"
-    def read(strs: Seq[String]): Either[String, ReportScope] =
-      strs match
-        case Seq("packages") => Right(ReportScope.Packages)
-        case Seq("files")    => Right(ReportScope.Files)
-        case Seq(other)      => Left(s"unknown scope: $other (expected packages or files)")
-        case _               => Left("expected exactly one scope")
-
   enum ReportFormat:
     case Json, Table
 
@@ -117,9 +105,19 @@ object Main:
                   writeOutput(Aggregator.fileLevel(deps).toJson(spaces = 2, sort = true), out)
                   0
 
+  private case class ReportOptions(
+      format: ReportFormat,
+      include: Seq[String],
+      exclude: Seq[String],
+      collapse: Seq[String],
+      skipTests: Boolean,
+      testPattern: Seq[String],
+      out: Option[String],
+      input: String
+  )
+
   @main
-  def report(
-      @arg(short = 's', name = "scope") scope: ReportScope,
+  def reportPackages(
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
       @arg(name = "include") include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
@@ -128,23 +126,36 @@ object Main:
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
-  ): Int =
-    testPatternsOrError(skipTests.value, testPattern) match
+  ): Int = runReport(MetricsCalculator.Scope.Packages, ReportOptions(format, include, exclude, collapse,
+    skipTests.value, testPattern, out, input))
+
+  @main
+  def reportFiles(
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
+      @arg(name = "include") include: Seq[String],
+      @arg(short = 'e') exclude: Seq[String],
+      @arg(short = 'c') collapse: Seq[String],
+      @arg(name = "skip-tests") skipTests: mainargs.Flag,
+      @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
+      @arg(short = 'o') out: Option[String],
+      @arg(short = 'i', name = "input") input: String
+  ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
+    skipTests.value, testPattern, out, input))
+
+  private def runReport(scope: MetricsCalculator.Scope, options: ReportOptions): Int =
+    testPatternsOrError(options.skipTests, options.testPattern) match
       case Left(err) =>
         System.err.println(s"error: $err")
         1
       case Right(patterns) =>
-        val metricsScope = scope match
-          case ReportScope.Packages => MetricsCalculator.Scope.Packages
-          case ReportScope.Files    => MetricsCalculator.Scope.Files
-        readGraphInput(input) match
+        readGraphInput(options.input) match
           case Left(err) =>
             System.err.println(s"error: $err")
             1
           case Right(graph) =>
-            parseRules(collapse).flatMap { rules =>
-              MetricsCalculator.run(graph, metricsScope, include, exclude, rules, patterns).map { metricsReport =>
-                format match
+            parseRules(options.collapse).flatMap { rules =>
+              MetricsCalculator.run(graph, scope, options.include, options.exclude, rules, patterns).map { metricsReport =>
+                options.format match
                   case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
                   case ReportFormat.Table => ReportTable.render(metricsReport)
               }
@@ -153,7 +164,7 @@ object Main:
                 System.err.println(s"error: $err")
                 1
               case Right(content) =>
-                writeOutput(content, out)
+                writeOutput(content, options.out)
                 0
 
   private def readGraphInput(input: String): Either[String, DepsGraph] =

@@ -11,7 +11,7 @@ that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
    emits the [standard JSON export format](/reference/json-input.html). No analysis.
-2. [`report`](#report) — the *analyzer*: consumes that JSON (a file or stdin) and emits the
+2. [`report-packages`](#report-packages) and [`report-files`](#report-files) — the *analyzers*: consume that JSON (a file or stdin) and emit the
    flat [metrics report](/reference/report.html): cycles with cut solutions, change
    propagators, per-node exposed-surface metrics and orphans.
 
@@ -30,10 +30,10 @@ for all subcommands.
 
 The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 
-The steps pipe together — `export` writes the graph to stdout, `report` reads it from stdin (`-`):
+The steps pipe together — `export` writes the graph to stdout, and either report command reads it from stdin (`-`):
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
 ```
 
 ## export
@@ -79,35 +79,35 @@ the run continues:
 warning: failed to parse semanticdb: ...
 ```
 
-## report
+## report-packages and report-files
 
 ```shell
-codeps report --scope <packages|files> [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i <file|->
+codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i <file|->
+codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
 (filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the
 flat [Metrics report](/reference/report.html), always exits `0` on success.
 
-`--scope` is required: `packages` analyzes the whole package graph; `files` analyzes the file
-graph of the packages selected with `--include` (jdeps data has no file-level info and errors here).
+`report-packages` analyzes the whole package graph; `report-files` analyzes the file graph of the
+packages selected with `--include` (jdeps data has no file-level info and errors here).
 
 | Option | Description |
 |---|---|
-| `-s` / `--scope` | `packages` or `files`. Required. |
 | `-f` / `--format` | `table` (default) or `json`. The table is a compact presentation; JSON preserves canonical ids and every cut. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
-| `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`. Repeatable. |
+| `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
 | `-i` / `--input` | The JSON graph to analyze — a file, or `-` for stdin, so `export` output can be piped straight in. Required. |
 
 ```shell
-codeps report --scope packages --input deps.json -o report.json
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope files --include com.example --input - > files.json
-codeps export --from jdeps --input jdeps.txt | codeps report --scope packages --format table --input -
+codeps report-packages --input deps.json -o report.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-files --include com.example --input - > files.json
+codeps export --from jdeps --input jdeps.txt | codeps report-packages --format table --input -
 ```
 
 The `table` format:
@@ -161,7 +161,7 @@ Errors (exit 1): parser errors from mainargs — `Missing argument: --input ...`
 `input path does not exist: <path>`, `not a file: <path>`,
 `no nodes remain after filtering`,
 `no file nodes found in the input (jdeps data has no file-level info)`, invalid
-collapse rules, unknown scope/format values, `invalid SOURCE_DATE_EPOCH: <value>`
+collapse rules, unknown format values, `invalid SOURCE_DATE_EPOCH: <value>`
 — and malformed or type-invalid
 JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
 
@@ -172,7 +172,7 @@ JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
 seconds) to pin it for deterministic CI diffs:
 
 ```shell
-SOURCE_DATE_EPOCH=1700000000 codeps report --scope packages --input deps.json
+SOURCE_DATE_EPOCH=1700000000 codeps report-packages --input deps.json
 ```
 
 ## Include / exclude patterns
@@ -190,15 +190,15 @@ treating an empty stdout as a successful report.
 
 ```shell
 # only com.example packages, minus internal helpers
-codeps report --scope packages --include com.example -e com.example.internal --input deps.json
+codeps report-packages --include com.example -e com.example.internal --input deps.json
 
 # file scope: descend into one package
-codeps report --scope files --include com.example.modules.module1 --input deps.json
+codeps report-files --include com.example.modules.module1 --input deps.json
 ```
 
 ## Skip tests
 
-`--skip-tests` (on `report`) excludes nodes defined in test files: `file`
+`--skip-tests` (on either report command) excludes nodes defined in test files: `file`
 nodes whose id matches a pattern, and `type`/`member` nodes whose `file` attribute
 matches. Package nodes and file-less nodes (all of jdeps data) never match, so on
 jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and
@@ -225,8 +225,8 @@ escape false positives (e.g. a main `*Spec.scala` DSL file) or to cover exotic
 layouts. Passing it without `--skip-tests` is an error.
 
 ```shell
-codeps report --scope packages --skip-tests --input deps.json
-codeps report --scope files --skip-tests --test-pattern '**/specs/**' --input deps.json
+codeps report-packages --skip-tests --input deps.json
+codeps report-files --skip-tests --test-pattern '**/specs/**' --input deps.json
 ```
 
 ## Collapse rules
@@ -246,7 +246,7 @@ first rule in the sequence). Loops created by collapsing are dropped; edges land
 on the same pair are merged with summed weights.
 
 ```shell
-codeps report --scope packages -c com.example.modules.** --input deps.json
+codeps report-packages -c com.example.modules.** --input deps.json
 ```
 
 ## Exit codes and errors
@@ -261,7 +261,7 @@ so a partial run still succeeds:
 warning: failed to parse semanticdb: ...
 ```
 
-For `report`, malformed or type-invalid JSON input is a hard error (exit 1):
+For either report command, malformed or type-invalid JSON input is a hard error (exit 1):
 
 ```text
 error: failed to parse json: ...
@@ -274,5 +274,5 @@ see the [README](https://github.com/sake92/codeps#development):
 
 ```shell
 deder exec -t run -m cli export --from semanticdb -i <dir> -o deps.json
-deder exec -t run -m cli report --scope packages -i deps.json
+deder exec -t run -m cli report-packages -i deps.json
 ```
