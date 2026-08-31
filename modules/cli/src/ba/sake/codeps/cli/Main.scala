@@ -112,6 +112,7 @@ object Main:
       collapse: Seq[String],
       skipTests: Boolean,
       testPattern: Seq[String],
+      showAll: Boolean,
       out: Option[String],
       input: String
   )
@@ -124,10 +125,11 @@ object Main:
       @arg(short = 'c') collapse: Seq[String],
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
+      @arg(name = "all") all: mainargs.Flag,
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Packages, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, out, input))
+    skipTests.value, testPattern, all.value, out, input))
 
   @main
   def reportFiles(
@@ -137,10 +139,11 @@ object Main:
       @arg(short = 'c') collapse: Seq[String],
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
+      @arg(name = "all") all: mainargs.Flag,
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, out, input))
+    skipTests.value, testPattern, all.value, out, input))
 
   private def runReport(scope: MetricsCalculator.Scope, options: ReportOptions): Int =
     testPatternsOrError(options.skipTests, options.testPattern) match
@@ -157,7 +160,7 @@ object Main:
               MetricsCalculator.run(graph, scope, options.include, options.exclude, rules, patterns).map { metricsReport =>
                 options.format match
                   case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
-                  case ReportFormat.Table => ReportTable.render(metricsReport)
+                  case ReportFormat.Table => ReportTable.render(metricsReport, showAll = options.showAll)
               }
             } match
               case Left(err) =>

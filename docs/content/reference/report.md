@@ -1,17 +1,17 @@
 ---
 layout: reference.html
 title: Metrics report
-description: the codeps report JSON format — cycles, surface, orphans
+description: the codeps report JSON format — findings, cycles, surface, orphans
 ---
 
 # Metrics report
 
-`codeps report` consumes the [standard JSON export format](/reference/json-input.html) (a file, or stdin via `-`)
+`codeps report-packages` or `codeps report-files` consumes the [standard JSON export format](/reference/json-input.html) (a file, or stdin via `-`)
 and emits a single flat JSON document: per-scope metrics over the graph's **packages**, or over the
 **files** of the packages selected with `--include`.
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --format json --input - > report.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - > report.json
 ```
 
 Every value is computed fresh from the graph's node/edge list on every run — the report is a pure
@@ -51,7 +51,18 @@ function of the input, which is what makes diffing reports over time meaningful.
   "surface": [
     { "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24, "utilization": 0.33, "cycleId": "scc:cache" }
   ],
-  "orphans": ["DeadUtil.scala"]
+  "orphans": ["DeadUtil.scala"],
+  "findings": [
+    {
+      "id": "cycle:scc:cache",
+      "kind": "cycle",
+      "severity": "high",
+      "subject": "scc:cache",
+      "evidence": "size=2, extFanIn=5, minCutsEstimate=1",
+      "confidence": "high",
+      "nextAction": "inspect-cycle scc:cache"
+    }
+  ]
 }
 ```
 
@@ -67,6 +78,15 @@ function of the input, which is what makes diffing reports over time meaningful.
   or not cycles exist. A value of `0` for a graph that is one SCC means the condensation graph
   has one node (and therefore no edges); it does **not** mean the underlying code is healthy or
   acyclic.
+
+## Findings
+
+`findings` is a complete, deterministic index of actionable diagnostics. Each finding has a stable
+`id`, a `kind` (`cycle`, `propagator`, `mutableSurface`, or `structuralUse`), `severity`, and
+`subject`, plus human-readable `evidence`, `confidence`, and a `nextAction`. Findings are ranked by
+severity, then metric score, then id. They cover every reported SCC, every above-average propagator,
+every node with exposed mutable ports, and every node whose structural utilization proxy is below
+`1.0`. The last kind is only a graph proxy, not proof that a public symbol is unused.
 
 ## Cycles
 
@@ -104,17 +124,20 @@ components are just acyclic nodes and are never reported.
 
 ## Change propagators
 
-Top 10 nodes by a normalized propagation score:
+The JSON index contains every node above the normalized propagation threshold. The default table shows
+the top 10 and reports its shown/total count; pass `--all` to either report command for the complete
+table inventory.
 
 - `score` — `(fanIn / avgFanIn + fanOut / avgFanOut) / 2`, where `avgFanIn`/`avgFanOut`
   are the graph-wide means (`edges / nodes`). An exactly average node scores `1.0`; a hub with
   twice the average fan-in and no fan-out scores `2.0`. Only nodes above `1.0` are listed,
-  sorted by score descending, top 10. A graph with no edges has no propagators.
+  sorted by score descending. A graph with no edges has no propagators.
 - `fanIn`/`fanOut` — the raw counts (same values as in `surface`), shown for context.
 
 ## Surface
 
-One row per scope node:
+One row per scope node is retained in JSON. The default table shows the top 10 rows as
+`Surface risks (top 10 of N)`; `--all` shows every row.
 
 - `fanIn` / `fanOut` — count of distinct edges in/out. Always derived from the edge list, never
   stored separately.
@@ -152,4 +175,9 @@ not silently meaningful.
 ## Orphans
 
 - `orphans` — node ids with `fanIn == 0 AND fanOut == 0`, sorted. Step 1 of the improvement
-  loop: dead-code-removal candidates.
+  loop: dead-code-removal candidates. JSON retains the complete list; the table bounds it to the
+  top 10 unless `--all` is supplied.
+
+The table format is a bounded triage view: findings, cycles, propagators, surface risks, and orphans
+each include a shown/total label and display at most 10 rows by default. `--all` is accepted by
+`report-packages` and `report-files` only and requests every table row. JSON is always complete.

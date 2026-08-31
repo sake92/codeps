@@ -33,6 +33,34 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("2.00"))
   }
 
+  test("default table bounds each inventory and --all shows every row") {
+    val rows = (1 to 20).map { i =>
+      SurfaceRow(s"node$i", i, 0, i.toDouble, 0.0, i.toDouble, Some(1.0))
+    }
+    val reportWithTwentySurfaceRows = report.copy(surface = rows)
+
+    val text = ReportTable.render(reportWithTwentySurfaceRows)
+    assert(text.contains("Surface risks (top 10 of 20)"))
+    assert(text.contains("node10"))
+    assert(!text.contains("node20"))
+
+    val allText = ReportTable.render(reportWithTwentySurfaceRows, showAll = true)
+    assert(allText.contains("Surface risks (all 20)"))
+    assert(allText.contains("node20"))
+  }
+
+  test("structured findings render as a bounded ranked section") {
+    val findings = (1 to 20).map { i =>
+      Finding(s"finding:$i", "cycle", "high", s"node$i", s"size=$i", "high", s"inspect-cycle node$i")
+    }
+    val withFindings = report.copy(findings = findings)
+    val text = ReportTable.render(withFindings)
+    assert(text.contains("Findings (top 10 of 20)"))
+    assert(text.contains("node10"))
+    assert(!text.contains("node20"))
+    assert(ReportTable.render(withFindings, showAll = true).contains("node20"))
+  }
+
   test("cycles table keeps only identifying and count columns; solutions use separate blocks") {
     val withThreeSolutions = report.copy(cycles = Seq(report.cycles.head.copy(solutions = Seq(
       Solution(Seq(CutCandidate("scheduler", "cache", 4))),

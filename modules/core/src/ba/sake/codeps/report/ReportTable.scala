@@ -9,8 +9,21 @@ object ReportTable:
   private val denseKnotWithoutSolutionsNote =
     "dense knot: inspect propagators; no complete solution was found within the search bounds"
 
-  def render(report: MetricsReport): String =
+  private val maxRowsPerSection = 10
+
+  /** Render the human-facing triage view. The report model remains complete;
+    * this edge applies a small, explicit bound unless the caller requests the
+    * full inventory. */
+  def render(report: MetricsReport, showAll: Boolean = false): String =
     val sb = new StringBuilder
+    def bounded[A](rows: Seq[A]): Seq[A] = if showAll then rows else rows.take(maxRowsPerSection)
+    def sectionTitle(label: String, total: Int, shown: Int): String =
+      if showAll then s"$label (all $total)" else s"$label (top $shown of $total)"
+    val displayedCycles = bounded(report.cycles)
+    val displayedFindings = bounded(report.findings)
+    val displayedPropagators = bounded(report.propagators)
+    val displayedSurface = bounded(report.surface)
+    val displayedOrphans = bounded(report.orphans)
     val stripIds: Iterable[String] =
       report.cycles.flatMap(_.members) ++
         report.propagators.map(_.node) ++
@@ -27,17 +40,34 @@ object ReportTable:
         s"    orphans: ${s.orphans}    criticalPathLength: ${s.criticalPathLength}\n\n"
     )
 
-    sb.append("Cycles (size desc, extFanIn desc)\n")
+    sb.append(sectionTitle("Findings", report.findings.size, displayedFindings.size) + "\n")
+    if displayedFindings.isEmpty then sb.append("  (none)\n")
+    else
+      sb.append(table(
+        Seq("kind", "severity", "subject", "evidence", "confidence", "nextAction"),
+        displayedFindings.map(f => Seq(
+          f.kind,
+          f.severity,
+          disp(f.subject),
+          f.evidence,
+          f.confidence,
+          f.nextAction
+        ))
+      ))
+    sb.append("\n")
+
+    sb.append(sectionTitle("Cycles", report.cycles.size, displayedCycles.size) + "\n")
+    sb.append("(size desc, extFanIn desc)\n")
     strippedPrefix.foreach(p => sb.append(s"common prefix stripped: $p (full ids via --format json)\n"))
-    if report.cycles.isEmpty then sb.append("  (none)\n")
+    if displayedCycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
         Seq("id", "size", "extFanIn", "minCutsEstimate"),
-        report.cycles.map { k =>
+        displayedCycles.map { k =>
           Seq("scc:" + disp(k.members.head), k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString)
         }
       ))
-      report.cycles.foreach { cycle =>
+      displayedCycles.foreach { cycle =>
         sb.append(s"\n  Cycle scc:${disp(cycle.members.head)}\n")
         if isDenseKnot(cycle) then
           val note = if cycle.solutions.nonEmpty then denseKnotWithSolutionsNote else denseKnotWithoutSolutionsNote
@@ -53,33 +83,37 @@ object ReportTable:
       }
     sb.append("\n")
 
-    sb.append("Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)\n")
-    if report.propagators.isEmpty then sb.append("  (none)\n")
+    sb.append(sectionTitle("Change propagators", report.propagators.size, displayedPropagators.size) +
+      " (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)\n")
+    if displayedPropagators.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
         Seq("node", "fanIn", "fanOut", "score"),
-        report.propagators.map(p => Seq(disp(p.node), p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f"))
+        displayedPropagators.map(p => Seq(disp(p.node), p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f"))
       ))
     sb.append("\n")
 
-    sb.append("Surface (utilization asc; — = no fan-in)\n")
-    sb.append(table(
-      Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "utilization"),
-      report.surface.map(r => Seq(
-        disp(r.node),
-        r.fanIn.toString,
-        r.fanOut.toString,
-        num(r.ports),
-        num(r.mutPorts),
-        num(r.exposure),
-        r.utilization.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
+    sb.append(sectionTitle("Surface risks", report.surface.size, displayedSurface.size) +
+      " (utilization asc; — = no fan-in)\n")
+    if displayedSurface.isEmpty then sb.append("  (none)\n")
+    else
+      sb.append(table(
+        Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "utilization"),
+        displayedSurface.map(r => Seq(
+          disp(r.node),
+          r.fanIn.toString,
+          r.fanOut.toString,
+          num(r.ports),
+          num(r.mutPorts),
+          num(r.exposure),
+          r.utilization.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
+        ))
       ))
-    ))
     sb.append("\n")
 
-    sb.append("Orphans\n")
-    if report.orphans.isEmpty then sb.append("  (none)\n")
-    else report.orphans.foreach(o => sb.append(s"  ${disp(o)}\n"))
+    sb.append(sectionTitle("Orphans", report.orphans.size, displayedOrphans.size) + "\n")
+    if displayedOrphans.isEmpty then sb.append("  (none)\n")
+    else displayedOrphans.foreach(o => sb.append(s"  ${disp(o)}\n"))
     sb.result()
 
   /** Aligns columns to the widest cell, two-space gaps. */

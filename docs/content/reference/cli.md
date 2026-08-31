@@ -6,7 +6,7 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with two subcommands
+`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with three subcommands
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
@@ -82,8 +82,8 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i <file|->
-codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [-o out] -i <file|->
+codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [-o out] -i <file|->
+codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
@@ -101,6 +101,7 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
+| `--all` | In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
 | `-i` / `--input` | The JSON graph to analyze — a file, or `-` for stdin, so `export` output can be piped straight in. Required. |
 
@@ -118,7 +119,12 @@ scope: packages    generatedAt: 2026-08-27T10:00:00Z
 Summary
   nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
-Cycles (size desc, extFanIn desc)
+Findings (top 10 of 1)
+kind   severity  subject  evidence  confidence  nextAction
+cycle  high      cache    size=2... high        inspect-cycle scc:modules.cache
+
+Cycles (top 10 of 1)
+(size desc, extFanIn desc)
 common prefix stripped: com.example. (full ids via --format json)
 id                 size  extFanIn  minCutsEstimate
 scc:modules.cache  10    5         9
@@ -126,16 +132,16 @@ scc:modules.cache  10    5         9
   Cycle scc:modules.cache
     solution 1: modules.cache.A -> modules.scheduler.B (w=1), modules.cache.B -> modules.scheduler.C (w=1), modules.cache.C -> modules.scheduler.D (w=1), modules.cache.D -> modules.scheduler.E (w=1), modules.cache.E -> modules.scheduler.F (w=1), modules.cache.F -> modules.scheduler.G (w=1), modules.cache.G -> modules.scheduler.H (w=1), modules.cache.H -> modules.scheduler.I (w=1), … 1 more (full list in JSON)
 
-Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
+Change propagators (top 10 of 1) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)
   node     fanIn  fanOut  score
   cache    3      2       2.50
 
-Surface (utilization asc; — = no fan-in)
+Surface risks (top 10 of 1) (utilization asc; — = no fan-in)
   node     fanIn  fanOut  ports  mutPorts  exposure  utilization
   cache    3       2        9      5          24        0.33
   ...
 
-Orphans
+Orphans (top 10 of 1)
   DeadUtil.scala
 ```
 

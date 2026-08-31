@@ -26,7 +26,11 @@ class MetricsReportSpec extends munit.FunSuite:
         SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33), Some("scc:cache")),
         SurfaceRow("outside", 0, 1, 1.0, 0.0, 1.0, None, None)
       ),
-      orphans = Seq("DeadUtil.scala")
+      orphans = Seq("DeadUtil.scala"),
+      findings = Seq(Finding(
+        "cycle:scc:cache", "cycle", "high", "scc:cache",
+        "size=2, extFanIn=5, minCutsEstimate=1", "high", "inspect-cycle scc:cache"
+      ))
     )
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"scope\":\"packages\""))
@@ -59,6 +63,9 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"witnessCycle\":[\"cache\",\"scheduler\",\"cache\"]"))
     assert(json.contains("\"cycleId\":\"scc:cache\""))
     assert(json.contains("\"cycleId\":null"))
+    assert(json.contains("\"findings\":[{"))
+    assert(json.contains("\"kind\":\"cycle\""))
+    assert(json.contains("\"nextAction\":\"inspect-cycle scc:cache\""))
     assert(!json.contains("articulation_points"))
   }
 
@@ -91,7 +98,7 @@ class MetricsReportSpec extends munit.FunSuite:
     val json = report.toJson(spaces = 0, sort = false)
     val rootKeys = Parser.parseFromString(json).toOption.get.asInstanceOf[JObject].vs.keySet
 
-    assertEquals(rootKeys, Set("schemaVersion", "scope", "generatedAt", "summary", "cycles", "propagators", "surface", "orphans"))
+    assertEquals(rootKeys, Set("schemaVersion", "scope", "generatedAt", "summary", "cycles", "propagators", "surface", "orphans", "findings"))
     assertEquals("\"edge\":".r.findAllIn(json).length, 9)
     assert(json.contains("\"edge\":[\"canonical.source.9\",\"canonical.target.9\"]"))
     assert(!json.contains("internalEdges"))

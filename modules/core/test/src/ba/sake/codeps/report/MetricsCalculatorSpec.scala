@@ -360,7 +360,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.propagators, Seq(PropagatorRow("a", 3, 0, 2.0)))
   }
 
-  test("propagators: sorted by score desc, capped at top 10") {
+  test("propagators: sorted by score desc with a complete JSON index") {
     val mids = (1 to 12).map(i => f"m$i%02d")
     val leaves = (1 to 24).map(i => f"l$i%02d")
     val midNodes = mids.map(m => Node(m, NodeKind.`package`)) ++
@@ -378,9 +378,9 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val props = report.propagators
-    assertEquals(props.size, 10) // root + 12 mids qualify; capped at 10
+    assertEquals(props.size, 13) // root + all 12 mids qualify; table bounds this to 10
     assertEquals(props.head.node, "root") // score 37/6, highest
-    assertEquals(props.tail.map(_.node), Seq("m01", "m02", "m03", "m04", "m05", "m06", "m07", "m08", "m09"))
+    assertEquals(props.tail.map(_.node), mids)
   }
 
   test("propagators: empty when the graph has no edges") {
@@ -390,6 +390,30 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     assertEquals(report.propagators, Seq.empty) // avgFanIn == 0 -> score undefined for everyone
+  }
+
+  test("findings cover cycles, propagators, mutable surface, and low structural use") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("a", NodeKind.`package`), Node("b", NodeKind.`package`),
+        Node("c", NodeKind.`package`), Node("h", NodeKind.`package`, ports = 2.0, mutPorts = 1.0),
+        Node("p", NodeKind.`package`), Node("q", NodeKind.`package`),
+        Node("u", NodeKind.`package`, ports = 4.0)
+      ),
+      edges = Set(
+        Edge("p", "q"), Edge("q", "p"),
+        Edge("a", "h"), Edge("b", "h"), Edge("c", "h"), Edge("c", "u")
+      )
+    )
+    val first = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val second = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+
+    assertEquals(first.findings, second.findings)
+    assertEquals(first.findings.map(_.kind).toSet, Set("cycle", "propagator", "mutableSurface", "structuralUse"))
+    assert(first.findings.exists(f => f.id == "cycle:scc:p" && f.subject == "scc:p"))
+    assert(first.findings.exists(f => f.id == "propagator:h" && f.subject == "h"))
+    assert(first.findings.exists(f => f.id == "mutableSurface:h" && f.subject == "h"))
+    assert(first.findings.exists(f => f.id == "structuralUse:u" && f.subject == "u"))
   }
 
   test("files scope: include selects the package's files (descend into it)") {

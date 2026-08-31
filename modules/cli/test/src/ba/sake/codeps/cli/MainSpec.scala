@@ -114,7 +114,7 @@ class MainSpec extends munit.FunSuite:
     assert(res.out.text().contains("com.example.modules.module2"))
   }
 
-  test("report --format table renders the same data as text") {
+  test("report-packages table renders the same data as text") {
     val out = os.pwd / "tmp" / "cli-test" / "report-table.txt"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
@@ -128,7 +128,7 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("Surface"))
   }
 
-  test("report defaults --format to table") {
+  test("report-packages defaults --format to table") {
     val res = runCli("report-packages", "--input", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 0)
     assert(res.out.text().startsWith("scope: packages"))
@@ -136,7 +136,17 @@ class MainSpec extends munit.FunSuite:
     assert(res.out.text().contains("Cycles"))
   }
 
-  test("report on the checked-in cyclic fixture finds the module cycle (homepage example)") {
+  test("report-packages --all selects the complete table inventory") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val defaultRes = runCli("report-packages", "--input", cyclic.toString)
+    val allRes = runCli("report-packages", "--all", "--input", cyclic.toString)
+    assertEquals(defaultRes.exitCode, 0)
+    assertEquals(allRes.exitCode, 0)
+    assert(defaultRes.out.text().contains("Surface risks (top"))
+    assert(allRes.out.text().contains("Surface risks (all"))
+  }
+
+  test("report-packages on the checked-in cyclic fixture finds the module cycle (homepage example)") {
     val cyclic = os.pwd / "testFixtures" / "cyclic.json"
     val outJson = os.pwd / "tmp" / "cli-test" / "report-cyclic-fixture.json"
     os.makeDir.all(outJson / os.up)
@@ -160,7 +170,7 @@ class MainSpec extends munit.FunSuite:
     assert(!tableRes.out.text().contains("mut_ports"))
   }
 
-  test("report --skip-tests excludes test nodes") {
+  test("report-packages --skip-tests excludes test nodes") {
     val out = os.pwd / "tmp" / "cli-test" / "report-v2-skip-tests.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
@@ -171,7 +181,7 @@ class MainSpec extends munit.FunSuite:
     assert(!content.contains("OnlyTestsHereSpec"))
   }
 
-  test("report -c collapse merges packages") {
+  test("report-packages -c collapse merges packages") {
     val out = os.pwd / "tmp" / "cli-test" / "report-v2-collapse.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
@@ -180,7 +190,7 @@ class MainSpec extends munit.FunSuite:
     assert(os.read(out).contains("com.example.modules"))
   }
 
-  test("report: --test-pattern without --skip-tests exits 1") {
+  test("report-packages --test-pattern without --skip-tests exits 1") {
     val res = runCli("report-packages", "--test-pattern", "**/test/**", "--input", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("--test-pattern requires --skip-tests"))
@@ -191,7 +201,7 @@ class MainSpec extends munit.FunSuite:
     assertEquals(res.exitCode, 1)
   }
 
-  test("bad report format exits non-zero") {
+  test("report-packages with a bad format exits non-zero") {
     val res = runCli("report-packages", "--format", "bogus", "--input", exportJson("deps.json").toString)
     assert(res.exitCode != 0)
     assert(res.err.text().contains("unknown format: bogus"))
@@ -206,14 +216,14 @@ class MainSpec extends munit.FunSuite:
     assert(res.err.text().contains("failed to parse json"))
   }
 
-  test("report on a directory input exits 1 with a clean error") {
+  test("report-packages on a directory input exits 1 with a clean error") {
     val res = runCli("report-packages", "--input", "testFixtures")
     assertEquals(res.exitCode, 1)
     assert(res.err.text().contains("not a file"))
     assert(!res.err.text().contains("Is a directory")) // no raw stack trace
   }
 
-  test("report reads from stdin with --input -") {
+  test("report-packages reads from stdin with --input -") {
     val json = os.read(exportJson("deps.json"))
     val out = os.pwd / "tmp" / "cli-test" / "report-stdin.json"
     os.makeDir.all(out / os.up)
@@ -246,7 +256,7 @@ class MainSpec extends munit.FunSuite:
     assert(res.out.text().trim.matches("[0-9A-Za-z.\\-]+"))
   }
 
-  test("report --help prints usage") {
+  test("report-packages --help prints usage") {
     val res = runCli("report-packages", "--help")
     assertEquals(res.exitCode, 0)
     assert(res.out.text().contains("Available subcommands"))

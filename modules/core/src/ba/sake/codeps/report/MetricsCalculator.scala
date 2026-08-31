@@ -135,7 +135,10 @@ object MetricsCalculator:
           }
           .filter(_.score > 1.0)
           .sortBy(r => (-r.score, r.node))
-          .take(10)
+          // Keep the report index complete. ReportTable applies the human-facing
+          // top-10 bound at the presentation edge (or shows all with --all).
+
+    val findings = buildFindings(cycles, propagators, surface)
 
     MetricsReport(
       scope = scope match
@@ -152,8 +155,94 @@ object MetricsCalculator:
       cycles = cycles,
       propagators = propagators,
       surface = surface,
-      orphans = orphans
+      orphans = orphans,
+      findings = findings
     )
+
+  private case class RankedFinding(finding: Finding, score: Double)
+
+  /** Builds stable diagnostics from the already-derived index rows. Findings
+    * deliberately carry no new graph computation: their score is only used to
+    * rank findings within a severity band and is not serialized. */
+  private def buildFindings(
+      cycles: Seq[Cycle],
+      propagators: Seq[PropagatorRow],
+      surface: Seq[SurfaceRow]
+  ): Seq[Finding] =
+    val cycleFindings = cycles.map { cycle =>
+      RankedFinding(
+        Finding(
+          id = s"cycle:${cycle.id}",
+          kind = "cycle",
+          severity = if cycle.size >= 10 then "critical" else "high",
+          subject = cycle.id,
+          evidence = s"size=${cycle.size}, extFanIn=${cycle.extFanIn}, minCutsEstimate=${cycle.minCutsEstimate}",
+          confidence = "high",
+          nextAction = s"inspect-cycle ${cycle.id}"
+        ),
+        cycle.size.toDouble + cycle.extFanIn.toDouble / 1000.0
+      )
+    }
+    val propagatorFindings = propagators.map { row =>
+      RankedFinding(
+        Finding(
+          id = s"propagator:${row.node}",
+          kind = "propagator",
+          severity = if row.score >= 2.0 then "high" else "medium",
+          subject = row.node,
+          evidence = s"fanIn=${row.fanIn}, fanOut=${row.fanOut}, score=${formatScore(row.score)}",
+          confidence = "high",
+          nextAction = s"inspect-node ${row.node}"
+        ),
+        row.score
+      )
+    }
+    val mutableSurfaceFindings = surface.filter(_.mutPorts > 0.0).map { row =>
+      RankedFinding(
+        Finding(
+          id = s"mutableSurface:${row.node}",
+          kind = "mutableSurface",
+          severity = "high",
+          subject = row.node,
+          evidence = s"mutPorts=${formatNumber(row.mutPorts)}, exposure=${formatNumber(row.exposure)}",
+          confidence = "high",
+          nextAction = s"inspect-node ${row.node}"
+        ),
+        row.exposure
+      )
+    }
+    val structuralUseFindings = surface.flatMap { row =>
+      row.utilization.filter(_ < 1.0).map { utilization =>
+        RankedFinding(
+          Finding(
+            id = s"structuralUse:${row.node}",
+            kind = "structuralUse",
+            severity = "low",
+            subject = row.node,
+            evidence = s"fanIn=${row.fanIn}, ports=${formatNumber(row.ports)}, utilization=${formatNumber(utilization)}",
+            confidence = "structuralProxy",
+            nextAction = s"inspect-node ${row.node}"
+          ),
+          1.0 - utilization
+        )
+      }
+    }
+    (cycleFindings ++ propagatorFindings ++ mutableSurfaceFindings ++ structuralUseFindings)
+      .sortBy(r => (severityRank(r.finding.severity), -r.score, r.finding.id))
+      .map(_.finding)
+
+  private def severityRank(severity: String): Int = severity match
+    case "critical" => 0
+    case "high"     => 1
+    case "medium"   => 2
+    case "low"      => 3
+    case _           => 4
+
+  private def formatScore(value: Double): String = f"$value%.4f"
+
+  private def formatNumber(value: Double): String =
+    if !value.isNaN && !value.isInfinite && value == math.rint(value) then value.toLong.toString
+    else value.toString
 
   /** Longest path (in number of edges) through the condensation DAG: collapse each
     * SCC to a single node, drop the self-loops the collapse creates, then relax in

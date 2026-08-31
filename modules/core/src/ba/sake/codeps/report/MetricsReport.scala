@@ -14,7 +14,8 @@ case class MetricsReport(
     propagators: Seq[PropagatorRow],
     surface: Seq[SurfaceRow],
     orphans: Seq[String],
-    schemaVersion: Int = 2
+    schemaVersion: Int = 2,
+    findings: Seq[Finding] = Nil
 )
 
 case class Summary(
@@ -65,8 +66,22 @@ case class SurfaceRow(
 
 /** A node that propagates changes to an above-average part of the graph.
   * `score` = (fanIn/avgFanIn + fanOut/avgFanOut) / 2 — an exactly average node
-  * scores 1.0; only nodes above 1.0 are listed, top 10 by score. */
+  * scores 1.0; only nodes above 1.0 are listed. The table presentation applies
+  * its own top-10 bound; JSON retains the complete index. */
 case class PropagatorRow(node: String, fanIn: Int, fanOut: Int, score: Double)
+
+/** A stable, structured diagnostic derived from the report index. `evidence` is
+  * intentionally human-readable while the subject and id remain machine-stable.
+  * Confidence values distinguish direct graph evidence from structural proxies. */
+case class Finding(
+    id: String,
+    kind: String,
+    severity: String,
+    subject: String,
+    evidence: String,
+    confidence: String,
+    nextAction: String
+)
 
 object MetricsReport:
   given JsonRW[MetricsReport] with
@@ -80,7 +95,8 @@ object MetricsReport:
         "cycles" -> JsonRW[Seq[Cycle]].write(value.cycles),
         "propagators" -> JsonRW[Seq[PropagatorRow]].write(value.propagators),
         "surface" -> JsonRW[Seq[SurfaceRow]].write(value.surface),
-        "orphans" -> JsonRW[Seq[String]].write(value.orphans)
+        "orphans" -> JsonRW[Seq[String]].write(value.orphans),
+        "findings" -> JsonRW[Seq[Finding]].write(value.findings)
       )
     override def parse(path: String, jValue: JValue): MetricsReport =
       throw new UnsupportedOperationException("metrics reports are write-only")
@@ -163,6 +179,21 @@ object PropagatorRow:
       )
     override def parse(path: String, jValue: JValue): PropagatorRow =
       throw new UnsupportedOperationException("metrics reports are write-only")
+
+object Finding:
+  given JsonRW[Finding] with
+    override def write(value: Finding): JValue =
+      obj(
+        "id" -> JsonRW[String].write(value.id),
+        "kind" -> JsonRW[String].write(value.kind),
+        "severity" -> JsonRW[String].write(value.severity),
+        "subject" -> JsonRW[String].write(value.subject),
+        "evidence" -> JsonRW[String].write(value.evidence),
+        "confidence" -> JsonRW[String].write(value.confidence),
+        "nextAction" -> JsonRW[String].write(value.nextAction)
+      )
+    override def parse(path: String, jValue: JValue): Finding =
+      throw new UnsupportedOperationException("metrics findings are write-only")
 
 /** Integral doubles render as integers (9 not 9.0); fractional halves stay decimals. */
 private def num(d: Double): JValue =
