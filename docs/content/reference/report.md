@@ -88,8 +88,10 @@ components are just acyclic nodes and are never reported.
   greedy plan as a single solution. An empty list means nothing was found within those bounds —
   it is never an error.
 - Table output is intentionally shorter than this JSON schema: it displays at most 8 cuts from
-  each solution and may replace a dense knot's cut list with structural guidance. `--format json`
-  retains every solution, complete canonical ids, and every cut.
+  each solution and may replace a dense knot's cut list with structural guidance. A dense knot
+  with solutions directs readers to the full cut list in JSON; one with an empty `solutions` list
+  reports that no complete solution was found within the search bounds and does not promise a cut
+  list. `--format json` retains every solution, complete canonical ids, and every cut.
 - `minCutsEstimate` — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly
   apply the best `resolved`-or-largest-reduction candidate, recompute against the largest remaining
   multi-member component of the cycle, until no such component remains. A heuristic, not a

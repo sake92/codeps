@@ -145,7 +145,10 @@ shows at most 8 cuts; if more exist, its exact omission count points to JSON. Us
 `--format json` when another tool or a review needs every canonical node id and
 every cut. Dense knots print `dense knot: inspect propagators; full cut list via
 --format json` instead of an inline cut wall, because hundreds or thousands of
-cuts are not actionable there.
+cuts are not actionable there, but only when a complete solution was found. If
+the bounded search found no complete solution, they instead print `dense knot:
+inspect propagators; no complete solution was found within the search bounds`;
+JSON then has an empty `solutions` list and no complete cut list to inspect.
 
 When the rendered ids share a prefix, table output announces it once. Package
 reports remove only complete dot-separated segments; file reports remove only

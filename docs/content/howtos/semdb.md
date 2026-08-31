@@ -74,7 +74,8 @@ codeps report --scope packages --input deps.json
   `--include`; e.g. `--include com.example` descends into `com.example` and everything below it
 - `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
 - `--include`/`--exclude`/`--collapse` filter and collapse (see below)
-- `--format json` emits machine-readable JSON (the default `table` renders the same data as plain aligned text)
+- `--format json` emits machine-readable JSON with complete report data; the default `table` is
+  a compact plain-text presentation that may abbreviate cut lists
 
 No intermediate file needed — pipe `export` straight into `report` (the `-` tells
 `report` to read the JSON from stdin):

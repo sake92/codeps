@@ -37,7 +37,7 @@ codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 codeps report --scope packages --input deps.json
 ```
 
-Real output of `codeps report --scope packages` on the repo's
+Abbreviated table output of `codeps report --scope packages` on the repo's
 [cyclic test fixture](https://github.com/sake92/codeps/blob/main/testFixtures/cyclic.json)
 (`module1` ↔ `module2`):
 

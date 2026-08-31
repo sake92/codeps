@@ -76,10 +76,34 @@ class ReportTableSpec extends munit.FunSuite:
       }.toSet
     )
     val denseReport = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    val text = ReportTable.render(denseReport)
+    val denseReportWithSolution = denseReport.copy(
+      cycles = denseReport.cycles.map(_.copy(solutions = Seq(Solution(Seq(CutCandidate(s"${names(0)}.T", s"${names(1)}.T", 1))))))
+    )
+    val text = ReportTable.render(denseReportWithSolution)
 
     assert(text.contains("dense knot: inspect propagators; full cut list via --format json"))
     assert(!text.contains("solution 1:"))
+  }
+
+  test("dense knot without solutions reports the bounded search result") {
+    val names = (0 until 10).map(i => s"p$i")
+    val graph = DepsGraph(
+      nodes = names.flatMap { name =>
+        Seq(Node(name, NodeKind.`package`), Node(s"$name.T", NodeKind.`type`, Some(name), None))
+      }.toSet,
+      edges = names.indices.flatMap { i =>
+        val next = (i + 1) % names.size
+        Seq(Edge(s"${names(i)}.T", s"${names(next)}.T"), Edge(s"${names(next)}.T", s"${names(i)}.T"))
+      }.toSet
+    )
+    val denseReport = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val noSolutionReport = denseReport.copy(
+      cycles = denseReport.cycles.map(_.copy(solutions = Seq.empty))
+    )
+    val text = ReportTable.render(noSolutionReport)
+
+    assert(text.contains("dense knot: inspect propagators; no complete solution was found within the search bounds"))
+    assert(!text.contains("full cut list via --format json"))
   }
 
   test("tiny utilization renders with more precision") {

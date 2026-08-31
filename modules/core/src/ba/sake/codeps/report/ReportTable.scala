@@ -5,7 +5,9 @@ package ba.sake.codeps.report
 object ReportTable:
 
   private val maxDisplayedCuts = 8
-  private val denseKnotNote = "dense knot: inspect propagators; full cut list via --format json"
+  private val denseKnotWithSolutionsNote = "dense knot: inspect propagators; full cut list via --format json"
+  private val denseKnotWithoutSolutionsNote =
+    "dense knot: inspect propagators; no complete solution was found within the search bounds"
 
   def render(report: MetricsReport): String =
     val sb = new StringBuilder
@@ -37,7 +39,9 @@ object ReportTable:
       ))
       report.cycles.foreach { cycle =>
         sb.append(s"\n  Cycle scc:${disp(cycle.members.head)}\n")
-        if isDenseKnot(cycle) then sb.append(s"    $denseKnotNote\n")
+        if isDenseKnot(cycle) then
+          val note = if cycle.solutions.nonEmpty then denseKnotWithSolutionsNote else denseKnotWithoutSolutionsNote
+          sb.append(s"    $note\n")
         else
           cycle.solutions.zipWithIndex.foreach { (solution, index) =>
             val displayedCuts = solution.cuts.take(maxDisplayedCuts)
