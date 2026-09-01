@@ -18,8 +18,7 @@ class MetricsReportSpec extends munit.FunSuite:
         witnessCycle = Seq("cache", "scheduler", "cache"),
         size = 2,
         extFanIn = 5,
-        minCutsEstimate = 1,
-        solutions = Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4))))
+        cutAnalysis = CutAnalysis("completed", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2)
       )),
       propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
       surface = Seq(
@@ -29,7 +28,7 @@ class MetricsReportSpec extends munit.FunSuite:
       orphans = Seq("DeadUtil.scala"),
       findings = Seq(Finding(
         "cycle:scc:cache", "cycle", "high", "scc:cache",
-        "size=2, extFanIn=5, minCutsEstimate=1", "high", "inspect-cycle scc:cache"
+        "size=2, extFanIn=5, greedyCutEstimate=1", "high", "inspect-cycle scc:cache"
       ))
     )
     val json = report.toJson(spaces = 0, sort = false)
@@ -39,7 +38,10 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"nodesInCycles\":34"))
     assert(json.contains("\"criticalPathLength\":7"))
     assert(json.contains("\"extFanIn\":5"))
-    assert(json.contains("\"minCutsEstimate\":1"))
+    assert(json.contains("\"cutAnalysis\""))
+    assert(json.contains("\"status\":\"completed\""))
+    assert(json.contains("\"greedyCutEstimate\":1"))
+    assert(json.contains("\"examinedCandidates\":2"))
     assert(json.contains("\"cycles\""))
     assert(json.contains("\"solutions\""))
     // object key order is hash-based, so assert each camelCase key-value pair independently
@@ -89,8 +91,8 @@ class MetricsReportSpec extends munit.FunSuite:
       scope = "packages",
       generatedAt = "2026-08-27T10:00:00Z",
       summary = Summary(10, 20, 10, 0, 1),
-      cycles = Seq(Cycle("scc:canonical.source.1", Seq("canonical.source.1", "canonical.target.1"), 10, 0, 3,
-        Seq(Solution(cuts)))),
+      cycles = Seq(Cycle("scc:canonical.source.1", Seq("canonical.source.1", "canonical.target.1"), 10, 0,
+        CutAnalysis("completed", Some(3), Seq(Solution(cuts)), 4))),
       propagators = Seq.empty,
       surface = Seq.empty,
       orphans = Seq.empty

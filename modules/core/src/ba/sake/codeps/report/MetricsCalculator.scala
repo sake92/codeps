@@ -74,7 +74,8 @@ object MetricsCalculator:
       includes: Seq[String] = Nil,
       excludes: Seq[String] = Nil,
       collapseRules: Seq[CollapseRule] = Nil,
-      testPatterns: Option[Seq[String]] = None
+      testPatterns: Option[Seq[String]] = None,
+      cutAnalysisBudget: Option[CutAnalysisBudget] = None
   ): Either[String, MetricsReport] =
     for
       generatedAt <- generatedAt()
@@ -83,7 +84,7 @@ object MetricsCalculator:
         case Some(patterns) => TestFilter.skipTests(filtered, patterns)
         case None           => filtered
       sg <- scopeGraph(scoped, scope)
-    yield compute(collapse(sg, collapseRules), scope, generatedAt)
+    yield compute(collapse(sg, collapseRules), scope, generatedAt, cutAnalysisBudget)
 
   /** Real clock by default; SOURCE_DATE_EPOCH (reproducible-builds.org standard,
     * epoch seconds) pins generatedAt for deterministic CI diffs. */
@@ -94,7 +95,12 @@ object MetricsCalculator:
         case Some(epoch) => Right(java.time.Instant.ofEpochSecond(epoch).toString)
         case None        => Left(s"invalid SOURCE_DATE_EPOCH: $raw (expected epoch seconds)")
 
-  private def compute(sg: ScopeGraph, scope: Scope, generatedAt: String): MetricsReport =
+  private def compute(
+      sg: ScopeGraph,
+      scope: Scope,
+      generatedAt: String,
+      cutAnalysisBudget: Option[CutAnalysisBudget]
+  ): MetricsReport =
     val fanIn = sg.edges.groupMapReduce(_.target)(_ => 1)(_ + _)
     val fanOut = sg.edges.groupMapReduce(_.source)(_ => 1)(_ + _)
     def fanInOf(id: String): Int = fanIn.getOrElse(id, 0)
@@ -103,7 +109,7 @@ object MetricsCalculator:
     val orphans = sg.nodes.filter(n => fanInOf(n) == 0 && fanOutOf(n) == 0).toSeq.sorted
     val cycleSets = TarjanScc.cycles(sg.nodes, sg.edges)
     val cycleIdByNode = cycleSets.flatMap(scc => scc.map(_ -> ("scc:" + scc.min))).toMap
-    val cycles = cycleSets.map(k => cycleRow(k, sg)).sortBy(k => (-k.size, -k.extFanIn, k.id))
+    val cycles = cycleSets.map(k => cycleRow(k, sg, cutAnalysisBudget)).sortBy(k => (-k.size, -k.extFanIn, k.id))
 
     val surface = sg.nodes.toSeq
       .map { id =>
@@ -176,7 +182,7 @@ object MetricsCalculator:
           kind = "cycle",
           severity = if cycle.size >= 10 then "critical" else "high",
           subject = cycle.id,
-          evidence = s"size=${cycle.size}, extFanIn=${cycle.extFanIn}, minCutsEstimate=${cycle.minCutsEstimate}",
+          evidence = s"size=${cycle.size}, extFanIn=${cycle.extFanIn}, greedyCutEstimate=${cycle.cutAnalysis.greedyCutEstimate.getOrElse("none")}",
           confidence = "high",
           nextAction = s"inspect-cycle ${cycle.id}"
         ),
@@ -271,20 +277,22 @@ object MetricsCalculator:
 
   // ---------- cycles ----------
 
-  /** Max candidate edges tested per cycle per simulation round. */
-  private val maxCutCandidates = 6
-
-  private def cycleRow(scc: Set[String], sg: ScopeGraph): Cycle =
+  private def cycleRow(
+      scc: Set[String],
+      sg: ScopeGraph,
+      cutAnalysisBudget: Option[CutAnalysisBudget]
+  ): Cycle =
     val extFanIn = sg.edges.count(e => scc.contains(e.target) && !scc.contains(e.source))
     val internalEdges = sg.edges.count(e => scc.contains(e.source) && scc.contains(e.target))
-    val (minCuts, greedyPlan) = greedyCutPlan(scc, sg)
+    val cutAnalysis = cutAnalysisBudget match
+      case Some(budget) => CutAnalyzer.analyze(scc, sg.edges, budget)
+      case None         => CutAnalysis.notRequested
     Cycle(
       id = "scc:" + scc.min, // stable key: min member id, NOT a counter
       members = scc.toSeq.sorted,
       size = scc.size,
       extFanIn = extFanIn,
-      minCutsEstimate = minCuts,
-      solutions = solutions(scc, sg, greedyPlan),
+      cutAnalysis = cutAnalysis,
       internalEdges = internalEdges,
       witnessCycle = cyclePath(scc, sg)
     )
@@ -306,97 +314,13 @@ object MetricsCalculator:
     def dfs(v: String): Unit =
       if !found then
         visited += v
-        for w <- adj.getOrElse(v, Nil) do
-          if found then return
-          else if w == start && path.size >= 2 then
+        for w <- adj.getOrElse(v, Nil) if !found do
+          if w == start && path.size >= 2 then
             path.append(start)
             found = true
-            return
           else if !visited.contains(w) then
             path.append(w)
             dfs(w)
             if !found then path.removeLast()
     dfs(start)
     if found then path.toSeq else scc.toSeq.sorted :+ start
-
-  /** Up to 3 complete cut solutions, simplest first: fewest cuts, then cheapest
-    * (lowest total weight), then lexicographic. A solution dissolves the cycle
-    * when removing ALL its edges leaves no multi-member component among the
-    * SCC's members. Dominated sets (a proper dissolving subset exists) are
-    * skipped. Search bounds: set size <= max(minCutsEstimate, 2), capped at 4;
-    * SCCs with > 60 internal edges skip the enumeration and fall back to the
-    * greedy plan as a single solution. */
-  private def solutions(scc: Set[String], sg: ScopeGraph, greedyPlan: Seq[Edge]): Seq[Solution] =
-    val internal = sg.edges.toSeq.filter(e => scc.contains(e.source) && scc.contains(e.target))
-    val maxK = math.min(math.max(greedyPlan.size, 2), 4)
-    val found = mutable.ListBuffer.empty[Seq[Edge]]
-    var k = 1
-    while k <= maxK && found.size < 3 && internal.size <= 60 do
-      val combos = internal.combinations(k).toSeq.sortBy { combo =>
-        (combo.map(_.weight).sum, combo.map(e => s"${e.source}->${e.target}").sorted.mkString(","))
-      }
-      combos.foreach { combo =>
-        if found.size < 3 &&
-          !found.exists(f => f.toSet.subsetOf(combo.toSet)) &&
-          dissolves(combo.toSet, scc, sg.edges)
-        then found += combo
-      }
-      k += 1
-    val enumerated = found.toSeq.map(toSolution)
-    if enumerated.nonEmpty then enumerated
-    else if greedyPlan.nonEmpty && dissolves(greedyPlan.toSet, scc, sg.edges) then Seq(toSolution(greedyPlan))
-    else Seq.empty
-
-  private def toSolution(edges: Seq[Edge]): Solution =
-    Solution(edges.sortBy(e => (e.weight, e.source, e.target)).map(e => CutCandidate(e.source, e.target, e.weight)))
-
-  /** True when removing `cuts` leaves no multi-member component among the SCC's
-    * members (components that only contain outside nodes don't count). */
-  private def dissolves(cuts: Set[Edge], scc: Set[String], edges: Set[Edge]): Boolean =
-    val comps = TarjanScc.components(scc, edges -- cuts)
-    !comps.exists(c => c.size >= 2 && c.exists(scc.contains))
-
-  /** Removes the edge from a copy of the edge list, reruns Tarjan, and classifies
-    * the effect on the component(s) containing the edge's endpoints:
-    * - no multi-member component left -> ("resolved", 1)
-    * - a multi-member component remains but is smaller -> ("partial", largest size)
-    * - same size (endpoints still in one component) -> ("none", scc.size): the edge
-    *   is redundant with the rest of the cycle (e.g. a chord running the ring's direction). */
-  private def simulateCut(e: Edge, scc: Set[String], edges: Set[Edge]): (String, Int) =
-    val containing = TarjanScc.components(scc, edges - e)
-      .filter(c => c.contains(e.source) || c.contains(e.target))
-    val multiSizes = containing.map(_.size).filter(_ >= 2)
-    if multiSizes.isEmpty then ("resolved", 1)
-    else if multiSizes.max < scc.size then ("partial", multiSizes.max)
-    else ("none", scc.size)
-
-  /** Greedy estimate of the cuts needed to dissolve the cycle: repeatedly apply
-    * the best candidate (resolved wins; else the partial with the smallest
-    * remaining size; else the cheapest "none" chord) to the trial edge list,
-    * then set `comp` to the largest remaining multi-member component of the
-    * original cycle members; repeat while one exists. Returns the cut count
-    * AND the chosen edges (the plan). A greedy heuristic, NOT a
-    * guaranteed-minimum feedback-edge set. */
-  private def greedyCutPlan(cycle: Set[String], sg: ScopeGraph): (Int, Seq[Edge]) =
-    var trialEdges = sg.edges
-    var comp = cycle
-    var cuts = 0
-    val chosen = mutable.ListBuffer.empty[Edge]
-    while comp.size > 1 do
-      val candidates = trialEdges.toSeq
-        .filter(e => comp.contains(e.source) && comp.contains(e.target))
-        .sortBy(e => (e.weight, e.source, e.target))
-        .take(maxCutCandidates)
-        .map(e => (e, simulateCut(e, comp, trialEdges)))
-      val best = candidates.minBy { case (e, (effect, newSize)) =>
-        (if effect == "resolved" then 0 else if effect == "partial" then 1 else 2,
-          newSize, e.weight, e.source, e.target)
-      }._1
-      trialEdges = trialEdges - best
-      chosen += best
-      cuts += 1
-      comp = TarjanScc.components(comp, trialEdges)
-        .filter(_.size >= 2)
-        .maxByOption(c => (c.size, c.min))
-        .getOrElse(Set.empty)
-    (cuts, chosen.toSeq)

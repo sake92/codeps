@@ -18,7 +18,7 @@ object TarjanScc:
   def components(nodes: Set[String], edges: Set[Edge]): Seq[Set[String]] =
     // Induced subgraph on `nodes`: edges with an endpoint outside it are dropped.
     // Callers pass restricted node sets for cut simulation — leaking foreign
-    // edges corrupted every restricted component computation (minCutsEstimate,
+    // edges corrupted every restricted component computation (cut analysis,
     // simulateCut, dissolves).
     val localEdges = edges.filter(e => nodes.contains(e.source) && nodes.contains(e.target))
     val adjacency = localEdges.toSeq

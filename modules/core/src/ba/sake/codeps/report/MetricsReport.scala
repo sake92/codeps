@@ -35,8 +35,7 @@ case class Cycle(
     members: Seq[String],
     size: Int,
     extFanIn: Int,
-    minCutsEstimate: Int,
-    solutions: Seq[Solution],
+    cutAnalysis: CutAnalysis = CutAnalysis.notRequested,
     /** Display-only cycle density metadata. It is intentionally not serialized,
       * so the report JSON schema remains stable. */
     internalEdges: Int = 0,
@@ -122,8 +121,7 @@ object Cycle:
         "members" -> JsonRW[Seq[String]].write(value.members),
         "size" -> JsonRW[Int].write(value.size),
         "extFanIn" -> JsonRW[Int].write(value.extFanIn),
-        "minCutsEstimate" -> JsonRW[Int].write(value.minCutsEstimate),
-        "solutions" -> JsonRW[Seq[Solution]].write(value.solutions),
+        "cutAnalysis" -> JsonRW[CutAnalysis].write(value.cutAnalysis),
         "witnessCycle" -> JsonRW[Seq[String]].write(value.witnessCycle)
       )
     override def parse(path: String, jValue: JValue): Cycle =

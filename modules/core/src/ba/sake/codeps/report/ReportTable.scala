@@ -62,24 +62,33 @@ object ReportTable:
     if displayedCycles.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
-        Seq("id", "size", "extFanIn", "minCutsEstimate"),
+        Seq("id", "size", "extFanIn", "greedyCutEstimate", "status"),
         displayedCycles.map { k =>
-          Seq("scc:" + disp(k.members.head), k.size.toString, k.extFanIn.toString, k.minCutsEstimate.toString)
+          Seq(
+            "scc:" + disp(k.members.head),
+            k.size.toString,
+            k.extFanIn.toString,
+            k.cutAnalysis.greedyCutEstimate.map(_.toString).getOrElse("—"),
+            k.cutAnalysis.status
+          )
         }
       ))
       displayedCycles.foreach { cycle =>
         sb.append(s"\n  Cycle scc:${disp(cycle.members.head)}\n")
-        if isDenseKnot(cycle) then
-          val note = if cycle.solutions.nonEmpty then denseKnotWithSolutionsNote else denseKnotWithoutSolutionsNote
+        val analysis = cycle.cutAnalysis
+        if analysis.status == "notRequested" then
+          sb.append("    cut analysis: notRequested (pass --analyze-cuts)\n")
+        else if isDenseKnot(cycle) then
+          val note = if analysis.solutions.nonEmpty then denseKnotWithSolutionsNote else denseKnotWithoutSolutionsNote
           sb.append(s"    $note\n")
         else
-          cycle.solutions.zipWithIndex.foreach { (solution, index) =>
-            val displayedCuts = solution.cuts.take(maxDisplayedCuts)
-              .map(c => s"${disp(c.source)} -> ${disp(c.target)} (w=${c.weight})")
-            val omitted = solution.cuts.size - maxDisplayedCuts
-            val suffix = if omitted > 0 then s", … $omitted more (full list in JSON)" else ""
-            sb.append(s"    solution ${index + 1}: ${displayedCuts.mkString(", ")}$suffix\n")
-          }
+          analysis.solutions.zipWithIndex.foreach { (solution, index) =>
+              val displayedCuts = solution.cuts.take(maxDisplayedCuts)
+                .map(c => s"${disp(c.source)} -> ${disp(c.target)} (w=${c.weight})")
+              val omitted = solution.cuts.size - maxDisplayedCuts
+              val suffix = if omitted > 0 then s", … $omitted more (full list in JSON)" else ""
+              sb.append(s"    solution ${index + 1}: ${displayedCuts.mkString(", ")}$suffix\n")
+            }
       }
     sb.append("\n")
 
@@ -131,4 +140,4 @@ object ReportTable:
   private def isDenseKnot(cycle: Cycle): Boolean =
     cycle.size >= 10 &&
       cycle.internalEdges >= 20 &&
-      cycle.minCutsEstimate.toDouble / cycle.internalEdges >= 0.15
+      cycle.cutAnalysis.greedyCutEstimate.exists(_.toDouble / cycle.internalEdges >= 0.15)

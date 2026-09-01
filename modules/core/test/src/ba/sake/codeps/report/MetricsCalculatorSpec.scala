@@ -5,7 +5,11 @@ import ba.sake.codeps.model.*
 import ba.sake.codeps.report.MetricsCalculator.Scope
 import ba.sake.tupson.*
 
+import scala.concurrent.duration.*
+
 class MetricsCalculatorSpec extends munit.FunSuite:
+
+  private val generousCutBudget = Some(CutAnalysisBudget(10.seconds, 100000))
 
   private val pkgGraph = DepsGraph(
     nodes = Set(
@@ -79,6 +83,28 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       SurfaceRow("com.c", 1, 0, 3.0, 0.0, 3.0, Some(1.0 / 3.0)),
       SurfaceRow("com.a", 0, 1, 3.0, 0.0, 3.0, None)
     )) // utilization asc, nulls last, then node asc
+  }
+
+  test("default reports leave cut analysis unrequested") {
+    val report = MetricsCalculator.run(pkgGraph, Scope.Packages).toOption.get
+    val cycle = report.cycles.head
+    assertEquals(cycle.cutAnalysis.status, "notRequested")
+    assertEquals(cycle.cutAnalysis.greedyCutEstimate, None)
+    assertEquals(cycle.cutAnalysis.solutions, Seq.empty)
+    assertEquals(cycle.cutAnalysis.examinedCandidates, 0)
+  }
+
+  test("cut analysis reports a bounded result without false complete evidence") {
+    val report = MetricsCalculator.run(
+      pkgGraph,
+      Scope.Packages,
+      cutAnalysisBudget = Some(CutAnalysisBudget(10.seconds, 1))
+    ).toOption.get
+    val analysis = report.cycles.head.cutAnalysis
+    assertEquals(analysis.status, "budgetExceeded")
+    assert(analysis.examinedCandidates <= 1)
+    assertEquals(analysis.greedyCutEstimate, None)
+    assertEquals(analysis.solutions, Seq.empty)
   }
 
   test("orphans on a graph with an isolated node") {
@@ -177,7 +203,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
         Edge("outside.D", "p1.A")
       )
     )
-    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val report = MetricsCalculator.run(graph, Scope.Packages, cutAnalysisBudget = generousCutBudget).toOption.get
     assertEquals(report.cycles.size, 1)
     val cycle = report.cycles.head
     assertEquals(cycle.id, "scc:p1")
@@ -188,8 +214,9 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.surface.find(_.node == "p1").flatMap(_.cycleId), Some("scc:p1"))
     assertEquals(report.surface.find(_.node == "outside").flatMap(_.cycleId), None)
     assert(report.toJson().contains("\"schemaVersion\": 2"))
-    assertEquals(cycle.minCutsEstimate, 1) // cutting any ring edge resolves a 3-ring
-    assertEquals(cycle.solutions, Seq(
+    assertEquals(cycle.cutAnalysis.status, "completed")
+    assertEquals(cycle.cutAnalysis.greedyCutEstimate, Some(1)) // cutting any ring edge resolves a 3-ring
+    assertEquals(cycle.cutAnalysis.solutions, Seq(
       Solution(Seq(CutCandidate("p1", "p2", 1))),
       Solution(Seq(CutCandidate("p2", "p3", 1))),
       Solution(Seq(CutCandidate("p3", "p1", 1)))
@@ -210,17 +237,17 @@ class MetricsCalculatorSpec extends munit.FunSuite:
         Edge("p1.A", "p2.B"), Edge("p2.B", "p3.C"), Edge("p3.C", "p1.A"), Edge("p1.A", "p3.C")
       )
     )
-    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val report = MetricsCalculator.run(graph, Scope.Packages, cutAnalysisBudget = generousCutBudget).toOption.get
     val cycle = report.cycles.head
     assertEquals(cycle.members, Seq("p1", "p2", "p3"))
     assertEquals(cycle.witnessCycle, Seq("p1", "p2", "p3", "p1"))
     // p3 -> p1 dissolves alone; the remaining slots are the cheapest 2-cut plans
-    assertEquals(cycle.solutions, Seq(
+    assertEquals(cycle.cutAnalysis.solutions, Seq(
       Solution(Seq(CutCandidate("p3", "p1", 1))),
       Solution(Seq(CutCandidate("p1", "p2", 1), CutCandidate("p1", "p3", 1))),
       Solution(Seq(CutCandidate("p1", "p3", 1), CutCandidate("p2", "p3", 1)))
     ))
-    assertEquals(cycle.minCutsEstimate, 1) // p3 -> p1 resolves it
+    assertEquals(cycle.cutAnalysis.greedyCutEstimate, Some(1)) // p3 -> p1 resolves it
   }
 
   test("cycle: resolved-only candidates on joined rings; greedy estimate counts cuts") {
@@ -239,7 +266,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
         Edge("a.A", "c.C"), Edge("d.D", "b.B")
       )
     )
-    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val report = MetricsCalculator.run(graph, Scope.Packages, cutAnalysisBudget = generousCutBudget).toOption.get
     val cycle = report.cycles.head
     assertEquals(cycle.size, 4)
     assertEquals(cycle.members, Seq("a", "b", "c", "d"))
@@ -247,8 +274,8 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     // no single edge dissolves the whole SCC ({a,b} and {c,d} are two interlocking
     // rings), so every solution is a pair: one edge from each ring. The pair
     // {a -> b, d -> c} does NOT work: b -> a -> c -> d -> b survives as a 4-cycle.
-    assertEquals(cycle.minCutsEstimate, 2)
-    assertEquals(cycle.solutions, Seq(
+    assertEquals(cycle.cutAnalysis.greedyCutEstimate, Some(2))
+    assertEquals(cycle.cutAnalysis.solutions, Seq(
       Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("c", "d", 1))),
       Solution(Seq(CutCandidate("b", "a", 1), CutCandidate("c", "d", 1))),
       Solution(Seq(CutCandidate("b", "a", 1), CutCandidate("d", "c", 1)))
@@ -292,9 +319,9 @@ class MetricsCalculatorSpec extends munit.FunSuite:
         Edge("p1.A", "p2.B", weight = 10), Edge("p2.B", "p3.C", weight = 1), Edge("p3.C", "p1.A", weight = 1)
       )
     )
-    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val report = MetricsCalculator.run(graph, Scope.Packages, cutAnalysisBudget = generousCutBudget).toOption.get
     val cycle = report.cycles.head
-    assertEquals(cycle.solutions, Seq(
+    assertEquals(cycle.cutAnalysis.solutions, Seq(
       Solution(Seq(CutCandidate("p2", "p3", 1))),
       Solution(Seq(CutCandidate("p3", "p1", 1))),
       Solution(Seq(CutCandidate("p1", "p2", 10)))
@@ -315,12 +342,12 @@ class MetricsCalculatorSpec extends munit.FunSuite:
         Edge("b.B", "c.C"), Edge("c.C", "b.B")
       )
     )
-    val cycle = MetricsCalculator.run(graph, Scope.Packages).toOption.get.cycles.head
+    val cycle = MetricsCalculator.run(graph, Scope.Packages, cutAnalysisBudget = generousCutBudget).toOption.get.cycles.head
     assertEquals(cycle.size, 3)
-    assertEquals(cycle.minCutsEstimate, 3) // greedy cuts three chords one by one
+    assertEquals(cycle.cutAnalysis.greedyCutEstimate, Some(3)) // greedy cuts three chords one by one
     // no 1- or 2-cut set breaks all three 2-cycles; the 3-cut solutions pick one
     // direction from each bidirectional pair, arranged acyclically
-    assertEquals(cycle.solutions, Seq(
+    assertEquals(cycle.cutAnalysis.solutions, Seq(
       Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("a", "c", 1), CutCandidate("b", "c", 1))),
       Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("a", "c", 1), CutCandidate("c", "b", 1))),
       Solution(Seq(CutCandidate("a", "b", 1), CutCandidate("c", "a", 1), CutCandidate("c", "b", 1)))
@@ -478,7 +505,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.summary.edges, 0) // intra-src edge collapses to a self-loop
   }
 
-  test("disjoint cycles: each cycle reports its own minCutsEstimate (no whole-graph leakage)") {
+  test("disjoint cycles: each cycle reports its own greedy estimate (no whole-graph leakage)") {
     val graph = DepsGraph(
       nodes = Set(
         Node("a", NodeKind.`package`), Node("b", NodeKind.`package`),
@@ -490,9 +517,9 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       ),
       edges = Set(Edge("a.A", "b.B"), Edge("b.B", "a.A"), Edge("c.C", "d.D"), Edge("d.D", "c.C"))
     )
-    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    assertEquals(report.cycles.map(_.minCutsEstimate), Seq(1, 1))
-    assertEquals(report.cycles.map(_.solutions.head.cuts), Seq(
+    val report = MetricsCalculator.run(graph, Scope.Packages, cutAnalysisBudget = generousCutBudget).toOption.get
+    assertEquals(report.cycles.map(_.cutAnalysis.greedyCutEstimate), Seq(Some(1), Some(1)))
+    assertEquals(report.cycles.map(_.cutAnalysis.solutions.head.cuts), Seq(
       Seq(CutCandidate("a", "b", 1)),
       Seq(CutCandidate("c", "d", 1))
     ))
