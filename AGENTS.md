@@ -39,3 +39,6 @@ AI commits MUST include:
 ```
 Co-Authored-By: (the agent's name and attribution byline)
 ```
+
+## Planning Artifacts
+- Specs and implementation plans are local working artifacts (`docs/superpowers/`); never stage or commit them.
