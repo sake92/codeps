@@ -74,7 +74,7 @@
     <li>Maven / sbt: enable the <code>semanticdb</code> compiler plugin and check the generated files in the target dir</li>
    </ul>
    <h2 id="exporting-the-graph">Exporting the graph<a href="#exporting-the-graph" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>codeps export</code> walks the directory, reads every <code>*.semanticdb</code> file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">standard JSON export format</a> (<code>nodes</code> + <code>edges</code>):</p>
+   <p><code>codeps export</code> walks the directory, reads every <code>*.semanticdb</code> file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> (<code>nodes</code> + <code>edges</code>):</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 </code></pre>
    <ul>
@@ -86,31 +86,31 @@
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb --root . -o deps.json
 </code></pre>
    <h2 id="analyzing">Analyzing<a href="#analyzing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>codeps report</code> reads the JSON graph and emits the flat metrics report:</p>
+   <p><code>codeps report-packages</code> reads the JSON graph and emits the flat metrics report over the package graph:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-codeps report --scope packages --input deps.json
+codeps report-packages --input deps.json
 </code></pre>
    <ul>
-    <li><code>--scope packages</code> — metrics over the whole package graph: cycles with cut solutions, per-package exposed-surface (<code>ports</code>/<code>mutPorts</code>/<code>exposure</code>/<code>utilization</code>), and orphans</li>
-    <li><code>--scope files</code> — the same metrics over the <strong>file graph</strong> of the packages selected with <code>--include</code>; e.g. <code>--include com.example</code> descends into <code>com.example</code> and everything below it</li>
+    <li><code>report-packages</code> — metrics over the whole package graph: cycles with optional budgeted cut analysis, per-package exposed-surface and encapsulation (<code>ports</code>/<code>mutPorts</code>/<code>exposure</code>/ <code>dependentsPerPublicPort</code> plus declaration visibility counters), and orphans</li>
+    <li><code>report-files</code> — the same metrics over the <strong>file graph</strong> of the packages selected with <code>--include</code>; e.g. <code>--include com.example</code> descends into <code>com.example</code> and everything below it</li>
     <li><code>--input</code> selects the JSON graph (a file, or <code>-</code> for stdin); <code>-i</code> works too</li>
     <li><code>--include</code>/<code>--exclude</code>/<code>--collapse</code> filter and collapse (see below)</li>
-    <li><code>--format json</code> emits machine-readable JSON (the default <code>table</code> renders the same data as plain aligned text)</li>
+    <li><code>--format json</code> emits machine-readable JSON with complete report data; the default <code>table</code> is a compact plain-text presentation that may abbreviate cut lists</li>
    </ul>
-   <p>No intermediate file needed — pipe <code>export</code> straight into <code>report</code> (the <code>-</code> tells <code>report</code> to read the JSON from stdin):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report --scope packages --input -
+   <p>No intermediate file needed — pipe <code>export</code> straight into <code>report-packages</code> (the <code>-</code> tells it to read the JSON from stdin):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
 </code></pre>
    <p>See the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the full field reference.</p>
    <h2 id="filtering-and-collapsing">Filtering and collapsing<a href="#filtering-and-collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>--include</code>/<code>--exclude</code> take package patterns: a pattern <code>com.example</code> matches the package itself and everything below it; excludes win over includes.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">only com.example packages, no third-party or JDK noise</span>
-codeps report --scope packages --include com.example --input deps.json
+codeps report-packages --include com.example --input deps.json
 <span class="hljs-meta prompt_">
 # </span><span class="language-bash">com.example.* minus internal helpers</span>
-codeps report --scope packages --include com.example -e com.example.internal --input deps.json
+codeps report-packages --include com.example -e com.example.internal --input deps.json
 </code></pre>
    <p>Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report --scope packages --include com.example -c com.example.modules.** --input deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example -c com.example.modules.** --input deps.json
 </code></pre>
    <p>When multiple rules match, the longest prefix wins; loops created by collapsing are dropped. See <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for the full option list.</p>
    <div role="group">
