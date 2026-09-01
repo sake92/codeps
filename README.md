@@ -3,7 +3,7 @@
 Code package dependency analyzer.
 
 Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` output
-into the [standard JSON export format](https://sake92.github.io/codeps/reference/json-input.html),
+into the [codeps export format](https://sake92.github.io/codeps/reference/json-input.html),
 then emits a flat [metrics report](https://sake92.github.io/codeps/reference/report.html):
 SCC facts with optional budgeted cut analysis, per-node exposed-surface metrics
 (`ports`/`mutPorts`/`exposure`/`dependentsPerPublicPort`) and declaration-surface
@@ -40,12 +40,12 @@ java -jar codeps.jar report-packages --input deps.json
 
 ### Other languages
 
-For any other ecosystem, produce the [standard JSON export format](https://sake92.github.io/codeps/reference/json-input.html)
+For any other ecosystem, produce the [codeps export format](https://sake92.github.io/codeps/reference/json-input.html)
 with a tool of your choice (madge, pydeps, `go list`, ...) and feed it to `report-packages` —
 codeps never parses that source code itself:
 
 ```shell
-madge --json src | jq '... shape it into the standard JSON export format ...' | java -jar codeps.jar report-packages --input -
+madge --json src | jq '... shape it into the codeps export format ...' | java -jar codeps.jar report-packages --input -
 ```
 
 The metrics are language-agnostic once the node/edge list carries per-node `isExposed`/`ports`/`mutPorts`

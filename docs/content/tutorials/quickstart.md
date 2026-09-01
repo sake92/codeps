@@ -29,7 +29,7 @@ scala-cli compile --server=false --semanticdb -d classes src/
 # -> classes/META-INF/semanticdb/**/*.semanticdb
 ```
 
-Then export the graph to the standard JSON export format:
+Then export the graph to the codeps export format:
 
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
@@ -77,4 +77,4 @@ as plain aligned text by default; `--format json` emits machine-readable JSON.
 
 - Filter and collapse packages: [CLI reference](/reference/cli.html)
 - Understand the metrics: [Metrics report](/reference/report.html)
-- The export JSON schema: [Standard JSON export format](/reference/json-input.html)
+- The export JSON schema: [Codeps export format](/reference/json-input.html)

@@ -1,12 +1,12 @@
 ---
 layout: reference.html
-title: Standard JSON export format
+title: Codeps export format
 description: the standard JSON graph format produced by codeps export and consumed by codeps report-packages or report-files
 ---
 
-# Standard JSON export format
+# Codeps export format
 
-The standard JSON export format is the contract between the two codeps steps: `codeps export`
+The codeps export format is the contract between the two codeps steps: `codeps export`
 *produces* it, and `codeps report-packages` or `codeps report-files` *consumes* it. It is a self-contained dependency
 graph produced by `codeps export` as `package` and `file` nodes only — the exporters
 collapse type/member symbols into their file (or root package for file-less jdeps

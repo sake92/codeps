@@ -13,7 +13,7 @@ It works in two steps:
 1. **`codeps export`** parses output your compiler already produced —
    [SemanticDB](/howtos/semdb.html) (`.semanticdb` files from Scala) or
    [jdeps](/howtos/jdeps.html) (the JDK's own analyzer) — and spits out a
-   dependency graph as JSON: the [standard JSON export format](/reference/json-input.html).
+   dependency graph as JSON: the [codeps export format](/reference/json-input.html).
 2. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
    via `-`) and spits out the [metrics report](/reference/report.html): a plain-text table by
    default, or JSON with `--format json` — handy for agents, other tools and CI.

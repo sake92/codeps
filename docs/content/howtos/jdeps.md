@@ -29,7 +29,7 @@ jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 ## Exporting the graph
 
 `codeps export` parses the text file and emits the
-[standard JSON export format](/reference/json-input.html) (`nodes` + `edges`):
+[codeps export format](/reference/json-input.html) (`nodes` + `edges`):
 
 ```shell
 codeps export --from jdeps --input jdeps.txt -o deps.json

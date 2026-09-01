@@ -6,7 +6,7 @@ description: the codeps report JSON format — findings, cycles, surface, orphan
 
 # Metrics report
 
-`codeps report-packages` or `codeps report-files` consumes the [standard JSON export format](/reference/json-input.html) (a file, or stdin via `-`)
+`codeps report-packages` or `codeps report-files` consumes the [codeps export format](/reference/json-input.html) (a file, or stdin via `-`)
 and emits a single flat JSON document: per-scope metrics over the graph's **packages**, or over the
 **files** of the packages selected with `--include`.
 

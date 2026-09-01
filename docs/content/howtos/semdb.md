@@ -41,7 +41,7 @@ Other ways to get SemanticDB output:
 ## Exporting the graph
 
 `codeps export` walks the directory, reads every `*.semanticdb` file and emits the
-[standard JSON export format](/reference/json-input.html) (`nodes` + `edges`):
+[codeps export format](/reference/json-input.html) (`nodes` + `edges`):
 
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json

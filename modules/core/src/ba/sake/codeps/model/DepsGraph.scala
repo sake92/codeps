@@ -4,7 +4,7 @@ import ba.sake.tupson.{JsonRW, ParseError, ParsingException}
 import org.typelevel.jawn.ast.{JObject, JValue}
 
 /**
-  * The standard JSON export format: a self-contained dependency graph with package/file/type/member
+  * The codeps export format: a self-contained dependency graph with package/file/type/member
   * nodes and directed edges between node ids. Optional SemanticDB metadata
   * carries exact symbol-reference occurrences after granular nodes are collapsed.
   * `{"nodes": [{"id": ..., "kind": ..., "parentId": ..., "file": ...}], "edges": [{"source": ..., "target": ...}]}`

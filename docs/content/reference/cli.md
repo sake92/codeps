@@ -10,7 +10,7 @@ description: codeps CLI reference
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
-   emits the [standard JSON export format](/reference/json-input.html). No analysis.
+   emits the [codeps export format](/reference/json-input.html). No analysis.
 2. [`report-packages`](#report-packages) and [`report-files`](#report-files) — the *analyzers*: consume that JSON (a file or stdin) and emit the
    flat [metrics report](/reference/report.html): SCC facts by default, with optional budgeted cut analysis, change
    propagators, per-node exposed-surface metrics and orphans.
