@@ -6,7 +6,7 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with three subcommands
+`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with five subcommands
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
@@ -14,6 +14,7 @@ that form a two-step pipeline:
 2. [`report-packages`](#report-packages) and [`report-files`](#report-files) — the *analyzers*: consume that JSON (a file or stdin) and emit the
    flat [metrics report](/reference/report.html): SCC facts by default, with optional budgeted cut analysis, change
    propagators, per-node exposed-surface metrics and orphans.
+3. [`inspect-cycle`](#inspect-cycle) and [`inspect-node`](#inspect-node) — report-only detail views for one cycle or node.
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
@@ -176,6 +177,34 @@ collapse rules, unknown format values, `invalid SOURCE_DATE_EPOCH: <value>`
 JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
 Cut controls also reject non-positive limits and reject `--cut-time-limit` or
 `--cut-candidate-limit` unless `--analyze-cuts` is present.
+
+## inspect-cycle
+
+```shell
+codeps inspect-cycle --report <v2-report.json> --id <scc-id> [--format <json|table>]
+```
+
+Reads one schema-version-2 metrics report and prints the selected cycle without
+recomputing the graph or cut analysis. JSON includes the exhaustive sorted `members`,
+the closed `witnessCycle`, `size`, `internalEdges`, `incomingEdges`, `outgoingEdges`,
+`extFanIn`, the complete `cutAnalysis` record, and matching findings. Table output
+prints the same fields in a compact readable form. `--format` defaults to `table`.
+
+The report path may be `-` to read JSON from stdin. Errors (exit 1) include
+`report path does not exist`, `report path is not a file`, malformed report JSON,
+`incompatible schema version`, and `unknown cycle id`.
+
+## inspect-node
+
+```shell
+codeps inspect-node --report <v2-report.json> --id <node-id> [--format <json|table>]
+```
+
+Reads one schema-version-2 metrics report and prints the selected node's complete
+surface row, nullable `cycleId`, and matching findings. JSON and table output are
+report-only views; no graph or cut analysis is recomputed. `--format` defaults to
+`table`, and `--report -` reads from stdin. Unknown node IDs and incompatible report
+schema versions exit 1.
 
 ## Reproducible output
 

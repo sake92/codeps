@@ -284,6 +284,7 @@ object MetricsCalculator:
   ): Cycle =
     val extFanIn = sg.edges.count(e => scc.contains(e.target) && !scc.contains(e.source))
     val internalEdges = sg.edges.count(e => scc.contains(e.source) && scc.contains(e.target))
+    val outgoingEdges = sg.edges.count(e => scc.contains(e.source) && !scc.contains(e.target))
     val cutAnalysis = cutAnalysisBudget match
       case Some(budget) => CutAnalyzer.analyze(scc, sg.edges, budget)
       case None         => CutAnalysis.notRequested
@@ -294,7 +295,9 @@ object MetricsCalculator:
       extFanIn = extFanIn,
       cutAnalysis = cutAnalysis,
       internalEdges = internalEdges,
-      witnessCycle = cyclePath(scc, sg)
+      witnessCycle = cyclePath(scc, sg),
+      incomingEdges = extFanIn,
+      outgoingEdges = outgoingEdges
     )
 
   /** A simple cycle through the SCC's smallest member as a closed path (first

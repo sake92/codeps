@@ -18,6 +18,9 @@ class MetricsReportSpec extends munit.FunSuite:
         witnessCycle = Seq("cache", "scheduler", "cache"),
         size = 2,
         extFanIn = 5,
+        internalEdges = 2,
+        incomingEdges = 5,
+        outgoingEdges = 3,
         cutAnalysis = CutAnalysis("completed", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2)
       )),
       propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
@@ -63,6 +66,9 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"utilization\":0.33"))
     assert(json.contains("\"members\":[\"cache\",\"scheduler\"]"))
     assert(json.contains("\"witnessCycle\":[\"cache\",\"scheduler\",\"cache\"]"))
+    assert(json.contains("\"internalEdges\":2"))
+    assert(json.contains("\"incomingEdges\":5"))
+    assert(json.contains("\"outgoingEdges\":3"))
     assert(json.contains("\"cycleId\":\"scc:cache\""))
     assert(json.contains("\"cycleId\":null"))
     assert(json.contains("\"findings\":[{"))
@@ -103,5 +109,35 @@ class MetricsReportSpec extends munit.FunSuite:
     assertEquals(rootKeys, Set("schemaVersion", "scope", "generatedAt", "summary", "cycles", "propagators", "surface", "orphans", "findings"))
     assertEquals("\"edge\":".r.findAllIn(json).length, 9)
     assert(json.contains("\"edge\":[\"canonical.source.9\",\"canonical.target.9\"]"))
-    assert(!json.contains("internalEdges"))
+    assert(json.contains("\"internalEdges\":0"))
+  }
+
+  test("v2 report JSON can be read back for inspection") {
+    val report = MetricsReport(
+      scope = "packages",
+      generatedAt = "2026-08-27T10:00:00Z",
+      summary = Summary(2, 2, 2, 0, 0),
+      cycles = Seq(Cycle(
+        id = "scc:a",
+        members = Seq("a", "b"),
+        witnessCycle = Seq("a", "b", "a"),
+        size = 2,
+        extFanIn = 1,
+        internalEdges = 2,
+        incomingEdges = 1,
+        outgoingEdges = 2,
+        cutAnalysis = CutAnalysis.notRequested
+      )),
+      propagators = Seq.empty,
+      surface = Seq(SurfaceRow("a", 1, 1, 1, 0, 1, None, Some("scc:a")), SurfaceRow("b", 1, 1, 1, 0, 1, None, Some("scc:a"))),
+      orphans = Seq.empty,
+      findings = Seq.empty
+    )
+    assertEquals(report.toJson(spaces = 0, sort = false).parseJson[MetricsReport], report)
+  }
+
+  test("v2 report parser rejects schema version 1") {
+    val json = """{"schemaVersion":1,"scope":"packages","generatedAt":"2026-08-27T10:00:00Z","summary":{"nodes":0,"edges":0,"nodesInCycles":0,"orphans":0,"criticalPathLength":0},"cycles":[],"propagators":[],"surface":[],"orphans":[],"findings":[]}"""
+    val error = intercept[ba.sake.tupson.TupsonException](json.parseJson[MetricsReport])
+    assert(error.getMessage.contains("incompatible schema version"))
   }

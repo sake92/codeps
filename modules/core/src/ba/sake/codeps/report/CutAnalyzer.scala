@@ -3,6 +3,7 @@ package ba.sake.codeps.report
 import ba.sake.codeps.graph.TarjanScc
 import ba.sake.codeps.model.Edge
 import ba.sake.tupson.JsonRW
+import ba.sake.tupson.{ParseError, ParsingException}
 import org.typelevel.jawn.ast.{JNull, JObject, JValue}
 
 import scala.collection.mutable
@@ -38,7 +39,22 @@ object CutAnalysis:
         "examinedCandidates" -> JsonRW[Int].write(value.examinedCandidates)
       )))
     override def parse(path: String, jValue: JValue): CutAnalysis =
-      throw new UnsupportedOperationException("metrics cut analyses are write-only")
+      val fields = jValue match
+        case JObject(value) => value
+        case other =>
+          throw ParsingException(
+            ParseError(path, s"should be Object but it is ${other.valueType.capitalize}", Some(other.render().take(100)))
+          )
+      def required[T](key: String)(using rw: JsonRW[T]): T =
+        fields.get(key) match
+          case Some(value) => rw.parse(s"$path.$key", value)
+          case None        => throw ParsingException(ParseError(s"$path.$key", "is missing"))
+      CutAnalysis(
+        required[String]("status"),
+        required[Option[Int]]("greedyCutEstimate"),
+        required[Seq[Solution]]("solutions"),
+        required[Int]("examinedCandidates")
+      )
 
 /** Bounded greedy and enumerative feedback-edge investigation for one SCC. */
 object CutAnalyzer:

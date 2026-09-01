@@ -1,6 +1,7 @@
 package ba.sake.codeps.report
 
 import ba.sake.tupson.JsonRW
+import ba.sake.tupson.{ParseError, ParsingException, TupsonException}
 import org.typelevel.jawn.ast.{JNull, JNum, JObject, JValue}
 
 /** The flat metrics report — codeps's only user-facing output (v2.md §5).
@@ -36,10 +37,13 @@ case class Cycle(
     size: Int,
     extFanIn: Int,
     cutAnalysis: CutAnalysis = CutAnalysis.notRequested,
-    /** Display-only cycle density metadata. It is intentionally not serialized,
-      * so the report JSON schema remains stable. */
+    /** Number of edges whose source and target are both in this SCC. */
     internalEdges: Int = 0,
-    witnessCycle: Seq[String] = Nil
+    witnessCycle: Seq[String] = Nil,
+    /** Number of edges entering this SCC from outside it. Equal to extFanIn. */
+    incomingEdges: Int = 0,
+    /** Number of edges leaving this SCC to outside it. */
+    outgoingEdges: Int = 0
 )
 
 /** One complete way to break the cycle: removing ALL `cuts` together dissolves
@@ -98,7 +102,21 @@ object MetricsReport:
         "findings" -> JsonRW[Seq[Finding]].write(value.findings)
       )
     override def parse(path: String, jValue: JValue): MetricsReport =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      val schemaVersion = required[Int](map, path, "schemaVersion")
+      if schemaVersion != 2 then
+        throw TupsonException(s"incompatible schema version: $schemaVersion (expected 2)")
+      MetricsReport(
+        requiredString(map, path, "scope"),
+        requiredString(map, path, "generatedAt"),
+        required[Summary](map, path, "summary"),
+        required[Seq[Cycle]](map, path, "cycles"),
+        required[Seq[PropagatorRow]](map, path, "propagators"),
+        required[Seq[SurfaceRow]](map, path, "surface"),
+        required[Seq[String]](map, path, "orphans"),
+        schemaVersion,
+        required[Seq[Finding]](map, path, "findings")
+      )
 
 object Summary:
   given JsonRW[Summary] with
@@ -111,7 +129,14 @@ object Summary:
         "criticalPathLength" -> JsonRW[Int].write(value.criticalPathLength)
       )
     override def parse(path: String, jValue: JValue): Summary =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      Summary(
+        required[Int](map, path, "nodes"),
+        required[Int](map, path, "edges"),
+        required[Int](map, path, "nodesInCycles"),
+        required[Int](map, path, "orphans"),
+        required[Int](map, path, "criticalPathLength")
+      )
 
 object Cycle:
   given JsonRW[Cycle] with
@@ -121,11 +146,25 @@ object Cycle:
         "members" -> JsonRW[Seq[String]].write(value.members),
         "size" -> JsonRW[Int].write(value.size),
         "extFanIn" -> JsonRW[Int].write(value.extFanIn),
+        "internalEdges" -> JsonRW[Int].write(value.internalEdges),
+        "incomingEdges" -> JsonRW[Int].write(value.incomingEdges),
+        "outgoingEdges" -> JsonRW[Int].write(value.outgoingEdges),
         "cutAnalysis" -> JsonRW[CutAnalysis].write(value.cutAnalysis),
         "witnessCycle" -> JsonRW[Seq[String]].write(value.witnessCycle)
       )
     override def parse(path: String, jValue: JValue): Cycle =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      Cycle(
+        requiredString(map, path, "id"),
+        required[Seq[String]](map, path, "members"),
+        required[Int](map, path, "size"),
+        required[Int](map, path, "extFanIn"),
+        required[CutAnalysis](map, path, "cutAnalysis"),
+        required[Int](map, path, "internalEdges"),
+        required[Seq[String]](map, path, "witnessCycle"),
+        required[Int](map, path, "incomingEdges"),
+        required[Int](map, path, "outgoingEdges")
+      )
 
 object Solution:
   given JsonRW[Solution] with
@@ -134,7 +173,8 @@ object Solution:
         "cuts" -> JsonRW[Seq[CutCandidate]].write(value.cuts)
       )
     override def parse(path: String, jValue: JValue): Solution =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      Solution(required[Seq[CutCandidate]](map, path, "cuts"))
 
 object CutCandidate:
   given JsonRW[CutCandidate] with
@@ -144,7 +184,11 @@ object CutCandidate:
         "weight" -> JsonRW[Int].write(value.weight)
       )
     override def parse(path: String, jValue: JValue): CutCandidate =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      val edge = required[Seq[String]](map, path, "edge")
+      if edge.size != 2 then
+        throw ParsingException(ParseError(s"$path.edge", "must contain exactly two node ids", Some(edge)))
+      CutCandidate(edge.head, edge(1), required[Int](map, path, "weight"))
 
 object SurfaceRow:
   given JsonRW[SurfaceRow] with
@@ -164,7 +208,17 @@ object SurfaceRow:
           case Some(id) => JsonRW[String].write(id))
       )
     override def parse(path: String, jValue: JValue): SurfaceRow =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      SurfaceRow(
+        requiredString(map, path, "node"),
+        required[Int](map, path, "fanIn"),
+        required[Int](map, path, "fanOut"),
+        required[Double](map, path, "ports"),
+        required[Double](map, path, "mutPorts"),
+        required[Double](map, path, "exposure"),
+        required[Option[Double]](map, path, "utilization"),
+        required[Option[String]](map, path, "cycleId")
+      )
 
 object PropagatorRow:
   given JsonRW[PropagatorRow] with
@@ -176,7 +230,13 @@ object PropagatorRow:
         "score" -> num(value.score)
       )
     override def parse(path: String, jValue: JValue): PropagatorRow =
-      throw new UnsupportedOperationException("metrics reports are write-only")
+      val map = objectFields(path, jValue)
+      PropagatorRow(
+        requiredString(map, path, "node"),
+        required[Int](map, path, "fanIn"),
+        required[Int](map, path, "fanOut"),
+        required[Double](map, path, "score")
+      )
 
 object Finding:
   given JsonRW[Finding] with
@@ -191,7 +251,16 @@ object Finding:
         "nextAction" -> JsonRW[String].write(value.nextAction)
       )
     override def parse(path: String, jValue: JValue): Finding =
-      throw new UnsupportedOperationException("metrics findings are write-only")
+      val map = objectFields(path, jValue)
+      Finding(
+        requiredString(map, path, "id"),
+        requiredString(map, path, "kind"),
+        requiredString(map, path, "severity"),
+        requiredString(map, path, "subject"),
+        requiredString(map, path, "evidence"),
+        requiredString(map, path, "confidence"),
+        requiredString(map, path, "nextAction")
+      )
 
 /** Integral doubles render as integers (9 not 9.0); fractional halves stay decimals. */
 private def num(d: Double): JValue =
@@ -199,3 +268,19 @@ private def num(d: Double): JValue =
 
 private def obj(fields: (String, JValue)*): JValue =
   JObject(scala.collection.mutable.Map.from(fields))
+
+private def objectFields(path: String, jValue: JValue): scala.collection.mutable.Map[String, JValue] =
+  jValue match
+    case JObject(fields) => fields
+    case other =>
+      throw ParsingException(
+        ParseError(path, s"should be Object but it is ${other.valueType.capitalize}", Some(other.render().take(100)))
+      )
+
+private def required[T](fields: scala.collection.mutable.Map[String, JValue], path: String, key: String)(using rw: JsonRW[T]): T =
+  fields.get(key) match
+    case Some(value) => rw.parse(s"$path.$key", value)
+    case None        => throw ParsingException(ParseError(s"$path.$key", "is missing"))
+
+private def requiredString(fields: scala.collection.mutable.Map[String, JValue], path: String, key: String): String =
+  required[String](fields, path, key)

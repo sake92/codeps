@@ -40,6 +40,9 @@ and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoc
       "witnessCycle": ["cache", "scheduler", "cache"],
       "size": 2,
       "extFanIn": 5,
+      "internalEdges": 2,
+      "incomingEdges": 5,
+      "outgoingEdges": 3,
       "cutAnalysis": {
         "status": "notRequested",
         "greedyCutEstimate": null,
@@ -106,6 +109,10 @@ components are just acyclic nodes and are never reported.
 - `extFanIn` — edges whose target is in the SCC and whose source is outside: how much outside
   stuff is exposed to the cycle's blast radius. Cycles are ranked by `size` first, `extFanIn`
   as tiebreaker.
+- `internalEdges` — distinct edges whose source and target are both in the SCC.
+- `incomingEdges` — distinct edges entering the SCC from outside. This is the same count as
+  `extFanIn`, retained as an explicit directional edge count for inspection consumers.
+- `outgoingEdges` — distinct edges leaving the SCC to outside nodes.
 - `cutAnalysis` — the explicit result of optional cut investigation. Its `status` is
   `notRequested` for the default fast report, `completed` when the configured search finished,
   or `budgetExceeded` when its time or candidate limit was reached. `budgetExceeded` is still a

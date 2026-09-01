@@ -204,6 +204,72 @@ class MainSpec extends munit.FunSuite:
     assert(badDuration.err.text().contains("must be a positive duration"))
   }
 
+  test("inspect-cycle reads the complete v2 cycle detail") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val reportJson = os.pwd / "tmp" / "cli-test" / "inspect-cycle-report.json"
+    os.makeDir.all(reportJson / os.up)
+    os.remove.all(reportJson)
+    val reportRes = runCli("report-packages", "--format", "json", "-o", reportJson.toString, "--input", cyclic.toString)
+    assertEquals(reportRes.exitCode, 0)
+
+    val result = runCli("inspect-cycle", "--report", reportJson.toString,
+      "--id", "scc:com.example.modules.module1", "--format", "json")
+    assertEquals(result.exitCode, 0)
+    assert(result.out.text().contains("\"members\": ["))
+    assert(result.out.text().contains("\"witnessCycle\": ["))
+    assert(result.out.text().contains("\"internalEdges\""))
+    assert(result.out.text().contains("\"incomingEdges\""))
+    assert(result.out.text().contains("\"outgoingEdges\""))
+    assert(result.out.text().contains("\"cutAnalysis\""))
+
+    val table = runCli("inspect-cycle", "--report", reportJson.toString,
+      "--id", "scc:com.example.modules.module1")
+    assertEquals(table.exitCode, 0)
+    assert(table.out.text().contains("edge counts:"))
+    assert(table.out.text().contains("cutAnalysis.status: notRequested"))
+
+    val missing = runCli("inspect-cycle", "--report", reportJson.toString, "--id", "missing")
+    assertEquals(missing.exitCode, 1)
+    assert(missing.err.text().contains("unknown cycle id"))
+  }
+
+  test("inspect-node returns surface, cycle affiliation, and matching findings") {
+    val reportJson = os.pwd / "tmp" / "cli-test" / "inspect-node-report.json"
+    os.makeDir.all(reportJson / os.up)
+    os.write.over(reportJson,
+      """{
+        "schemaVersion": 2,
+        "scope": "packages",
+        "generatedAt": "2026-08-27T10:00:00Z",
+        "summary": {"nodes": 1, "edges": 0, "nodesInCycles": 0, "orphans": 1, "criticalPathLength": 0},
+        "cycles": [],
+        "propagators": [],
+        "surface": [{"node": "p1", "fanIn": 0, "fanOut": 0, "ports": 3, "mutPorts": 1, "exposure": 6, "utilization": null, "cycleId": null}],
+        "orphans": ["p1"],
+        "findings": [{"id": "mutableSurface:p1", "kind": "mutableSurface", "severity": "high", "subject": "p1", "evidence": "mutPorts=1, exposure=6", "confidence": "high", "nextAction": "inspect-node p1"}]
+      }""")
+
+    val result = runCli("inspect-node", "--report", reportJson.toString, "--id", "p1", "--format", "json")
+    assertEquals(result.exitCode, 0)
+    assert(result.out.text().contains("\"surface\""))
+    assert(result.out.text().contains("\"cycleId\": null"))
+    assert(result.out.text().contains("mutableSurface:p1"))
+
+    val missing = runCli("inspect-node", "--report", reportJson.toString, "--id", "missing")
+    assertEquals(missing.exitCode, 1)
+    assert(missing.err.text().contains("unknown node id"))
+  }
+
+  test("inspection rejects an incompatible report schema") {
+    val reportJson = os.pwd / "tmp" / "cli-test" / "inspect-schema-report.json"
+    os.makeDir.all(reportJson / os.up)
+    os.write.over(reportJson,
+      """{"schemaVersion": 1, "scope": "packages", "generatedAt": "2026-08-27T10:00:00Z", "summary": {"nodes": 0, "edges": 0, "nodesInCycles": 0, "orphans": 0, "criticalPathLength": 0}, "cycles": [], "propagators": [], "surface": [], "orphans": [], "findings": []}""")
+    val result = runCli("inspect-node", "--report", reportJson.toString, "--id", "missing")
+    assertEquals(result.exitCode, 1)
+    assert(result.err.text().contains("incompatible schema version"))
+  }
+
   test("report-packages --skip-tests excludes test nodes") {
     val out = os.pwd / "tmp" / "cli-test" / "report-v2-skip-tests.json"
     os.makeDir.all(out / os.up)

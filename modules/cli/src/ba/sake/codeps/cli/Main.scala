@@ -2,7 +2,7 @@ package ba.sake.codeps.cli
 
 import ba.sake.codeps.graph.{Aggregator, Collapser, TestFilter}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
-import ba.sake.codeps.report.{CutAnalysisBudget, MetricsCalculator, ReportTable}
+import ba.sake.codeps.report.{CutAnalysisBudget, MetricsCalculator, ReportInspector, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
@@ -159,6 +159,40 @@ object Main:
   ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
     skipTests.value, testPattern, all.value, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
+  @main
+  def inspectCycle(
+      @arg(name = "report") report: String,
+      @arg(name = "id") id: String,
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
+  ): Int =
+    readReportInput(report).flatMap(ReportInspector.inspectCycle(_, id)) match
+      case Left(err) =>
+        System.err.println(s"error: $err")
+        1
+      case Right(detail) =>
+        val content = format match
+          case ReportFormat.Json  => ReportInspector.renderJson(detail)
+          case ReportFormat.Table => ReportInspector.renderTable(detail)
+        writeOutput(content, None)
+        0
+
+  @main
+  def inspectNode(
+      @arg(name = "report") report: String,
+      @arg(name = "id") id: String,
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
+  ): Int =
+    readReportInput(report).flatMap(ReportInspector.inspectNode(_, id)) match
+      case Left(err) =>
+        System.err.println(s"error: $err")
+        1
+      case Right(detail) =>
+        val content = format match
+          case ReportFormat.Json  => ReportInspector.renderJson(detail)
+          case ReportFormat.Table => ReportInspector.renderTable(detail)
+        writeOutput(content, None)
+        0
+
   private def runReport(scope: MetricsCalculator.Scope, options: ReportOptions): Int =
     parseCutBudget(options.analyzeCuts, options.cutTimeLimit, options.cutCandidateLimit) match
       case Left(err) =>
@@ -241,6 +275,16 @@ object Main:
     try Right(text.parseJson[DepsGraph])
     catch
       case e: ba.sake.tupson.TupsonException => Left(s"failed to parse json: ${e.getMessage}")
+
+  private def readReportInput(input: String): Either[String, ba.sake.codeps.report.MetricsReport] =
+    val text =
+      if input == "-" then new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+      else
+        val path = os.Path(input, os.pwd)
+        if !os.exists(path) then return Left(s"report path does not exist: $path")
+        if !os.isFile(path) then return Left(s"report path is not a file: $path")
+        os.read(path)
+    ReportInspector.parse(text).left.map(err => s"failed to parse report json: $err")
 
   /** `--test-pattern` requires `--skip-tests`; when given it replaces the built-in patterns. */
   private def testPatternsOrError(skipTests: Boolean, testPattern: Seq[String]): Either[String, Option[Seq[String]]] =
