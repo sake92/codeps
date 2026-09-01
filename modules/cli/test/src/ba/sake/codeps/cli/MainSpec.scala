@@ -189,13 +189,69 @@ class MainSpec extends munit.FunSuite:
     assert(tableRes.out.text().contains("cut analysis: notRequested"))
     assert(tableRes.out.text().contains("greedyCutEstimate"))
     assert(!tableRes.out.text().contains("solution 1:"))
-    assert(tableRes.out.text().contains("mutPorts"))
+    assert(tableRes.out.text().contains("mut"))
+    assert(!tableRes.out.text().contains("mutPorts"))
     assert(!tableRes.out.text().contains("mut_ports"))
 
     val analyzedRes = runCli("report-packages", "--format", "json", "--analyze-cuts", "--cut-time-limit", "1s", "--input", cyclic.toString)
     assertEquals(analyzedRes.exitCode, 0)
     assert(analyzedRes.out.text().contains("\"status\": \"completedExact\""))
     assert(analyzedRes.out.text().contains("\"greedyCutEstimate\": 1"))
+  }
+
+  test("report-packages surface columns are repeatable, canonical, and deduplicated") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val res = runCli(
+      "report-packages",
+      "--columns", "mutability",
+      "--columns", "visibility",
+      "--columns", "core",
+      "--columns", "visibility",
+      "--input", cyclic.toString
+    )
+    assertEquals(res.exitCode, 0)
+    val surfaceSection = res.out.text().substring(res.out.text().indexOf("Surface risks"), res.out.text().indexOf("Public surface"))
+    val header = surfaceSection.linesIterator.find(_.startsWith("node")).get
+    assertEquals(
+      header.trim.split("\\s+").toSeq,
+      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv", "pubMut", "protMut", "pkgMut", "privMut")
+    )
+    assert(!header.contains("fanIn"))
+    assert(!header.contains("publicSurface"))
+  }
+
+  test("report-packages defaults to core surface columns and all exposes the accounting view") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val defaultRes = runCli("report-packages", "--input", cyclic.toString)
+    val allRes = runCli("report-packages", "--columns", "all", "--input", cyclic.toString)
+    assertEquals(defaultRes.exitCode, 0)
+    assertEquals(allRes.exitCode, 0)
+    val defaultSection = defaultRes.out.text().substring(defaultRes.out.text().indexOf("Surface risks"), defaultRes.out.text().indexOf("Public surface"))
+    val allSection = allRes.out.text().substring(allRes.out.text().indexOf("Surface risks"), allRes.out.text().indexOf("Public surface"))
+    val defaultHeader = defaultSection.linesIterator.find(_.startsWith("node")).get
+    val allHeader = allSection.linesIterator.find(_.startsWith("node")).get
+    assertEquals(defaultHeader.trim.split("\\s+").toSeq, Seq("node", "in", "out", "ports", "mut", "encap%", "use"))
+    assertEquals(allHeader.trim.split("\\s+").toSeq, Seq(
+      "node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv",
+      "pubMut", "protMut", "pkgMut", "privMut", "exp", "total", "mut%"
+    ))
+  }
+
+  test("surface column selection does not change JSON output") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val env = Map("SOURCE_DATE_EPOCH" -> "1700000000")
+    val defaultRes = runCliEnv(env, "report-packages", "--format", "json", "--input", cyclic.toString)
+    val allRes = runCliEnv(env, "report-packages", "--format", "json", "--columns", "all", "--input", cyclic.toString)
+    assertEquals(defaultRes.exitCode, 0)
+    assertEquals(allRes.exitCode, 0)
+    assertEquals(defaultRes.out.text(), allRes.out.text())
+  }
+
+  test("report surface columns validate group names") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val res = runCli("report-packages", "--columns", "unknown", "--input", cyclic.toString)
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("unknown columns group"))
   }
 
   test("cut analysis candidate budget is a successful bounded report") {
@@ -381,6 +437,8 @@ class MainSpec extends munit.FunSuite:
     val res = runCli("report-packages", "--help")
     assertEquals(res.exitCode, 0)
     assert(res.out.text().contains("Available subcommands"))
+    assert(res.out.text().contains("--columns"))
+    assert(res.out.text().contains("core, visibility, mutability, coupling, or all"))
   }
 
   test("SOURCE_DATE_EPOCH pins generatedAt") {

@@ -33,6 +33,75 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("2.00"))
   }
 
+  test("surface defaults to the compact core columns") {
+    val rich = report.copy(surface = Seq(SurfaceRow(
+      node = "cache",
+      fanIn = 3,
+      fanOut = 2,
+      ports = 9.0,
+      mutPorts = 5.0,
+      exposure = 24.0,
+      dependentsPerPublicPort = Some(0.33),
+      publicSurface = 3.0,
+      protectedSurface = 2.0,
+      packageSurface = 1.0,
+      privateSurface = 4.0,
+      publicMutableSurface = 1.0,
+      protectedMutableSurface = 1.0,
+      packageMutableSurface = 0.0,
+      privateMutableSurface = 1.0,
+      totalDeclaredSurface = 10.0,
+      encapsulationRatio = Some(0.3),
+      publicMutableRatio = Some(1.0 / 3.0)
+    )))
+    val surfaceSection = ReportTable.render(rich).substring(
+      ReportTable.render(rich).indexOf("Surface risks"),
+      ReportTable.render(rich).indexOf("Public surface")
+    )
+    val header = surfaceSection.linesIterator.find(_.startsWith("node")).get
+
+    assertEquals(header.trim.split("\\s+").toSeq, Seq("node", "in", "out", "ports", "mut", "encap%", "use"))
+    assert(!header.contains("fanIn"))
+    assert(!header.contains("mutPorts"))
+    assert(surfaceSection.contains("0.30"))
+    assert(surfaceSection.contains("0.33"))
+  }
+
+  test("surface column groups compose in canonical order and deduplicate columns") {
+    val groups = Seq(
+      ReportTable.ColumnGroup.Mutability,
+      ReportTable.ColumnGroup.Visibility,
+      ReportTable.ColumnGroup.Core,
+      ReportTable.ColumnGroup.Visibility
+    )
+    val text = ReportTable.render(report, columns = groups)
+    val surfaceSection = text.substring(text.indexOf("Surface risks"), text.indexOf("Public surface"))
+    val header = surfaceSection.linesIterator.find(_.startsWith("node")).get
+
+    assertEquals(
+      header.trim.split("\\s+").toSeq,
+      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv", "pubMut", "protMut", "pkgMut", "privMut")
+    )
+    assertEquals(header.trim.split("\\s+").count(_ == "pub"), 1)
+    assert(!header.contains("publicSurface"))
+    assert(!header.contains("publicMutableSurface"))
+  }
+
+  test("all surface columns expose the complete accounting view with short headings") {
+    val text = ReportTable.render(report, columns = Seq(ReportTable.ColumnGroup.All))
+    val surfaceSection = text.substring(text.indexOf("Surface risks"), text.indexOf("Public surface"))
+    val header = surfaceSection.linesIterator.find(_.startsWith("node")).get
+
+    assertEquals(
+      header.trim.split("\\s+").toSeq,
+      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv",
+        "pubMut", "protMut", "pkgMut", "privMut", "exp", "total", "mut%")
+    )
+    assert(!header.contains("fanIn"))
+    assert(!header.contains("encapsulationRatio"))
+    assert(!header.contains("totalDeclaredSurface"))
+  }
+
   test("default table bounds each inventory and --all shows every row") {
     val rows = (1 to 20).map { i =>
       SurfaceRow(s"node$i", i, 0, i.toDouble, 0.0, i.toDouble, Some(1.0))

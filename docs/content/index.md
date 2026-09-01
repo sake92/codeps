@@ -58,12 +58,12 @@ Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, to
 node                         fanIn  fanOut  score
 com.example.modules.module1  2      1       1.50
 com.example.modules.module2  1      2       1.50
-Surface (dependentsPerPublicPort asc; — = no fan-in)
-node                         fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort
-com.example.modules.module2  1      2       4      0         4         0.25
-org.thirdparty               1      0       4      0         4         0.25
-com.example.modules.module1  2      1       4      0         4         0.50
-com.example.app              0      1       4      0         4         —
+Surface risks (dependentsPerPublicPort asc; — = no fan-in)
+node                         in  out  ports  mut  encap%  use
+com.example.modules.module2  1   2    4      0    —       0.25
+org.thirdparty               1   0    4      0    —       0.25
+com.example.modules.module1  2   1    4      0    —       0.50
+com.example.app              0   1    4      0    —       —
 Orphans
   (none)
 ```
@@ -74,6 +74,7 @@ Orphans
 - **Cycles with explicit cut analysis** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`; default reports remain fast with `cutAnalysis.status=notRequested`, while `--analyze-cuts` adds budgeted greedy estimates and up to 3 complete ways to break the cycle
 - **Change propagators** — the nodes whose changes propagate most: a normalized `(fanIn/avgFanIn + fanOut/avgFanOut)/2` score, top 10
 - **Encapsulation and structural-use metrics** — per-node weighted `ports` / `mutPorts`, raw declaration visibility counters, `encapsulationRatio`, `publicMutableRatio`, and the `dependentsPerPublicPort` structural proxy (sealed/given/var rules resolved by the SemanticDB exporter)
+- **Compact surface tables** — default `node,in,out,ports,mut,encap%,use` headings, with repeatable `--columns visibility`, `--columns mutability`, `--columns coupling`, or `--columns all` groups for wider reviews; JSON field names remain camelCase
 - **Orphans** — dead-code-removal candidates
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`); skip tests with `--skip-tests`
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)

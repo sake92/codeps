@@ -83,8 +83,8 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
-codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
@@ -103,6 +103,7 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `--all` | In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
+| `--columns` | Repeatable table surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
 | `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. `cutAnalysis.status` distinguishes `completedExact` (the bounded candidate space was exhausted), `completedHeuristic` (greedy-only, including large SCCs), and `budgetExceeded`; without this flag it is `notRequested` and no candidates are simulated. |
 | `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration such as `1s` or `250ms`. Defaults to `1s` when `--analyze-cuts` is present. |
 | `--cut-candidate-limit` | Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to `10000` when `--analyze-cuts` is present. |
@@ -143,13 +144,21 @@ Change propagators (top 10 of 1) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2;
   cache    3      2       2.50
 
 Surface risks (top 10 of 1) (dependentsPerPublicPort asc; — = no fan-in)
-  node     fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort
-  cache    3       2        9      5          24        0.33
+  node     in  out  ports  mut  encap%  use
+  cache    3   2    9      5    0.30    0.33
   ...
 
 Orphans (top 10 of 1)
   DeadUtil.scala
 ```
+
+Surface-risk tables use short headings: `node`, `in`, `out`, `ports`, `mut`, `encap%`, and `use`
+are the default core view. Add `--columns visibility`, `--columns mutability`, or
+`--columns coupling` (each flag may be repeated) to compose the `pub`/`prot`/`pkg`/`priv`,
+`pubMut`/`protMut`/`pkgMut`/`privMut`, and `exp`/`total`/`mut%` groups respectively.
+`--columns all` selects every surface column. Group order and headings are deterministic,
+and repeated groups never duplicate a column. These aliases apply only to table headings;
+the JSON report keeps its camelCase field names.
 
 The cycle table is deliberately bounded: its rows contain identity, count, greedy
 estimate, and cut-analysis status, then each analyzed cycle gets separate numbered
@@ -175,6 +184,8 @@ Errors (exit 1): parser errors from mainargs — `Missing argument: --input ...`
 collapse rules, unknown format values, `invalid SOURCE_DATE_EPOCH: <value>`
 — and malformed or type-invalid
 JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
+Unknown `--columns` groups are parser errors and must be one of `core`, `visibility`,
+`mutability`, `coupling`, or `all`.
 Cut controls also reject non-positive limits and reject `--cut-time-limit` or
 `--cut-candidate-limit` unless `--analyze-cuts` is present.
 

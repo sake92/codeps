@@ -4,6 +4,11 @@ package ba.sake.codeps.report
   * presentation, never a separate computation. */
 object ReportTable:
 
+  /** Named groups of surface columns exposed by the CLI. The group vocabulary
+    * stays in the presentation layer: it does not add fields to MetricsReport. */
+  enum ColumnGroup:
+    case Core, Visibility, Mutability, Coupling, All
+
   private val maxDisplayedCuts = 8
   private val denseKnotWithSolutionsNote = "dense knot: inspect propagators; full cut list via --format json"
   private val denseKnotWithoutSolutionsNote =
@@ -14,7 +19,11 @@ object ReportTable:
   /** Render the human-facing triage view. The report model remains complete;
     * this edge applies a small, explicit bound unless the caller requests the
     * full inventory. */
-  def render(report: MetricsReport, showAll: Boolean = false): String =
+  def render(
+      report: MetricsReport,
+      showAll: Boolean = false,
+      columns: Seq[ColumnGroup] = Nil
+  ): String =
     val sb = new StringBuilder
     def bounded[A](rows: Seq[A]): Seq[A] = if showAll then rows else rows.take(maxRowsPerSection)
     def sectionTitle(label: String, total: Int, shown: Int): String =
@@ -106,31 +115,10 @@ object ReportTable:
       " (dependentsPerPublicPort asc; — = no fan-in)\n")
     if displayedSurface.isEmpty then sb.append("  (none)\n")
     else
+      val selectedColumns = surfaceColumns(columns, disp)
       sb.append(table(
-        Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "publicSurface",
-          "protectedSurface", "packageSurface", "privateSurface", "publicMutableSurface",
-          "protectedMutableSurface", "packageMutableSurface", "privateMutableSurface",
-          "totalDeclaredSurface", "encapsulationRatio", "publicMutableRatio", "dependentsPerPublicPort"),
-        displayedSurface.map(r => Seq(
-          disp(r.node),
-          r.fanIn.toString,
-          r.fanOut.toString,
-          num(r.ports),
-          num(r.mutPorts),
-          num(r.exposure),
-          num(r.publicSurface),
-          num(r.protectedSurface),
-          num(r.packageSurface),
-          num(r.privateSurface),
-          num(r.publicMutableSurface),
-          num(r.protectedMutableSurface),
-          num(r.packageMutableSurface),
-          num(r.privateMutableSurface),
-          num(r.totalDeclaredSurface),
-          r.encapsulationRatio.map(u => f"$u%.2f").getOrElse("—"),
-          r.publicMutableRatio.map(u => f"$u%.2f").getOrElse("—"),
-          r.dependentsPerPublicPort.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
-        ))
+        selectedColumns.map(_.heading),
+        displayedSurface.map(row => selectedColumns.map(_.value(row)))
       ))
     sb.append("\n")
 
@@ -141,13 +129,13 @@ object ReportTable:
       else sb.append(table(Seq("node", header), bounded(ranked).map(row => Seq(disp(row.node), num(metric(row))))))
       sb.append("\n")
 
-    rankedSection("Public surface", report.surface, "publicSurface")(_.publicSurface)
-    rankedSection("Public mutability", report.surface, "publicMutableSurface")(_.publicMutableSurface)
+    rankedSection("Public surface", report.surface, "pub")(_.publicSurface)
+    rankedSection("Public mutability", report.surface, "pubMut")(_.publicMutableSurface)
     val encapsulated = report.surface.filter(_.encapsulationRatio.exists(_ > 0.0))
       .sortBy(row => (-row.encapsulationRatio.getOrElse(0.0), row.node))
     sb.append(sectionTitle("Public exposure ratio", encapsulated.size, bounded(encapsulated).size) + "\n")
     if encapsulated.isEmpty then sb.append("  (none)\n")
-    else sb.append(table(Seq("node", "encapsulationRatio"), bounded(encapsulated).map(row =>
+    else sb.append(table(Seq("node", "encap%"), bounded(encapsulated).map(row =>
       Seq(disp(row.node), row.encapsulationRatio.map(value => f"$value%.2f").getOrElse("—")))))
     sb.append("\n")
 
@@ -167,6 +155,65 @@ object ReportTable:
 
   private def num(d: Double): String =
     if !d.isNaN && !d.isInfinite && d == math.rint(d) then d.toLong.toString else d.toString
+
+  private case class SurfaceColumn(heading: String, value: SurfaceRow => String)
+
+  private def surfaceColumns(
+      requested: Seq[ColumnGroup],
+      disp: String => String
+  ): Seq[SurfaceColumn] =
+    val core = Seq(
+      SurfaceColumn("node", row => disp(row.node)),
+      SurfaceColumn("in", _.fanIn.toString),
+      SurfaceColumn("out", _.fanOut.toString),
+      SurfaceColumn("ports", row => num(row.ports)),
+      SurfaceColumn("mut", row => num(row.mutPorts)),
+      SurfaceColumn("encap%", row => row.encapsulationRatio.map(value => f"$value%.2f").getOrElse("—")),
+      SurfaceColumn("use", row => usage(row.dependentsPerPublicPort))
+    )
+    val visibility = Seq(
+      SurfaceColumn("pub", row => num(row.publicSurface)),
+      SurfaceColumn("prot", row => num(row.protectedSurface)),
+      SurfaceColumn("pkg", row => num(row.packageSurface)),
+      SurfaceColumn("priv", row => num(row.privateSurface))
+    )
+    val mutability = Seq(
+      SurfaceColumn("pubMut", row => num(row.publicMutableSurface)),
+      SurfaceColumn("protMut", row => num(row.protectedMutableSurface)),
+      SurfaceColumn("pkgMut", row => num(row.packageMutableSurface)),
+      SurfaceColumn("privMut", row => num(row.privateMutableSurface))
+    )
+    val coupling = Seq(
+      SurfaceColumn("exp", row => num(row.exposure)),
+      SurfaceColumn("total", row => num(row.totalDeclaredSurface)),
+      SurfaceColumn("mut%", row => row.publicMutableRatio.map(value => f"$value%.2f").getOrElse("—"))
+    )
+    val all = core ++ visibility ++ mutability ++ coupling
+    val columnsByGroup = Map[ColumnGroup, Seq[SurfaceColumn]](
+      ColumnGroup.Core -> core,
+      ColumnGroup.Visibility -> visibility,
+      ColumnGroup.Mutability -> mutability,
+      ColumnGroup.Coupling -> coupling,
+      ColumnGroup.All -> all
+    )
+    // Group order is canonical rather than dependent on flag order. This
+    // keeps repeated invocations reproducible and makes `all` a stable view.
+    val effective = if requested.isEmpty then Seq(ColumnGroup.Core) else requested
+    val selectedGroups =
+      if effective.contains(ColumnGroup.All) then Seq(ColumnGroup.All)
+      else Seq(ColumnGroup.Core, ColumnGroup.Visibility, ColumnGroup.Mutability, ColumnGroup.Coupling)
+        .filter(effective.contains)
+    val selected = selectedGroups.flatMap(group => columnsByGroup(group))
+    // A node identifier is useful even for a group-only request such as
+    // `--columns visibility`; keep it as the one invariant identity column.
+    val nodeColumn = SurfaceColumn("node", row => disp(row.node))
+    val withNode = if selected.exists(_.heading == nodeColumn.heading) then selected else nodeColumn +: selected
+    withNode.foldLeft(Vector.empty[SurfaceColumn]) { (unique, column) =>
+      if unique.exists(_.heading == column.heading) then unique else unique :+ column
+    }
+
+  private def usage(value: Option[Double]): String =
+    value.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
 
   private def isDenseKnot(cycle: Cycle): Boolean =
     cycle.size >= 10 &&

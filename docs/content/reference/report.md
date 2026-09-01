@@ -168,6 +168,14 @@ table inventory.
 One row per scope node is retained in JSON. The default table shows the top 10 rows as
 `Surface risks (top 10 of N)`; `--all` shows every row.
 
+The table keeps its default surface view compact with the headings `node`, `in`, `out`,
+`ports`, `mut`, `encap%`, and `use`. For a wider table, repeat `--columns` with one or more
+groups: `visibility` adds `pub`, `prot`, `pkg`, and `priv`; `mutability` adds `pubMut`,
+`protMut`, `pkgMut`, and `privMut`; and `coupling` adds `exp`, `total`, and `mut%`.
+`--columns all` selects the complete accounting view. Groups are rendered in canonical order,
+duplicate columns are removed, and these short aliases apply only to table headings; JSON
+continues to use its camelCase field names. With no `--columns`, the `core` group is used.
+
 - `fanIn` / `fanOut` — count of distinct edges in/out. Always derived from the edge list, never
   stored separately.
 - `ports` — weighted count of exposed members (see [Exposed surface](#exposed-surface)).

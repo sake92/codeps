@@ -58,6 +58,18 @@ object Main:
         case Seq(other)   => Left(s"unknown format: $other (expected json or table)")
         case _            => Left("expected exactly one format")
 
+  given TokensReader.Simple[ReportTable.ColumnGroup] with
+    def shortName: String = "columns"
+    def read(strs: Seq[String]): Either[String, ReportTable.ColumnGroup] =
+      strs match
+        case Seq("core")        => Right(ReportTable.ColumnGroup.Core)
+        case Seq("visibility")  => Right(ReportTable.ColumnGroup.Visibility)
+        case Seq("mutability")  => Right(ReportTable.ColumnGroup.Mutability)
+        case Seq("coupling")    => Right(ReportTable.ColumnGroup.Coupling)
+        case Seq("all")         => Right(ReportTable.ColumnGroup.All)
+        case Seq(other)         => Left(s"unknown columns group: $other (expected core, visibility, mutability, coupling, or all)")
+        case _                  => Left("expected exactly one columns group")
+
   @main
   def `export`(
       @arg(short = 'f', name = "from") from: InputFormat,
@@ -124,6 +136,7 @@ object Main:
       skipTests: Boolean,
       testPattern: Seq[String],
       showAll: Boolean,
+      columns: Seq[ReportTable.ColumnGroup],
       analyzeCuts: Boolean,
       cutTimeLimit: Option[String],
       cutCandidateLimit: Option[Int],
@@ -143,13 +156,14 @@ object Main:
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(name = "all") all: mainargs.Flag,
+      @arg(name = "columns", doc = "surface columns: core, visibility, mutability, coupling, or all (repeatable)") columns: Seq[ReportTable.ColumnGroup],
       @arg(name = "analyze-cuts") analyzeCuts: mainargs.Flag,
       @arg(name = "cut-time-limit") cutTimeLimit: Option[String],
       @arg(name = "cut-candidate-limit") cutCandidateLimit: Option[Int],
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Packages, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, all.value, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
+    skipTests.value, testPattern, all.value, columns, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
   @main
   def reportFiles(
@@ -160,13 +174,14 @@ object Main:
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(name = "all") all: mainargs.Flag,
+      @arg(name = "columns", doc = "surface columns: core, visibility, mutability, coupling, or all (repeatable)") columns: Seq[ReportTable.ColumnGroup],
       @arg(name = "analyze-cuts") analyzeCuts: mainargs.Flag,
       @arg(name = "cut-time-limit") cutTimeLimit: Option[String],
       @arg(name = "cut-candidate-limit") cutCandidateLimit: Option[Int],
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, all.value, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
+    skipTests.value, testPattern, all.value, columns, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
   @main
   def inspectCycle(
@@ -230,7 +245,8 @@ object Main:
                   ).map { metricsReport =>
                     options.format match
                       case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
-                      case ReportFormat.Table => ReportTable.render(metricsReport, showAll = options.showAll)
+                      case ReportFormat.Table =>
+                        ReportTable.render(metricsReport, showAll = options.showAll, columns = options.columns)
                   }
                 } match
                   case Left(err) =>
