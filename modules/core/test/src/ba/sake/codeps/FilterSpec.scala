@@ -115,3 +115,27 @@ class FilterSpec extends munit.FunSuite:
     assert(!filtered.nodes.map(_.id).contains("com.example.modules.module2"))
     assert(filtered.nodes.map(_.id).contains("com.example.modules.module1"))
   }
+
+  test("include and exclude keep symbol metadata inside the selected source surface") {
+    val withUses = graph.copy(
+      nodes = graph.nodes ++ Set(
+        Node("src/Service1.scala", NodeKind.file, Some("com.example.modules.module1")),
+        Node("src/Service2.scala", NodeKind.file, Some("com.example.modules.module2"))
+      ),
+      symbolReferences = Some(Seq(
+        SymbolReference("src/Service1.scala", "com.example.modules.module1.Service1"),
+        SymbolReference("src/Service2.scala", "com.example.modules.module1.Service1")
+      )),
+      declaredPublicSymbols = Some(Map(
+        "com.example.modules.module1.Service1" -> "src/Service1.scala",
+        "com.example.modules.module2.Service2" -> "src/Service2.scala"
+      ))
+    )
+    val filtered = Filter(withUses, Seq("com.example.modules.module1"), Nil)
+    assertEquals(filtered.symbolReferences, Some(Seq(
+      SymbolReference("src/Service1.scala", "com.example.modules.module1.Service1")
+    )))
+    assertEquals(filtered.declaredPublicSymbols, Some(Map(
+      "com.example.modules.module1.Service1" -> "src/Service1.scala"
+    )))
+  }

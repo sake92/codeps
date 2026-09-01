@@ -10,7 +10,7 @@ class ReportTableSpec extends munit.FunSuite:
     generatedAt = "2026-08-27T10:00:00Z",
     summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1, criticalPathLength = 1),
     cycles = Seq(Cycle("scc:cache", Seq("cache", "scheduler", "cache"), 2, 5,
-      CutAnalysis("completed", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2))),
+      CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2))),
     propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
     surface = Seq(
       SurfaceRow("cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33)),
@@ -62,7 +62,7 @@ class ReportTableSpec extends munit.FunSuite:
   }
 
   test("cycles table keeps only identifying and count columns; solutions use separate blocks") {
-    val withThreeSolutions = report.copy(cycles = Seq(report.cycles.head.copy(cutAnalysis = CutAnalysis("completed", Some(1), Seq(
+    val withThreeSolutions = report.copy(cycles = Seq(report.cycles.head.copy(cutAnalysis = CutAnalysis("completedExact", Some(1), Seq(
       Solution(Seq(CutCandidate("scheduler", "cache", 4))),
       Solution(Seq(CutCandidate("cache", "scheduler", 5))),
       Solution(Seq(CutCandidate("scheduler", "cache", 6)))
@@ -85,7 +85,7 @@ class ReportTableSpec extends munit.FunSuite:
 
   test("large solution displays at most eight cuts and points to the complete JSON list") {
     val cuts = (1 to 9).map(i => CutCandidate(s"source$i", s"target$i", i))
-    val large = report.copy(cycles = Seq(report.cycles.head.copy(cutAnalysis = CutAnalysis("completed", Some(1), Seq(Solution(cuts)), 1))))
+    val large = report.copy(cycles = Seq(report.cycles.head.copy(cutAnalysis = CutAnalysis("completedExact", Some(1), Seq(Solution(cuts)), 1))))
     val text = ReportTable.render(large)
 
     assert(text.contains("source8 -> target8 (w=8)"))
@@ -106,7 +106,7 @@ class ReportTableSpec extends munit.FunSuite:
     )
     val denseReport = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     val denseReportWithSolution = denseReport.copy(
-      cycles = denseReport.cycles.map(_.copy(cutAnalysis = CutAnalysis("completed", Some(4), Seq(Solution(Seq(CutCandidate(s"${names(0)}.T", s"${names(1)}.T", 1)))), 1)))
+      cycles = denseReport.cycles.map(_.copy(cutAnalysis = CutAnalysis("completedExact", Some(4), Seq(Solution(Seq(CutCandidate(s"${names(0)}.T", s"${names(1)}.T", 1)))), 1)))
     )
     val text = ReportTable.render(denseReportWithSolution)
 
@@ -166,7 +166,7 @@ class ReportTableSpec extends munit.FunSuite:
       generatedAt = "x",
       summary = Summary(2, 1, 2, 1, 1),
       cycles = Seq(Cycle("scc:cache", Seq("org.sake.cache", "org.sake.scheduler"), 2, 5,
-        CutAnalysis("completed", Some(1), Seq(Solution(Seq(CutCandidate("org.sake.scheduler", "org.sake.cache", 4)))), 1))),
+        CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("org.sake.scheduler", "org.sake.cache", 4)))), 1))),
       propagators = Seq(PropagatorRow("org.sake.cache", 3, 2, 2.0)),
       surface = Seq(
         SurfaceRow("org.sake.cache", 3, 2, 9.0, 5.0, 24.0, Some(0.33)),
@@ -199,7 +199,7 @@ class ReportTableSpec extends munit.FunSuite:
           Seq("server/src/a/A.scala", "server/src/b/B.scala"),
           2,
           5,
-          CutAnalysis("completed", Some(1), Seq(Solution(Seq(CutCandidate("server/src/b/B.scala", "server/src/a/A.scala", 4)))), 1)
+          CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("server/src/b/B.scala", "server/src/a/A.scala", 4)))), 1)
         )
       ),
       propagators = Seq(PropagatorRow("server/src/a/A.scala", 3, 2, 2.0)),

@@ -21,7 +21,7 @@ class MetricsReportSpec extends munit.FunSuite:
         internalEdges = 2,
         incomingEdges = 5,
         outgoingEdges = 3,
-        cutAnalysis = CutAnalysis("completed", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2)
+        cutAnalysis = CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2)
       )),
       propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
       surface = Seq(
@@ -42,7 +42,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"criticalPathLength\":7"))
     assert(json.contains("\"extFanIn\":5"))
     assert(json.contains("\"cutAnalysis\""))
-    assert(json.contains("\"status\":\"completed\""))
+    assert(json.contains("\"status\":\"completedExact\""))
     assert(json.contains("\"greedyCutEstimate\":1"))
     assert(json.contains("\"examinedCandidates\":2"))
     assert(json.contains("\"cycles\""))
@@ -98,7 +98,7 @@ class MetricsReportSpec extends munit.FunSuite:
       generatedAt = "2026-08-27T10:00:00Z",
       summary = Summary(10, 20, 10, 0, 1),
       cycles = Seq(Cycle("scc:canonical.source.1", Seq("canonical.source.1", "canonical.target.1"), 10, 0,
-        CutAnalysis("completed", Some(3), Seq(Solution(cuts)), 4))),
+        CutAnalysis("completedExact", Some(3), Seq(Solution(cuts)), 4))),
       propagators = Seq.empty,
       surface = Seq.empty,
       orphans = Seq.empty

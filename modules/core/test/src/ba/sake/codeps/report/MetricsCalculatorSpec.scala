@@ -1,6 +1,6 @@
 package ba.sake.codeps.report
 
-import ba.sake.codeps.graph.TestFilter
+import ba.sake.codeps.graph.{TarjanScc, TestFilter}
 import ba.sake.codeps.model.*
 import ba.sake.codeps.report.MetricsCalculator.Scope
 import ba.sake.tupson.*
@@ -123,6 +123,58 @@ class MetricsCalculatorSpec extends munit.FunSuite:
         f.kind == "unusedPublicSymbol" &&
         f.confidence == "semanticdbComplete"
     ))
+    assertEquals(
+      report.findings.find(_.id == "unusedPublicSymbol:com.a.Api#unused").map(_.nextAction),
+      Some("inspect-node com.a")
+    )
+    assert(ReportInspector.inspectNode(report, "com.a").isRight)
+
+    val collapsed = MetricsCalculator.run(
+      graph,
+      Scope.Packages,
+      collapseRules = Seq(CollapseRule.Wild("com"))
+    ).toOption.get
+    assertEquals(
+      collapsed.findings.find(_.id == "unusedPublicSymbol:com.a.Api#unused").map(_.nextAction),
+      Some("inspect-node com")
+    )
+    assert(ReportInspector.inspectNode(collapsed, "com").isRight)
+  }
+
+  test("public symbol use follows include, exclude, and test-source scope") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("p.main", NodeKind.`package`),
+        Node("p.other", NodeKind.`package`),
+        Node("src/main/Api.scala", NodeKind.file, Some("p.main")),
+        Node("src/main/Consumer.scala", NodeKind.file, Some("p.main")),
+        Node("src/other/Consumer.scala", NodeKind.file, Some("p.other")),
+        Node("src/main/ApiSpec.scala", NodeKind.file, Some("p.main")),
+        Node("p.main.Api", NodeKind.`type`, Some("p.main"), Some("src/main/Api.scala")),
+        Node("p.main.Consumer", NodeKind.`type`, Some("p.main"), Some("src/main/Consumer.scala")),
+        Node("p.other.Consumer", NodeKind.`type`, Some("p.other"), Some("src/other/Consumer.scala")),
+        Node("p.main.ApiSpec", NodeKind.`type`, Some("p.main"), Some("src/main/ApiSpec.scala"))
+      ),
+      edges = Set.empty,
+      symbolReferences = Some(Seq(
+        SymbolReference("src/main/Consumer.scala", "p.main.Api"),
+        SymbolReference("src/other/Consumer.scala", "p.main.Api"),
+        SymbolReference("src/main/ApiSpec.scala", "p.main.Api")
+      )),
+      declaredPublicSymbols = Some(Map("p.main.Api" -> "src/main/Api.scala"))
+    )
+
+    val included = MetricsCalculator.run(graph, Scope.Packages, includes = Seq("p.main")).toOption.get
+    assertEquals(included.publicSymbols.get.head.consumerCount, 2)
+    assertEquals(included.publicSymbols.get.head.referenceCount, 2)
+
+    val skipped = MetricsCalculator.run(graph, Scope.Packages, testPatterns = Some(Seq("**/*Spec.scala"))).toOption.get
+    assertEquals(skipped.publicSymbols.get.find(_.symbol == "p.main.Api").map(_.consumerCount), Some(2))
+    assertEquals(skipped.publicSymbols.get.find(_.symbol == "p.main.Api").map(_.referenceCount), Some(2))
+
+    val excluded = MetricsCalculator.run(graph, Scope.Packages, excludes = Seq("p.other")).toOption.get
+    assertEquals(excluded.publicSymbols.get.find(_.symbol == "p.main.Api").map(_.consumerCount), Some(2))
+    assertEquals(excluded.publicSymbols.get.find(_.symbol == "p.main.Api").map(_.referenceCount), Some(2))
   }
 
   test("absent symbol-reference evidence does not infer unused public API") {
@@ -179,6 +231,36 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assert(analysis.examinedCandidates <= 1)
     assertEquals(analysis.greedyCutEstimate, None)
     assertEquals(analysis.solutions, Seq.empty)
+  }
+
+  test("cut analysis distinguishes exact enumeration from heuristic fallback") {
+    val exact = MetricsCalculator.run(
+      pkgGraph,
+      Scope.Packages,
+      cutAnalysisBudget = Some(CutAnalysisBudget(10.seconds, 100000))
+    ).toOption.get.cycles.head.cutAnalysis
+    assertEquals(exact.status, "completedExact")
+
+    // More than the exact-search edge bound forces the bounded greedy path.
+    // Every emitted fallback still has to dissolve the original SCC.
+    val names = (1 to 12).map(i => f"n$i%02d")
+    val packageNodes = names.map(name => Node(name, NodeKind.`package`))
+    val typeNodes = names.map(name => Node(s"$name.T", NodeKind.`type`, Some(name), None))
+    val denseEdges = names.flatMap(source => names.filter(_ != source).map(target => Edge(s"$source.T", s"$target.T"))).toSet
+    val packageEdges = names.flatMap(source => names.filter(_ != source).map(target => Edge(source, target))).toSet
+    val dense = DepsGraph((packageNodes ++ typeNodes).toSet, denseEdges)
+    val heuristic = MetricsCalculator.run(
+      dense,
+      Scope.Packages,
+      cutAnalysisBudget = Some(CutAnalysisBudget(10.seconds, 100000))
+    ).toOption.get.cycles.head.cutAnalysis
+    assertEquals(heuristic.status, "completedHeuristic")
+    assert(heuristic.greedyCutEstimate.nonEmpty)
+    assert(heuristic.solutions.nonEmpty)
+    heuristic.solutions.foreach { solution =>
+      val cuts = solution.cuts.map(c => Edge(c.source, c.target, c.weight)).toSet
+      assert(!TarjanScc.cycles(Set.from(names), packageEdges -- cuts).exists(_.size >= 2))
+    }
   }
 
   test("orphans on a graph with an isolated node") {
@@ -288,7 +370,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.surface.find(_.node == "p1").flatMap(_.cycleId), Some("scc:p1"))
     assertEquals(report.surface.find(_.node == "outside").flatMap(_.cycleId), None)
     assert(report.toJson().contains("\"schemaVersion\": 2"))
-    assertEquals(cycle.cutAnalysis.status, "completed")
+    assertEquals(cycle.cutAnalysis.status, "completedExact")
     assertEquals(cycle.cutAnalysis.greedyCutEstimate, Some(1)) // cutting any ring edge resolves a 3-ring
     assertEquals(cycle.cutAnalysis.solutions, Seq(
       Solution(Seq(CutCandidate("p1", "p2", 1))),

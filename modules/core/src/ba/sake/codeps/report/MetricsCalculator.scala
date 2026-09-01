@@ -41,6 +41,14 @@ object MetricsCalculator:
       )
     else
       val ids = mapped.map(_._2).toSet
+      val mappedByNode = mapped.iterator.map { case (node, scopeId) => node.id -> scopeId }.toMap
+      // SemanticDB references identify their source by file id. Keep a direct
+      // lookup so scope filtering cannot accidentally count consumers from an
+      // excluded package or test source (and so declaration mapping stays linear).
+      val sourceFileScope = mapped.iterator.flatMap { case (node, scopeId) =>
+        val fileIds = (if node.kind == NodeKind.file then Iterator.single(node.id) else Iterator.empty) ++ node.file.iterator
+        fileIds.map(_ -> scopeId)
+      }.toMap
       val ports = mapped.groupMapReduce(_._2)(_._1.ports)(_ + _)
       val mutPorts = mapped.groupMapReduce(_._2)(_._1.mutPorts)(_ + _)
       val declarationSurface = mapped
@@ -51,11 +59,14 @@ object MetricsCalculator:
           n.id -> scopeId
       }.toMap
       val publicSymbols = nodePublicSymbols ++ graph.declaredPublicSymbols.toSeq.flatMap(_.flatMap { case (symbol, sourceFile) =>
-        mapped.find { case (n, _) => n.id == symbol }
-          .orElse(mapped.find { case (n, _) => n.kind == NodeKind.file && n.id == sourceFile })
-          .map { case (_, scopeId) => symbol -> scopeId }
+        mappedByNode.get(symbol)
+          .orElse(sourceFileScope.get(sourceFile))
+          .map(scopeId => symbol -> scopeId)
       }).toMap
-      val symbolReferences = graph.symbolReferences.map(_.filter(r => publicSymbols.contains(r.targetSymbol)))
+      val symbolReferences = graph.symbolReferences.map(_.filter { reference =>
+        publicSymbols.contains(reference.targetSymbol) &&
+          sourceFileScope.get(reference.sourceFile).forall(ids.contains)
+      })
       val edges = graph.edges.toSeq
         .flatMap { e =>
           for
@@ -82,7 +93,7 @@ object MetricsCalculator:
         reSum(sg.mutPorts, resolve),
         reSumSurface(sg.declarationSurface, resolve),
         sg.symbolReferences,
-        sg.publicSymbols
+        sg.publicSymbols.view.mapValues(resolve).toMap
       )
 
   private def reSum(perId: Map[String, Double], resolve: String => String): Map[String, Double] =
@@ -196,13 +207,26 @@ object MetricsCalculator:
           // top-10 bound at the presentation edge (or shows all with --all).
 
     val publicSymbols = sg.symbolReferences.map { refs =>
+      val consumerCounts = mutable.HashMap.empty[String, mutable.HashSet[String]]
+      val referenceCounts = mutable.HashMap.empty[String, Int]
+      // Build both counts in one bounded pass over references. The previous
+      // per-symbol scan made this public-use index O(publicSymbols * refs).
+      refs.foreach { reference =>
+        if sg.publicSymbols.contains(reference.targetSymbol) then
+          consumerCounts.getOrElseUpdate(reference.targetSymbol, mutable.HashSet.empty) += reference.sourceFile
+          referenceCounts.update(reference.targetSymbol, referenceCounts.getOrElse(reference.targetSymbol, 0) + 1)
+      }
       sg.publicSymbols.keys.toSeq.sorted.map { symbol =>
-        val matching = refs.filter(_.targetSymbol == symbol)
-        PublicSymbolRow(symbol, matching.map(_.sourceFile).distinct.size, matching.size, "semanticdbComplete")
+        PublicSymbolRow(
+          symbol,
+          consumerCounts.get(symbol).fold(0)(_.size),
+          referenceCounts.getOrElse(symbol, 0),
+          "semanticdbComplete"
+        )
       }
     }
 
-    val findings = buildFindings(cycles, propagators, surface, publicSymbols)
+    val findings = buildFindings(cycles, propagators, surface, publicSymbols, sg.publicSymbols)
 
     MetricsReport(
       scope = scope match
@@ -233,7 +257,8 @@ object MetricsCalculator:
       cycles: Seq[Cycle],
       propagators: Seq[PropagatorRow],
       surface: Seq[SurfaceRow],
-      publicSymbols: Option[Seq[PublicSymbolRow]]
+      publicSymbols: Option[Seq[PublicSymbolRow]],
+      publicSymbolScopes: Map[String, String]
   ): Seq[Finding] =
     val cycleFindings = cycles.map { cycle =>
       RankedFinding(
@@ -302,7 +327,10 @@ object MetricsCalculator:
           subject = row.symbol,
           evidence = "consumerCount=0, referenceCount=0",
           confidence = row.usageConfidence,
-          nextAction = s"inspect-node ${row.symbol}"
+          // Public symbols are not scope nodes. Point the finding at the
+          // declaring package/file detail workflow, whose id remains valid
+          // after report collapse.
+          nextAction = s"inspect-node ${publicSymbolScopes(row.symbol)}"
         ),
         1.0
       )

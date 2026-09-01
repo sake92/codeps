@@ -84,7 +84,9 @@ Symbol-reference fields:
 
 SemanticDB export emits `symbolReferences` and `declaredPublicSymbols`; after all input documents
 are merged, references to missing or non-public declarations are removed. Parsers without complete
-symbol information omit both fields, so reports never infer unused public API from their absence.
+symbol information omit both fields, so reports never infer unused public API from their absence. If
+any SemanticDB document fails to parse, `export` omits both fields from the merged output rather
+than advertising the successful subset as a complete index.
 
 ### Id rules
 

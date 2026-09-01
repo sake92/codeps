@@ -83,6 +83,7 @@ object Main:
                   1
                 case None =>
                   var deps = DepsGraph.empty
+                  var parseFailed = false
                   val workspaceRoot = root.map(r => os.Path(r, os.pwd)).getOrElse(os.pwd)
                   val files = paths.flatMap(d => os.walk(d).filter(_.ext == "semanticdb").toSeq)
                   if files.isEmpty then
@@ -92,8 +93,16 @@ object Main:
                     for f <- files do
                       SemanticDbParser.parse(os.read.bytes(f), workspaceRoot.toNIO) match
                         case Right(d)  => deps = deps.merge(d)
-                        case Left(err) => System.err.println(s"warning: $err")
-                    writeOutput(Aggregator.fileLevel(deps.withoutDanglingEdges).toJson(spaces = 2, sort = true), out)
+                        case Left(err) =>
+                          parseFailed = true
+                          System.err.println(s"warning: $err")
+                    // A partial SemanticDB export cannot support complete
+                    // public-symbol use or unused-public-symbol claims. Drop
+                    // both optional indexes so downstream reports omit them.
+                    val exportGraph =
+                      if parseFailed then deps.copy(symbolReferences = None, declaredPublicSymbols = None)
+                      else deps
+                    writeOutput(Aggregator.fileLevel(exportGraph.withoutDanglingEdges).toJson(spaces = 2, sort = true), out)
                     0
             case InputFormat.Jdeps =>
               paths.find(!os.isFile(_)) match

@@ -69,6 +69,26 @@ class MainSpec extends munit.FunSuite:
     assert(res.err.text().contains("input path does not exist"))
   }
 
+  test("partial semanticdb export omits incomplete symbol-use metadata") {
+    val input = os.pwd / "tmp" / "cli-test" / "partial-semanticdb"
+    val out = os.pwd / "tmp" / "cli-test" / "partial-deps.json"
+    os.remove.all(input)
+    os.remove.all(out)
+    os.makeDir.all(input)
+    val valid = os.walk(semdbDir).find(_.ext == "semanticdb").get
+    os.write.over(input / "valid.semanticdb", os.read.bytes(valid))
+    // Truncated protobuf: one successful document plus one parse failure makes
+    // the merged reference index incomplete.
+    os.write.over(input / "broken.semanticdb", Array[Byte](10, 127))
+
+    val res = runCli("export", "--from", "semanticdb", "-o", out.toString, "--input", input.toString)
+    assertEquals(res.exitCode, 0)
+    assert(res.err.text().contains("warning: failed to parse semanticdb"))
+    val content = os.read(out)
+    assert(!content.contains("symbolReferences"))
+    assert(!content.contains("declaredPublicSymbols"))
+  }
+
   test("report-packages emits the flat metrics json") {
     val out = os.pwd / "tmp" / "cli-test" / "report-v2.json"
     os.makeDir.all(out / os.up)
@@ -174,7 +194,7 @@ class MainSpec extends munit.FunSuite:
 
     val analyzedRes = runCli("report-packages", "--format", "json", "--analyze-cuts", "--cut-time-limit", "1s", "--input", cyclic.toString)
     assertEquals(analyzedRes.exitCode, 0)
-    assert(analyzedRes.out.text().contains("\"status\": \"completed\""))
+    assert(analyzedRes.out.text().contains("\"status\": \"completedExact\""))
     assert(analyzedRes.out.text().contains("\"greedyCutEstimate\": 1"))
   }
 

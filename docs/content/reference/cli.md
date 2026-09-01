@@ -103,7 +103,7 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `--all` | In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
-| `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. Without this flag, cycle `cutAnalysis.status` is `notRequested` and no candidates are simulated. |
+| `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. `cutAnalysis.status` distinguishes `completedExact` (the bounded candidate space was exhausted), `completedHeuristic` (greedy-only, including large SCCs), and `budgetExceeded`; without this flag it is `notRequested` and no candidates are simulated. |
 | `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration such as `1s` or `250ms`. Defaults to `1s` when `--analyze-cuts` is present. |
 | `--cut-candidate-limit` | Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to `10000` when `--analyze-cuts` is present. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
@@ -133,7 +133,7 @@ Cycles (top 10 of 1)
 (size desc, extFanIn desc)
 common prefix stripped: com.example. (full ids via --format json)
 id                 size  extFanIn  greedyCutEstimate  status
-scc:modules.cache  10    5         9                  completed
+scc:modules.cache  10    5         9                  completedHeuristic
 
   Cycle scc:modules.cache
     solution 1: modules.cache.A -> modules.scheduler.B (w=1), modules.cache.B -> modules.scheduler.C (w=1), modules.cache.C -> modules.scheduler.D (w=1), modules.cache.D -> modules.scheduler.E (w=1), modules.cache.E -> modules.scheduler.F (w=1), modules.cache.F -> modules.scheduler.G (w=1), modules.cache.G -> modules.scheduler.H (w=1), modules.cache.H -> modules.scheduler.I (w=1), … 1 more (full list in JSON)

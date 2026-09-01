@@ -125,9 +125,11 @@ components are just acyclic nodes and are never reported.
   `extFanIn`, retained as an explicit directional edge count for inspection consumers.
 - `outgoingEdges` — distinct edges leaving the SCC to outside nodes.
 - `cutAnalysis` — the explicit result of optional cut investigation. Its `status` is
-  `notRequested` for the default fast report, `completed` when the configured search finished,
-  or `budgetExceeded` when its time or candidate limit was reached. `budgetExceeded` is still a
-  successful report result.
+  `notRequested` for the default fast report, `completedExact` when bounded enumeration finished
+  its complete candidate space, `completedHeuristic` when only the greedy pass was available
+  (including large SCCs), or `budgetExceeded` when its time or candidate limit was reached.
+  `budgetExceeded` is still a successful report result. Every serialized solution is validated
+  against the original SCC; a greedy plan is never emitted if it leaves any cyclic component.
   - `greedyCutEstimate` — nullable greedy estimate of the total cuts needed to dissolve the
     cycle. It is present only when the greedy pass completed before the budget was exhausted; it
     is a heuristic, not a guaranteed-minimum feedback-edge set.
@@ -201,7 +203,13 @@ Each row also carries raw declaration counts, aggregated from the adapter-neutra
 present, each row identifies a declared public symbol and reports `consumerCount` (distinct
 source files), `referenceCount` (reference occurrences), and `usageConfidence`. SemanticDB
 exports use `semanticdbComplete`; only these complete rows can produce an `unusedPublicSymbol`
-finding. Absence of the field never implies that public API is unused.
+finding. Include/exclude and test filters apply to both declaration targets and source-file
+references, so consumers outside the selected report surface are not counted. If any SemanticDB
+document fails to parse during `export`, the optional indexes are omitted because the remaining
+records are partial. An `unusedPublicSymbol` finding's `nextAction` is `inspect-node <scope-id>`,
+where `<scope-id>` is the declaring package or file and is valid for the report's detail workflow;
+the symbol id itself is not a surface node. Absence of the field never implies that public API is
+unused.
 
 ## Exposed surface
 
