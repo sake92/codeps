@@ -12,12 +12,14 @@ private[graph] object SymbolMetadataFilter:
     if !restrictSources then graph.copy(nodes = nodes)
     else
       val retainedSources = nodes.iterator.flatMap(sourceFiles).toSet
-      val retainedSymbols = nodes.iterator
-        .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
-        .map(_.id)
-        .toSet ++ graph.declaredPublicSymbols.toSeq.flatMap(_.collect {
-          case (symbol, sourceFile) if retainedSources.contains(sourceFile) => symbol
-        })
+      val retainedSymbols = graph.declaredPublicSymbols match
+        case Some(declarations) => declarations.collect {
+            case (symbol, sourceFile) if retainedSources.contains(sourceFile) => symbol
+          }.toSet
+        case None => nodes.iterator
+            .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
+            .map(_.id)
+            .toSet
       val references = graph.symbolReferences.map(_.filter { reference =>
         retainedSources.contains(reference.sourceFile) && retainedSymbols.contains(reference.targetSymbol)
       })

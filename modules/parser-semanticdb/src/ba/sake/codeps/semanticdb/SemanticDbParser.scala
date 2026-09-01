@@ -22,9 +22,25 @@ object SemanticDbParser:
         nodes ++= documentNodes(doc, root)
         edges ++= documentEdges(doc, root)
         symbolReferences ++= documentSymbolReferences(doc, root)
-      val declaredPublicSymbols = nodes.iterator
-        .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
-        .flatMap(n => n.file.map(file => n.id -> file))
+      // SemanticDB also lists compiler-generated members (for example case-class
+      // `copy`/`apply`, Product's `_1`, and synthetic type-lambda symbols) in
+      // `symbols`. They are useful for dependency edges but are not source
+      // declarations and must not become unused-public-API findings. A
+      // definition occurrence is the source-level declaration boundary; the
+      // synthetic property covers producers that mark generated symbols
+      // explicitly. Keep the map keyed by stable node ids so it survives the
+      // package/file aggregation performed by the CLI.
+      val declaredPublicSymbols = docs.documents.iterator
+        .flatMap { doc =>
+          val definitionSymbols = doc.occurrences.iterator
+            .filter(_.role.isDefinition)
+            .map(_.symbol)
+            .toSet
+          val file = fileId(doc.uri, root)
+          doc.symbols.iterator
+            .filter(s => isPublicDeclaration(s, definitionSymbols))
+            .flatMap(s => declarationId(s).map(_ -> file))
+        }
         .toMap
       Right(DepsGraph(nodes, edges, Some(symbolReferences), Some(declaredPublicSymbols)))
     catch
@@ -180,6 +196,21 @@ object SemanticDbParser:
 
   private def isMemberKind(k: SymbolInformation.Kind): Boolean =
     k.isField || k.isMethod || k.isMacro
+
+  /** A declaration that can be meaningfully reported as public API. SemanticDB
+    * contains compiler-generated public members alongside source declarations;
+    * those generally have no definition occurrence. Checking the explicit
+    * synthetic property as well handles producers that do mark them. */
+  private def isPublicDeclaration(s: SymbolInformation, definitionSymbols: Set[String]): Boolean =
+    (isTypeKind(s.kind) || isMemberKind(s.kind)) &&
+      isExposed(s) &&
+      definitionSymbols.contains(s.symbol) &&
+      (s.properties & SymbolInformation.Property.SYNTHETIC.value) == 0
+
+  private def declarationId(s: SymbolInformation): Option[String] =
+    if isTypeKind(s.kind) then Some(typeId(s.symbol))
+    else if isMemberKind(s.kind) then Some(memberId(s.symbol))
+    else None
 
   /** `<init>` constructors are not nodes; references to them resolve to the parent type.
     * Scala 3 emits them backticked: ``Foo#`<init>`().`` */

@@ -161,7 +161,8 @@ class MetricsReportSpec extends munit.FunSuite:
       publicMutableRatio = Some(1.0 / 3.0)
     )
     val report = MetricsReport("packages", "x", Summary(1, 0, 0, 0, 0), Nil, Nil, Seq(row), Nil,
-      publicSymbols = Some(Seq(PublicSymbolRow("p.Api", 2, 3, "semanticdbComplete"))))
+      publicSymbols = Some(Seq(PublicSymbolRow("p.Api", 2, 3, "semanticdbComplete"))),
+      truncation = Some(ReportTruncation(findingsOmitted = 3, publicSymbolsOmitted = 4)))
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"dependentsPerPublicPort\":"))
     assert(json.contains("\"publicSurface\":3"))
@@ -169,5 +170,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"publicSymbols\":[{"))
     assert(json.contains("\"consumerCount\":2"))
     assert(json.contains("\"usageConfidence\":\"semanticdbComplete\""))
+    assert(json.contains("\"findingsOmitted\":3"))
+    assert(json.contains("\"publicSymbolsOmitted\":4"))
     assertEquals(json.parseJson[MetricsReport], report)
   }

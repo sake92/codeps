@@ -18,7 +18,9 @@ case class MetricsReport(
     schemaVersion: Int = 2,
     findings: Seq[Finding] = Nil,
     /** Present only when the input exporter supplied complete public-symbol references. */
-    publicSymbols: Option[Seq[PublicSymbolRow]] = None
+    publicSymbols: Option[Seq[PublicSymbolRow]] = None,
+    /** Present when the default JSON inventory limit omitted rows. */
+    truncation: Option[ReportTruncation] = None
 ):
   def publicSymbolUses: Option[Seq[PublicSymbolRow]] = publicSymbols
   def publicSymbolUse: Option[Seq[PublicSymbolRow]] = publicSymbols
@@ -102,10 +104,19 @@ case class PublicSymbolRow(
 ):
   def targetSymbol: String = symbol
 
+/** Counts rows omitted from the bounded JSON report inventories. A missing
+  * value means no inventory was truncated; zero in one field means that only
+  * the other inventory exceeded its bound. */
+case class ReportTruncation(
+    findingsOmitted: Int,
+    publicSymbolsOmitted: Int
+)
+
 /** A node that propagates changes to an above-average part of the graph.
   * `score` = (fanIn/avgFanIn + fanOut/avgFanOut) / 2 — an exactly average node
   * scores 1.0; only nodes above 1.0 are listed. The table presentation applies
-  * its own top-10 bound; JSON retains the complete index. */
+  * its own top-10 bound; JSON applies a larger explicit bound and records
+  * omissions in `truncation`. */
 case class PropagatorRow(node: String, fanIn: Int, fanOut: Int, score: Double)
 
 object PublicSymbolRow:
@@ -126,6 +137,20 @@ object PublicSymbolRow:
         requiredString(map, path, "usageConfidence")
       )
 
+object ReportTruncation:
+  given JsonRW[ReportTruncation] with
+    override def write(value: ReportTruncation): JValue =
+      obj(
+        "findingsOmitted" -> JsonRW[Int].write(value.findingsOmitted),
+        "publicSymbolsOmitted" -> JsonRW[Int].write(value.publicSymbolsOmitted)
+      )
+    override def parse(path: String, jValue: JValue): ReportTruncation =
+      val map = objectFields(path, jValue)
+      ReportTruncation(
+        required[Int](map, path, "findingsOmitted"),
+        required[Int](map, path, "publicSymbolsOmitted")
+      )
+
 /** A stable, structured diagnostic derived from the report index. `evidence` is
   * intentionally human-readable while the subject and id remain machine-stable.
   * Confidence values distinguish direct graph evidence from structural proxies. */
@@ -140,8 +165,22 @@ case class Finding(
 )
 
 object MetricsReport:
+  /** JSON inventories are bounded at the serialization edge; the in-memory
+    * report remains complete so `ReportTable --all` can still show every row. */
+  private[report] val maxJsonFindings = 10000
+  private[report] val maxJsonPublicSymbols = 10000
+
   given JsonRW[MetricsReport] with
     override def write(value: MetricsReport): JValue =
+      val findings = value.findings.take(maxJsonFindings)
+      val publicSymbols = value.publicSymbols.map(_.take(maxJsonPublicSymbols))
+      val omittedFindings = math.max(0, value.findings.size - findings.size)
+      val omittedPublicSymbols = value.publicSymbols.fold(0)(rows => math.max(0, rows.size - publicSymbols.fold(0)(_.size)))
+      val truncation = value.truncation.orElse {
+        if omittedFindings > 0 || omittedPublicSymbols > 0 then
+          Some(ReportTruncation(omittedFindings, omittedPublicSymbols))
+        else None
+      }
       val fields = scala.collection.mutable.Map[String, JValue](
         // Schema version is a wire-level contract; callers cannot emit a different version.
         "schemaVersion" -> JsonRW[Int].write(2),
@@ -152,9 +191,10 @@ object MetricsReport:
         "propagators" -> JsonRW[Seq[PropagatorRow]].write(value.propagators),
         "surface" -> JsonRW[Seq[SurfaceRow]].write(value.surface),
         "orphans" -> JsonRW[Seq[String]].write(value.orphans),
-        "findings" -> JsonRW[Seq[Finding]].write(value.findings)
+        "findings" -> JsonRW[Seq[Finding]].write(findings)
       )
-      value.publicSymbols.foreach(symbols => fields("publicSymbols") = JsonRW[Seq[PublicSymbolRow]].write(symbols))
+      publicSymbols.foreach(symbols => fields("publicSymbols") = JsonRW[Seq[PublicSymbolRow]].write(symbols))
+      truncation.foreach(meta => fields("truncation") = JsonRW[ReportTruncation].write(meta))
       JObject(fields)
     override def parse(path: String, jValue: JValue): MetricsReport =
       val map = objectFields(path, jValue)
@@ -173,7 +213,10 @@ object MetricsReport:
         required[Seq[Finding]](map, path, "findings"),
         map.get("publicSymbols") match
           case None    => None
-          case Some(v) => Some(JsonRW[Seq[PublicSymbolRow]].parse(s"$path.publicSymbols", v))
+          case Some(v) => Some(JsonRW[Seq[PublicSymbolRow]].parse(s"$path.publicSymbols", v)),
+        map.get("truncation") match
+          case None    => None
+          case Some(v) => Some(JsonRW[ReportTruncation].parse(s"$path.truncation", v))
       )
 
 object Summary:

@@ -97,13 +97,17 @@ and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoc
 
 ## Findings
 
-`findings` is a complete, deterministic index of actionable diagnostics. Each finding has a stable
+`findings` is a deterministic index of actionable diagnostics. Each finding has a stable
 `id`, a `kind` (`cycle`, `propagator`, `mutableSurface`, `structuralUse`, or `unusedPublicSymbol`), `severity`, and
 `subject`, plus human-readable `evidence`, `confidence`, and a `nextAction`. Findings are ranked by
 severity, then metric score, then id. They cover every reported SCC, every above-average propagator,
 every node with exposed mutable ports, and every node whose structural-use proxy is below `1.0`.
 The structural-use kind is only a graph proxy, not proof that a public symbol is unused. An
 `unusedPublicSymbol` finding is emitted only when the optional `publicSymbols` index is present.
+JSON serialization bounds both `findings` and `publicSymbols` at 10,000 rows each so large
+projects remain agent-usable. When rows are omitted, `truncation` is present with
+`findingsOmitted` and `publicSymbolsOmitted` counts; the in-memory report and `--all` table view
+retain the complete inventories.
 
 ## Cycles
 
@@ -209,7 +213,9 @@ document fails to parse during `export`, the optional indexes are omitted becaus
 records are partial. An `unusedPublicSymbol` finding's `nextAction` is `inspect-node <scope-id>`,
 where `<scope-id>` is the declaring package or file and is valid for the report's detail workflow;
 the symbol id itself is not a surface node. Absence of the field never implies that public API is
-unused.
+unused. Compiler-generated SemanticDB symbols without a source definition (such as case-class
+`copy`/`apply` methods and Product `_1` accessors), as well as symbols marked `SYNTHETIC`, are
+excluded; a source-defined identifier with the same spelling remains eligible.
 
 ## Exposed surface
 

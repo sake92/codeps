@@ -58,11 +58,13 @@ object MetricsCalculator:
             if (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed =>
           n.id -> scopeId
       }.toMap
-      val publicSymbols = nodePublicSymbols ++ graph.declaredPublicSymbols.toSeq.flatMap(_.flatMap { case (symbol, sourceFile) =>
-        mappedByNode.get(symbol)
-          .orElse(sourceFileScope.get(sourceFile))
-          .map(scopeId => symbol -> scopeId)
-      }).toMap
+      val publicSymbols = graph.declaredPublicSymbols match
+        case Some(declarations) => declarations.flatMap { case (symbol, sourceFile) =>
+            mappedByNode.get(symbol)
+              .orElse(sourceFileScope.get(sourceFile))
+              .map(scopeId => symbol -> scopeId)
+          }
+        case None => nodePublicSymbols
       val symbolReferences = graph.symbolReferences.map(_.filter { reference =>
         publicSymbols.contains(reference.targetSymbol) &&
           sourceFileScope.get(reference.sourceFile).forall(ids.contains)
@@ -206,7 +208,7 @@ object MetricsCalculator:
           // Keep the report index complete. ReportTable applies the human-facing
           // top-10 bound at the presentation edge (or shows all with --all).
 
-    val publicSymbols = sg.symbolReferences.map { refs =>
+    val allPublicSymbols = sg.symbolReferences.map { refs =>
       val consumerCounts = mutable.HashMap.empty[String, mutable.HashSet[String]]
       val referenceCounts = mutable.HashMap.empty[String, Int]
       // Build both counts in one bounded pass over references. The previous
@@ -226,7 +228,13 @@ object MetricsCalculator:
       }
     }
 
-    val findings = buildFindings(cycles, propagators, surface, publicSymbols, sg.publicSymbols)
+    val findings = buildFindings(cycles, propagators, surface, allPublicSymbols, sg.publicSymbols)
+    val omittedFindings = math.max(0, findings.size - MetricsReport.maxJsonFindings)
+    val omittedPublicSymbols = allPublicSymbols.fold(0)(rows => math.max(0, rows.size - MetricsReport.maxJsonPublicSymbols))
+    val truncation =
+      if omittedFindings > 0 || omittedPublicSymbols > 0 then
+        Some(ReportTruncation(omittedFindings, omittedPublicSymbols))
+      else None
 
     MetricsReport(
       scope = scope match
@@ -245,7 +253,8 @@ object MetricsCalculator:
       surface = surface,
       orphans = orphans,
       findings = findings,
-      publicSymbols = publicSymbols
+      publicSymbols = allPublicSymbols,
+      truncation = truncation
     )
 
   private case class RankedFinding(finding: Finding, score: Double)

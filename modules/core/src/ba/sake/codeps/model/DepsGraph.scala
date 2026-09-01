@@ -33,7 +33,10 @@ case class DepsGraph(
     val nodePublicSymbols = nodes
       .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
       .map(_.id)
-    val publicSymbols = nodePublicSymbols ++ declaredPublicSymbols.toSeq.flatMap(_.keys)
+    // An explicit declaration index is complete metadata from the exporter and
+    // is authoritative. Falling back to exposed nodes is retained for older or
+    // hand-authored graphs that do not carry the optional index.
+    val publicSymbols = declaredPublicSymbols.fold(nodePublicSymbols)(_.keySet)
     copy(
       edges = edges.filter(e => ids.contains(e.source) && ids.contains(e.target)),
       symbolReferences = symbolReferences.map(_.filter(r => publicSymbols.contains(r.targetSymbol))),

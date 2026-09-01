@@ -188,6 +188,32 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assert(!report.findings.exists(_.kind == "unusedPublicSymbol"))
   }
 
+  test("large public-symbol inventories are bounded with explicit omission counts") {
+    val declarationCount = 10005
+    val symbols = (1 to declarationCount).map(i => s"p.Api#$i")
+    val graph = DepsGraph(
+      nodes = (Seq(
+        Node("p", NodeKind.`package`),
+        Node("p.Api", NodeKind.`type`, Some("p"), Some("src/Api.scala")),
+        Node("src/Api.scala", NodeKind.file)
+      ) ++ symbols.map(symbol => Node(symbol, NodeKind.member, Some("p.Api"), Some("src/Api.scala")))).toSet,
+      edges = Set.empty,
+      symbolReferences = Some(Seq.empty),
+      declaredPublicSymbols = Some(symbols.map(_ -> "src/Api.scala").toMap)
+    )
+
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    assertEquals(report.publicSymbols.map(_.size), Some(declarationCount))
+    assertEquals(report.findings.count(_.kind == "unusedPublicSymbol"), declarationCount)
+    assertEquals(report.truncation, Some(ReportTruncation(findingsOmitted = 5, publicSymbolsOmitted = 5)))
+    val json = report.toJson(spaces = 0, sort = false)
+    assert(json.contains("\"findingsOmitted\":5"))
+    assert(json.contains("\"publicSymbolsOmitted\":5"))
+    val serialized = json.parseJson[MetricsReport]
+    assertEquals(serialized.findings.size, 10000)
+    assertEquals(serialized.publicSymbols.map(_.size), Some(10000))
+  }
+
   test("packages scope: fans, surface, orphans, summary on an acyclic graph") {
     val graph = DepsGraph(
       nodes = Set(
