@@ -91,6 +91,51 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(row.utilization, row.dependentsPerPublicPort)
   }
 
+  test("public symbol use reports distinct consumers and complete unused findings") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("com.a", NodeKind.`package`),
+        Node("com.b", NodeKind.`package`),
+        Node("com.a.Api", NodeKind.`type`, Some("com.a"), None,
+          declarationSurface = DeclarationSurface(public = 1)),
+        Node("com.a.Api#used", NodeKind.member, Some("com.a.Api"), None,
+          declarationSurface = DeclarationSurface(public = 1)),
+        Node("com.a.Api#unused", NodeKind.member, Some("com.a.Api"), None,
+          declarationSurface = DeclarationSurface(public = 1)),
+        Node("com.b.Consumer", NodeKind.`type`, Some("com.b"), None,
+          declarationSurface = DeclarationSurface(public = 1))
+      ),
+      edges = Set(Edge("com.b.Consumer", "com.a.Api#used")),
+      symbolReferences = Some(Seq(
+        SymbolReference("src/a/Api.scala", "com.a.Api#used"),
+        SymbolReference("src/b/Consumer.scala", "com.a.Api#used"),
+        SymbolReference("src/b/Consumer.scala", "com.a.Api#used")
+      ))
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val used = report.publicSymbols.get.find(_.symbol == "com.a.Api#used").get
+    assertEquals(used.consumerCount, 2)
+    assertEquals(used.referenceCount, 3)
+    assertEquals(used.usageConfidence, "semanticdbComplete")
+    assert(report.publicSymbols.get.exists(_.symbol == "com.a.Api#unused"))
+    assert(report.findings.exists(f =>
+      f.id == "unusedPublicSymbol:com.a.Api#unused" &&
+        f.kind == "unusedPublicSymbol" &&
+        f.confidence == "semanticdbComplete"
+    ))
+  }
+
+  test("absent symbol-reference evidence does not infer unused public API") {
+    val graph = DepsGraph(
+      Set(Node("p", NodeKind.`package`), Node("p.Api", NodeKind.`type`, Some("p"), None,
+        declarationSurface = DeclarationSurface(public = 1))),
+      Set.empty
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    assertEquals(report.publicSymbols, None)
+    assert(!report.findings.exists(_.kind == "unusedPublicSymbol"))
+  }
+
   test("packages scope: fans, surface, orphans, summary on an acyclic graph") {
     val graph = DepsGraph(
       nodes = Set(

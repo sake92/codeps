@@ -1,6 +1,6 @@
 package ba.sake.codeps.semanticdb
 
-import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
+import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind, SymbolReference}
 import scala.meta.internal.semanticdb.*
 
 object SemanticDbParser:
@@ -17,10 +17,16 @@ object SemanticDbParser:
       val docs = TextDocuments.parseFrom(bytes)
       var nodes = Set.empty[Node]
       var edges = Set.empty[Edge]
+      var symbolReferences = Vector.empty[SymbolReference]
       for doc <- docs.documents do
         nodes ++= documentNodes(doc, root)
         edges ++= documentEdges(doc, root)
-      Right(DepsGraph(nodes, edges))
+        symbolReferences ++= documentSymbolReferences(doc, root)
+      val declaredPublicSymbols = nodes.iterator
+        .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
+        .flatMap(n => n.file.map(file => n.id -> file))
+        .toMap
+      Right(DepsGraph(nodes, edges, Some(symbolReferences), Some(declaredPublicSymbols)))
     catch
       case e: Exception => Left(s"failed to parse semanticdb: ${e.getMessage}")
 
@@ -32,7 +38,7 @@ object SemanticDbParser:
     // contains one of these belong to a sealed hierarchy
     val sealedOwners = doc.symbols.iterator.filter(_.isSealed).map(_.symbol).toSet
     var nodes = Set.empty[Node]
-    var fileSurface = ba.sake.codeps.model.DeclarationSurface()
+    var fileSurface = DeclarationSurface()
     for s <- doc.symbols do
       val node = symbolNode(s, file, sealedOwners)
       node.foreach(nodes += _)
@@ -68,28 +74,28 @@ object SemanticDbParser:
   private def typeNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Node =
     Node(typeId(s.symbol), NodeKind.`type`, parentOf(s.symbol), Some(file),
       isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s),
-      declarationSurface = declarationSurfaceOf(s).getOrElse(ba.sake.codeps.model.DeclarationSurface()))
+      declarationSurface = declarationSurfaceOf(s).getOrElse(DeclarationSurface()))
 
   private def memberNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Node =
     Node(memberId(s.symbol), NodeKind.member, parentOf(s.symbol), Some(file),
       isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s),
-      declarationSurface = declarationSurfaceOf(s).getOrElse(ba.sake.codeps.model.DeclarationSurface()))
+      declarationSurface = declarationSurfaceOf(s).getOrElse(DeclarationSurface()))
 
   /** Counts source declarations independently of the weighted public-port
     * calculation. Setters are compiler accessors, not declarations; locals,
     * constructors and unsupported SemanticDB kinds are not surface entries. */
-  private def declarationSurfaceOf(s: SymbolInformation): Option[ba.sake.codeps.model.DeclarationSurface] =
+  private def declarationSurfaceOf(s: SymbolInformation): Option[DeclarationSurface] =
     if isConstructor(s.symbol) || s.kind.isLocal || s.displayName.endsWith("_=") then None
     else if isTypeKind(s.kind) || isMemberKind(s.kind) then
       val mutable = isMutableDeclaration(s)
       val one = if mutable then 1 else 0
       s.access match
-        case Access.Empty | _: PublicAccess => Some(ba.sake.codeps.model.DeclarationSurface(public = 1, publicMutable = one))
-        case _: ProtectedAccess             => Some(ba.sake.codeps.model.DeclarationSurface(`protected` = 1, protectedMutable = one))
-        case _: PrivateWithinAccess        => Some(ba.sake.codeps.model.DeclarationSurface(packageRestricted = 1, packageRestrictedMutable = one))
+        case Access.Empty | _: PublicAccess => Some(DeclarationSurface(public = 1, publicMutable = one))
+        case _: ProtectedAccess             => Some(DeclarationSurface(`protected` = 1, protectedMutable = one))
+        case _: PrivateWithinAccess        => Some(DeclarationSurface(packageRestricted = 1, packageRestrictedMutable = one))
         case _: PrivateAccess | _: PrivateThisAccess =>
-          Some(ba.sake.codeps.model.DeclarationSurface(privateMembers = 1, privateMutable = one))
-        case _ => Some(ba.sake.codeps.model.DeclarationSurface(privateMembers = 1, privateMutable = one))
+          Some(DeclarationSurface(privateMembers = 1, privateMutable = one))
+        case _ => Some(DeclarationSurface(privateMembers = 1, privateMutable = one))
     else None
 
   /** Mutable declaration rules intentionally match `mutPortsOf`, but without
@@ -253,6 +259,17 @@ object SemanticDbParser:
         }
     edges
 
+  /** Keeps every reference occurrence in source-file form. The target remains
+    * a stable declaration id; visibility and declaration membership are checked
+    * after all SemanticDB documents are merged by `withoutDanglingEdges`. */
+  private def documentSymbolReferences(doc: TextDocument, root: java.nio.file.Path): Seq[SymbolReference] =
+    val accessOf = doc.symbols.iterator.map(s => s.symbol -> s.access).toMap
+    val sourceFile = fileId(doc.uri, root)
+    doc.occurrences.iterator
+      .filter(_.role.isReference)
+      .flatMap(occ => referenceTargetId(occ.symbol, accessOf).map(SymbolReference(sourceFile, _)))
+      .toSeq
+
   /** Node id the occurrence points at; None for locals, package decls (already nodes), unresolvable
     * symbols, and references to class-private symbols that collapse into a package (dropped: they
     * are file-scoped, so the edge carries no cross-file information).
@@ -262,6 +279,16 @@ object SemanticDbParser:
     else if isConstructor(sym) then parentOf(sym) // dependency on `new Foo` == dependency on Foo
     else if isClassPrivate(accessOf.getOrElse(sym, Access.Empty)) then
       collapseUp(sym, accessOf).filter(!_.endsWith("/")).map(dotFormId)
+    else Some(targetIdPlain(sym))
+
+  /** Public-symbol references must retain the exact target, not the dependency
+    * edge's class-private ancestor collapse. Private targets are removed here;
+    * protected/package-restricted targets survive until merged public-node
+    * filtering, where their `isExposed = false` metadata removes them. */
+  private def referenceTargetId(sym: String, accessOf: Map[String, Access]): Option[String] =
+    if sym.isEmpty || sym.endsWith("/") || isLocalSymbol(sym) then None
+    else if isConstructor(sym) then parentOf(sym).map(dotFormId)
+    else if accessOf.get(sym).exists(isClassPrivate) then None
     else Some(targetIdPlain(sym))
 
   private def targetIdPlain(sym: String): String =

@@ -19,7 +19,10 @@ case class MetricsReport(
     findings: Seq[Finding] = Nil,
     /** Present only when the input exporter supplied complete public-symbol references. */
     publicSymbols: Option[Seq[PublicSymbolRow]] = None
-)
+):
+  def publicSymbolUses: Option[Seq[PublicSymbolRow]] = publicSymbols
+  def publicSymbolUse: Option[Seq[PublicSymbolRow]] = publicSymbols
+  def symbolUses: Option[Seq[PublicSymbolRow]] = publicSymbols
 
 case class Summary(
     nodes: Int,
@@ -82,6 +85,10 @@ case class SurfaceRow(
   /** Source-compatibility alias for consumers of pre-v2.1 reports. It is not
     * serialized; `dependentsPerPublicPort` is the unambiguous structural proxy. */
   def utilization: Option[Double] = dependentsPerPublicPort
+  def packageRestrictedSurface: Double = packageSurface
+  def packageRestrictedMutableSurface: Double = packageMutableSurface
+  def privateMembersSurface: Double = privateSurface
+  def privateMembersMutableSurface: Double = privateMutableSurface
 
 /** Public declaration use derived from optional SemanticDB reference records.
   * `referenceCount` counts occurrences; `consumerCount` counts distinct source

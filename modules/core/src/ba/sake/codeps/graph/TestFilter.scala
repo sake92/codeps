@@ -34,4 +34,4 @@ object TestFilter:
     val kept = graph.nodes.filterNot(isTest)
     val keptIds = kept.map(_.id)
     val keptEdges = graph.edges.filter(e => keptIds.contains(e.source) && keptIds.contains(e.target) && e.source != e.target)
-    Prune.emptyPackages(DepsGraph(kept, keptEdges))
+    Prune.emptyPackages(DepsGraph(kept, keptEdges, graph.symbolReferences, graph.declaredPublicSymbols))

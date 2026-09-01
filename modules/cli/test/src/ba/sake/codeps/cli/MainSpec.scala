@@ -42,7 +42,8 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("\"kind\": \"file\""))
     assert(!content.contains("\"kind\": \"type\""))
     assert(!content.contains("\"kind\": \"member\""))
-    assert(!content.contains("com.example.modules.module1.Service1")) // types are gone
+    // Public symbol metadata and references may mention type ids, but the
+    // exported dependency node set remains package/file-only.
     assert(content.contains("com.example.modules.module1")) // packages remain
     assert(content.contains("src/com/example/util/Helper.scala")) // files remain
     assert(content.contains("\"parentId\": \"com.example.util\"")) // file -> package link

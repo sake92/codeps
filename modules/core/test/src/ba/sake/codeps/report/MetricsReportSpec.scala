@@ -141,3 +141,33 @@ class MetricsReportSpec extends munit.FunSuite:
     val error = intercept[ba.sake.tupson.TupsonException](json.parseJson[MetricsReport])
     assert(error.getMessage.contains("incompatible schema version"))
   }
+
+  test("surface and public-symbol use fields serialize with camelCase names") {
+    val row = SurfaceRow(
+      "p",
+      2,
+      1,
+      3.0,
+      1.0,
+      6.0,
+      Some(2.0 / 3.0),
+      publicSurface = 3.0,
+      protectedSurface = 2.0,
+      packageSurface = 1.0,
+      privateSurface = 4.0,
+      publicMutableSurface = 1.0,
+      totalDeclaredSurface = 10.0,
+      encapsulationRatio = Some(0.3),
+      publicMutableRatio = Some(1.0 / 3.0)
+    )
+    val report = MetricsReport("packages", "x", Summary(1, 0, 0, 0, 0), Nil, Nil, Seq(row), Nil,
+      publicSymbols = Some(Seq(PublicSymbolRow("p.Api", 2, 3, "semanticdbComplete"))))
+    val json = report.toJson(spaces = 0, sort = false)
+    assert(json.contains("\"dependentsPerPublicPort\":"))
+    assert(json.contains("\"publicSurface\":3"))
+    assert(json.contains("\"totalDeclaredSurface\":10"))
+    assert(json.contains("\"publicSymbols\":[{"))
+    assert(json.contains("\"consumerCount\":2"))
+    assert(json.contains("\"usageConfidence\":\"semanticdbComplete\""))
+    assertEquals(json.parseJson[MetricsReport], report)
+  }

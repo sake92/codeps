@@ -9,9 +9,9 @@ description: the standard JSON graph format produced by codeps export and consum
 The standard JSON export format is the contract between the two codeps steps: `codeps export`
 *produces* it, and `codeps report-packages` or `codeps report-files` *consumes* it. It is a self-contained dependency
 graph produced by `codeps export` as `package` and `file` nodes only — the exporters
-    collapse type/member symbols into their file (or root package for file-less jdeps
-    types), with `ports`/`mutPorts` and `declarationSurface` summed and edges aggregated at file level with
-    summed weights. `type`/`member` kinds are still *accepted* on input for backward
+collapse type/member symbols into their file (or root package for file-less jdeps
+types), with `ports`/`mutPorts` and `declarationSurface` summed and edges aggregated at file level with
+summed weights. `type`/`member` kinds are still *accepted* on input for backward
 compatibility with old graphs (the analyzer aggregates them), but exporters never
 emit them.
 
@@ -25,7 +25,13 @@ emit them.
   ],
   "edges": [
     {"source": "src/com/example/a/Foo.scala", "target": "src/com/example/b/Bar.scala", "weight": 5}
-  ]
+  ],
+  "symbolReferences": [
+    {"sourceFile": "src/com/example/b/Bar.scala", "targetSymbol": "com.example.a.Foo#api"}
+  ],
+  "declaredPublicSymbols": {
+    "com.example.a.Foo#api": "src/com/example/a/Foo.scala"
+  }
 }
 ```
 
@@ -35,6 +41,8 @@ emit them.
 |---|---|---|
 | `nodes` | `[{id, kind, parentId?, file?}]` | the graph's nodes; a set, so each `id` appears once |
 | `edges` | `[{source, target, weight}]` | directed dependency edges between node ids; a set (deduplicated); `weight` = number of finer-grained references merged into the edge |
+| `symbolReferences` | array (optional) | exact public-symbol reference occurrences; omitted when the producer cannot provide a complete SemanticDB reference index |
+| `declaredPublicSymbols` | object (optional) | public declaration ids mapped to their source-file ids when type/member nodes are aggregated away; paired with `symbolReferences` |
 
 Node fields:
 
@@ -66,6 +74,17 @@ Edge fields:
 | `source` | string | node id the dependency comes from |
 | `target` | string | node id the dependency goes to |
 | `weight` | number (optional) | number of finer-grained references this edge represents; 1 when absent (producers that don't emit it are accepted) |
+
+Symbol-reference fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `sourceFile` | string | source file containing the reference occurrence |
+| `targetSymbol` | string | stable dotted declaration id, such as `com.example.a.Foo#api` |
+
+SemanticDB export emits `symbolReferences` and `declaredPublicSymbols`; after all input documents
+are merged, references to missing or non-public declarations are removed. Parsers without complete
+symbol information omit both fields, so reports never infer unused public API from their absence.
 
 ### Id rules
 

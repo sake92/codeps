@@ -90,3 +90,19 @@ class ModelSpec extends munit.FunSuite:
     assertEquals(node.toJson(spaces = 0, sort = false).parseJson[Node], node)
     assertEquals("""{"id":"p.a","kind":"package"}""".parseJson[Node].declarationSurface, DeclarationSurface())
   }
+
+  test("optional symbol references round-trip and dangling private targets are removed") {
+    val graph = DepsGraph(
+      Set(
+        Node("p", NodeKind.`package`),
+        Node("p.Api", NodeKind.`type`, Some("p"), isExposed = true),
+        Node("p.Hidden", NodeKind.member, Some("p.Api"), isExposed = false)
+      ),
+      Set.empty,
+      Some(Seq(SymbolReference("src/Consumer.scala", "p.Api"), SymbolReference("src/Consumer.scala", "p.Hidden")))
+    )
+    val cleaned = graph.withoutDanglingEdges
+    assertEquals(cleaned.symbolReferences, Some(Seq(SymbolReference("src/Consumer.scala", "p.Api"))))
+    assertEquals(graph.toJson(spaces = 0, sort = false).parseJson[DepsGraph], graph)
+    assertEquals("""{"nodes":[],"edges":[]}""".parseJson[DepsGraph].symbolReferences, None)
+  }

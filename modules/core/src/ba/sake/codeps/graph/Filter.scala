@@ -17,7 +17,7 @@ object Filter:
       .filterNot(n => excludes.exists(pat => n.rootPackageId(nodesById).exists(matches(_, pat))))
     val keptIds = universe.map(_.id)
     val keptEdges = graph.edges.filter(e => keptIds.contains(e.source) && keptIds.contains(e.target) && e.source != e.target)
-    Prune.emptyPackages(DepsGraph(universe, keptEdges))
+    Prune.emptyPackages(DepsGraph(universe, keptEdges, graph.symbolReferences, graph.declaredPublicSymbols))
 
   private def matches(pkg: String, pattern: String): Boolean =
     pkg == pattern || pkg.startsWith(pattern + ".")

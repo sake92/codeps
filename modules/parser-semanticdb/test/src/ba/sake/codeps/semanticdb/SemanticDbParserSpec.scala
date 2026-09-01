@@ -1,7 +1,7 @@
 package ba.sake.codeps.semanticdb
 
 import ba.sake.codeps.testing.FixtureCompiler
-import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind}
+import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind, SymbolReference}
 import scala.meta.internal.semanticdb.{Access, ByNameType, ClassSignature, PrivateAccess, PrivateThisAccess, PrivateWithinAccess, ProtectedAccess, PublicAccess, Range, Signature, SymbolInformation, SymbolOccurrence, TextDocument, TextDocuments, Type, TypeRef, ValueSignature}
 
 class SemanticDbParserSpec extends munit.FunSuite:
@@ -237,4 +237,41 @@ class SemanticDbParserSpec extends munit.FunSuite:
     assertEquals(nodes("com.example.util.Exposure#intOrdering").ports, 1.0) // given: flat +1
     assertEquals(nodes("com.example.util.Exposure#intOrdering").mutPorts, 0.0) // givens are not mutable state
     assertEquals(nodes("com.example.util.Exposure#stringConv").ports, 1.0) // implicit def
+  }
+
+  test("public symbol references retain stable targets and duplicate occurrences") {
+    val root = os.pwd.toNIO
+    val apiFile = "src/com/example/refs/Api.scala"
+    val consumerFile = "src/com/example/refs/Consumer.scala"
+    val api = TextDocument(
+      uri = apiFile,
+      symbols = Seq(
+        SymbolInformation(symbol = "com/example/refs/Api#", kind = SymbolInformation.Kind.CLASS, displayName = "Api"),
+        SymbolInformation(symbol = "com/example/refs/Api#used().", kind = SymbolInformation.Kind.METHOD, displayName = "used"),
+        SymbolInformation(symbol = "com/example/refs/Api#unused().", kind = SymbolInformation.Kind.METHOD, displayName = "unused")
+      ),
+      occurrences = Seq(
+        SymbolOccurrence(Some(Range(1, 0, 1, 3)), "com/example/refs/Api#", SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(Some(Range(2, 0, 2, 4)), "com/example/refs/Api#used().", SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(Some(Range(3, 0, 3, 6)), "com/example/refs/Api#unused().", SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(Some(Range(4, 0, 4, 4)), "com/example/refs/Api#used().", SymbolOccurrence.Role.REFERENCE)
+      )
+    )
+    val consumer = TextDocument(
+      uri = consumerFile,
+      symbols = Seq(SymbolInformation(symbol = "com/example/refs/Consumer#", kind = SymbolInformation.Kind.CLASS, displayName = "Consumer")),
+      occurrences = Seq(
+        SymbolOccurrence(Some(Range(1, 0, 1, 8)), "com/example/refs/Consumer#", SymbolOccurrence.Role.DEFINITION),
+        SymbolOccurrence(Some(Range(2, 0, 2, 4)), "com/example/refs/Api#used().", SymbolOccurrence.Role.REFERENCE)
+      )
+    )
+    val bytes = TextDocuments(Seq(api, consumer)).toByteArray
+    val deps = SemanticDbParser.parse(bytes, root).toOption.get.withoutDanglingEdges
+
+    assert(deps.nodes.exists(_.id == "com.example.refs.Api#used"))
+    assertEquals(
+      deps.symbolReferences.get.filter(_.targetSymbol == "com.example.refs.Api#used"),
+      Seq(SymbolReference(apiFile, "com.example.refs.Api#used"), SymbolReference(consumerFile, "com.example.refs.Api#used"))
+    )
+    assertEquals(deps.symbolReferences.get.count(_.targetSymbol == "com.example.refs.Api#unused"), 0)
   }

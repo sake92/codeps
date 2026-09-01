@@ -53,3 +53,13 @@ class AggregatorSpec extends munit.FunSuite:
     assertEquals(agg.edges.count(_.source == "src/A.scala"), 1)
     assertEquals(agg.edges.find(e => e.source == "src/A.scala" && e.target == "src/B.scala").get.weight, 2)
   }
+
+  test("aggregating retains public symbol metadata and reference occurrences") {
+    val graph = granular.copy(
+      symbolReferences = Some(Seq(SymbolReference("src/B.scala", "com.a.A#m"))),
+      declaredPublicSymbols = Some(Map("com.a.A#m" -> "src/A.scala"))
+    )
+    val agg = Aggregator.fileLevel(graph)
+    assertEquals(agg.symbolReferences, graph.symbolReferences)
+    assertEquals(agg.declaredPublicSymbols, Some(Map("com.a.A#m" -> "src/A.scala")))
+  }

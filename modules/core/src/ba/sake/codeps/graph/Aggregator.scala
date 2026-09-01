@@ -69,4 +69,20 @@ object Aggregator:
           declarationSurface = declarationSurface.getOrElse(p.id, DeclarationSurface())
         )
     }
-    DepsGraph(fileNodes ++ pkgNodes, edges)
+    // Symbol references keep their stable declaration targets; they are
+    // intentionally not rewritten to file ids because the report's public-use
+    // index is symbol-level. `declaredPublicSymbols` carries the declaration ids
+    // across this package/file-only projection for report consumers.
+    val fileIds = (fileNodes ++ pkgNodes).map(_.id)
+    val sourceDeclarations = graph.declaredPublicSymbols.getOrElse(
+      graph.nodes.iterator
+        .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
+        .flatMap(n => n.file.map(file => n.id -> file))
+        .toMap
+    )
+    val declaredPublicSymbols =
+      if graph.symbolReferences.nonEmpty then Some(sourceDeclarations.flatMap { case (symbol, file) =>
+        aggId(graph.nodes.find(_.id == file).getOrElse(Node(file, NodeKind.file))).map(id => symbol -> id)
+      }.filter((_, file) => fileIds.contains(file)))
+      else graph.declaredPublicSymbols
+    DepsGraph(fileNodes ++ pkgNodes, edges, graph.symbolReferences, declaredPublicSymbols)

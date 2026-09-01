@@ -45,11 +45,16 @@ object MetricsCalculator:
       val mutPorts = mapped.groupMapReduce(_._2)(_._1.mutPorts)(_ + _)
       val declarationSurface = mapped
         .groupMapReduce(_._2)(_._1.declarationSurface)(_ + _)
-      val publicSymbols = mapped.collect {
+      val nodePublicSymbols = mapped.collect {
         case (n, scopeId)
             if (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed =>
           n.id -> scopeId
       }.toMap
+      val publicSymbols = nodePublicSymbols ++ graph.declaredPublicSymbols.toSeq.flatMap(_.flatMap { case (symbol, sourceFile) =>
+        mapped.find { case (n, _) => n.id == symbol }
+          .orElse(mapped.find { case (n, _) => n.kind == NodeKind.file && n.id == sourceFile })
+          .map { case (_, scopeId) => symbol -> scopeId }
+      }).toMap
       val symbolReferences = graph.symbolReferences.map(_.filter(r => publicSymbols.contains(r.targetSymbol)))
       val edges = graph.edges.toSeq
         .flatMap { e =>
