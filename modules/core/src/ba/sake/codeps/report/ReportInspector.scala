@@ -88,11 +88,11 @@ object ReportInspector:
     sb.append(s"cycleId: ${detail.cycleId.getOrElse("null")}\n\n")
     sb.append("Surface\n")
     val row = detail.surface
-    sb.append("  fanIn  fanOut  ports  mutPorts  exposure  utilization\n")
+    sb.append("  fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort\n")
     sb.append(
       s"  ${row.fanIn}      ${row.fanOut}       ${number(row.ports)}      " +
         s"${number(row.mutPorts)}         ${number(row.exposure)}       " +
-        s"${row.utilization.map(number).getOrElse("—")}\n"
+        s"${row.dependentsPerPublicPort.map(number).getOrElse("—")}\n"
     )
     appendFindings(sb, detail.findings)
     sb.result()

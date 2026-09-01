@@ -103,11 +103,14 @@ object ReportTable:
     sb.append("\n")
 
     sb.append(sectionTitle("Surface risks", report.surface.size, displayedSurface.size) +
-      " (utilization asc; — = no fan-in)\n")
+      " (dependentsPerPublicPort asc; — = no fan-in)\n")
     if displayedSurface.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
-        Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "utilization"),
+        Seq("node", "fanIn", "fanOut", "ports", "mutPorts", "exposure", "publicSurface",
+          "protectedSurface", "packageSurface", "privateSurface", "publicMutableSurface",
+          "protectedMutableSurface", "packageMutableSurface", "privateMutableSurface",
+          "totalDeclaredSurface", "encapsulationRatio", "publicMutableRatio", "dependentsPerPublicPort"),
         displayedSurface.map(r => Seq(
           disp(r.node),
           r.fanIn.toString,
@@ -115,9 +118,37 @@ object ReportTable:
           num(r.ports),
           num(r.mutPorts),
           num(r.exposure),
-          r.utilization.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
+          num(r.publicSurface),
+          num(r.protectedSurface),
+          num(r.packageSurface),
+          num(r.privateSurface),
+          num(r.publicMutableSurface),
+          num(r.protectedMutableSurface),
+          num(r.packageMutableSurface),
+          num(r.privateMutableSurface),
+          num(r.totalDeclaredSurface),
+          r.encapsulationRatio.map(u => f"$u%.2f").getOrElse("—"),
+          r.publicMutableRatio.map(u => f"$u%.2f").getOrElse("—"),
+          r.dependentsPerPublicPort.map(u => if u > 0 && u < 0.01 then f"$u%.4f" else f"$u%.2f").getOrElse("—")
         ))
       ))
+    sb.append("\n")
+
+    def rankedSection(label: String, rows: Seq[SurfaceRow], header: String)(metric: SurfaceRow => Double): Unit =
+      val ranked = rows.filter(row => metric(row) > 0.0).sortBy(row => (-metric(row), row.node))
+      sb.append(sectionTitle(label, ranked.size, bounded(ranked).size) + "\n")
+      if ranked.isEmpty then sb.append("  (none)\n")
+      else sb.append(table(Seq("node", header), bounded(ranked).map(row => Seq(disp(row.node), num(metric(row))))))
+      sb.append("\n")
+
+    rankedSection("Public surface", report.surface, "publicSurface")(_.publicSurface)
+    rankedSection("Public mutability", report.surface, "publicMutableSurface")(_.publicMutableSurface)
+    val encapsulated = report.surface.filter(_.encapsulationRatio.exists(_ > 0.0))
+      .sortBy(row => (-row.encapsulationRatio.getOrElse(0.0), row.node))
+    sb.append(sectionTitle("Public exposure ratio", encapsulated.size, bounded(encapsulated).size) + "\n")
+    if encapsulated.isEmpty then sb.append("  (none)\n")
+    else sb.append(table(Seq("node", "encapsulationRatio"), bounded(encapsulated).map(row =>
+      Seq(disp(row.node), row.encapsulationRatio.map(value => f"$value%.2f").getOrElse("—")))))
     sb.append("\n")
 
     sb.append(sectionTitle("Orphans", report.orphans.size, displayedOrphans.size) + "\n")

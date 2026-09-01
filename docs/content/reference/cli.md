@@ -142,8 +142,8 @@ Change propagators (top 10 of 1) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2;
   node     fanIn  fanOut  score
   cache    3      2       2.50
 
-Surface risks (top 10 of 1) (utilization asc; — = no fan-in)
-  node     fanIn  fanOut  ports  mutPorts  exposure  utilization
+Surface risks (top 10 of 1) (dependentsPerPublicPort asc; — = no fan-in)
+  node     fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort
   cache    3       2        9      5          24        0.33
   ...
 

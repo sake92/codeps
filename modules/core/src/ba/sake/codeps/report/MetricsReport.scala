@@ -16,7 +16,9 @@ case class MetricsReport(
     surface: Seq[SurfaceRow],
     orphans: Seq[String],
     schemaVersion: Int = 2,
-    findings: Seq[Finding] = Nil
+    findings: Seq[Finding] = Nil,
+    /** Present only when the input exporter supplied complete public-symbol references. */
+    publicSymbols: Option[Seq[PublicSymbolRow]] = None
 )
 
 case class Summary(
@@ -63,15 +65,59 @@ case class SurfaceRow(
     ports: Double,
     mutPorts: Double,
     exposure: Double,
-    utilization: Option[Double],
-    cycleId: Option[String] = None
-)
+    dependentsPerPublicPort: Option[Double],
+    cycleId: Option[String] = None,
+    publicSurface: Double = 0.0,
+    protectedSurface: Double = 0.0,
+    packageSurface: Double = 0.0,
+    privateSurface: Double = 0.0,
+    publicMutableSurface: Double = 0.0,
+    protectedMutableSurface: Double = 0.0,
+    packageMutableSurface: Double = 0.0,
+    privateMutableSurface: Double = 0.0,
+    totalDeclaredSurface: Double = 0.0,
+    encapsulationRatio: Option[Double] = None,
+    publicMutableRatio: Option[Double] = None
+):
+  /** Source-compatibility alias for consumers of pre-v2.1 reports. It is not
+    * serialized; `dependentsPerPublicPort` is the unambiguous structural proxy. */
+  def utilization: Option[Double] = dependentsPerPublicPort
+
+/** Public declaration use derived from optional SemanticDB reference records.
+  * `referenceCount` counts occurrences; `consumerCount` counts distinct source
+  * files. `usageConfidence` is `semanticdbComplete` when this index is present.
+  */
+case class PublicSymbolRow(
+    symbol: String,
+    consumerCount: Int,
+    referenceCount: Int,
+    usageConfidence: String
+):
+  def targetSymbol: String = symbol
 
 /** A node that propagates changes to an above-average part of the graph.
   * `score` = (fanIn/avgFanIn + fanOut/avgFanOut) / 2 — an exactly average node
   * scores 1.0; only nodes above 1.0 are listed. The table presentation applies
   * its own top-10 bound; JSON retains the complete index. */
 case class PropagatorRow(node: String, fanIn: Int, fanOut: Int, score: Double)
+
+object PublicSymbolRow:
+  given JsonRW[PublicSymbolRow] with
+    override def write(value: PublicSymbolRow): JValue =
+      obj(
+        "symbol" -> JsonRW[String].write(value.symbol),
+        "consumerCount" -> JsonRW[Int].write(value.consumerCount),
+        "referenceCount" -> JsonRW[Int].write(value.referenceCount),
+        "usageConfidence" -> JsonRW[String].write(value.usageConfidence)
+      )
+    override def parse(path: String, jValue: JValue): PublicSymbolRow =
+      val map = objectFields(path, jValue)
+      PublicSymbolRow(
+        requiredString(map, path, "symbol"),
+        required[Int](map, path, "consumerCount"),
+        required[Int](map, path, "referenceCount"),
+        requiredString(map, path, "usageConfidence")
+      )
 
 /** A stable, structured diagnostic derived from the report index. `evidence` is
   * intentionally human-readable while the subject and id remain machine-stable.
@@ -89,7 +135,7 @@ case class Finding(
 object MetricsReport:
   given JsonRW[MetricsReport] with
     override def write(value: MetricsReport): JValue =
-      obj(
+      val fields = scala.collection.mutable.Map[String, JValue](
         // Schema version is a wire-level contract; callers cannot emit a different version.
         "schemaVersion" -> JsonRW[Int].write(2),
         "scope" -> JsonRW[String].write(value.scope),
@@ -101,6 +147,8 @@ object MetricsReport:
         "orphans" -> JsonRW[Seq[String]].write(value.orphans),
         "findings" -> JsonRW[Seq[Finding]].write(value.findings)
       )
+      value.publicSymbols.foreach(symbols => fields("publicSymbols") = JsonRW[Seq[PublicSymbolRow]].write(symbols))
+      JObject(fields)
     override def parse(path: String, jValue: JValue): MetricsReport =
       val map = objectFields(path, jValue)
       val schemaVersion = required[Int](map, path, "schemaVersion")
@@ -115,7 +163,10 @@ object MetricsReport:
         required[Seq[SurfaceRow]](map, path, "surface"),
         required[Seq[String]](map, path, "orphans"),
         schemaVersion,
-        required[Seq[Finding]](map, path, "findings")
+        required[Seq[Finding]](map, path, "findings"),
+        map.get("publicSymbols") match
+          case None    => None
+          case Some(v) => Some(JsonRW[Seq[PublicSymbolRow]].parse(s"$path.publicSymbols", v))
       )
 
 object Summary:
@@ -200,12 +251,23 @@ object SurfaceRow:
         "ports" -> num(value.ports),
         "mutPorts" -> num(value.mutPorts),
         "exposure" -> num(value.exposure),
-        "utilization" -> (value.utilization match
+        "dependentsPerPublicPort" -> (value.dependentsPerPublicPort match
           case None    => JNull
           case Some(d) => num(d)),
         "cycleId" -> (value.cycleId match
           case None     => JNull
-          case Some(id) => JsonRW[String].write(id))
+          case Some(id) => JsonRW[String].write(id)),
+        "publicSurface" -> num(value.publicSurface),
+        "protectedSurface" -> num(value.protectedSurface),
+        "packageSurface" -> num(value.packageSurface),
+        "privateSurface" -> num(value.privateSurface),
+        "publicMutableSurface" -> num(value.publicMutableSurface),
+        "protectedMutableSurface" -> num(value.protectedMutableSurface),
+        "packageMutableSurface" -> num(value.packageMutableSurface),
+        "privateMutableSurface" -> num(value.privateMutableSurface),
+        "totalDeclaredSurface" -> num(value.totalDeclaredSurface),
+        "encapsulationRatio" -> optionalNum(value.encapsulationRatio),
+        "publicMutableRatio" -> optionalNum(value.publicMutableRatio)
       )
     override def parse(path: String, jValue: JValue): SurfaceRow =
       val map = objectFields(path, jValue)
@@ -216,9 +278,35 @@ object SurfaceRow:
         required[Double](map, path, "ports"),
         required[Double](map, path, "mutPorts"),
         required[Double](map, path, "exposure"),
-        required[Option[Double]](map, path, "utilization"),
-        required[Option[String]](map, path, "cycleId")
+        proxy(map, path),
+        required[Option[String]](map, path, "cycleId"),
+        optionalDouble(map, path, "publicSurface"),
+        optionalDouble(map, path, "protectedSurface"),
+        optionalDouble(map, path, "packageSurface"),
+        optionalDouble(map, path, "privateSurface"),
+        optionalDouble(map, path, "publicMutableSurface"),
+        optionalDouble(map, path, "protectedMutableSurface"),
+        optionalDouble(map, path, "packageMutableSurface"),
+        optionalDouble(map, path, "privateMutableSurface"),
+        optionalDouble(map, path, "totalDeclaredSurface"),
+        optionalOptionDouble(map, path, "encapsulationRatio"),
+        optionalOptionDouble(map, path, "publicMutableRatio")
       )
+
+    private def proxy(map: scala.collection.mutable.Map[String, JValue], path: String): Option[Double] =
+      map.get("dependentsPerPublicPort").orElse(map.get("utilization")) match
+        case None    => None
+        case Some(v) => JsonRW[Option[Double]].parse(s"$path.dependentsPerPublicPort", v)
+
+    private def optionalDouble(map: scala.collection.mutable.Map[String, JValue], path: String, key: String): Double =
+      map.get(key) match
+        case None    => 0.0
+        case Some(v) => JsonRW[Double].parse(s"$path.$key", v)
+
+    private def optionalOptionDouble(map: scala.collection.mutable.Map[String, JValue], path: String, key: String): Option[Double] =
+      map.get(key) match
+        case None    => None
+        case Some(v) => JsonRW[Option[Double]].parse(s"$path.$key", v)
 
 object PropagatorRow:
   given JsonRW[PropagatorRow] with
@@ -265,6 +353,10 @@ object Finding:
 /** Integral doubles render as integers (9 not 9.0); fractional halves stay decimals. */
 private def num(d: Double): JValue =
   if !d.isNaN && !d.isInfinite && d == math.rint(d) then JNum(d.toLong) else JNum(d)
+
+private def optionalNum(value: Option[Double]): JValue = value match
+  case None    => JNull
+  case Some(d) => num(d)
 
 private def obj(fields: (String, JValue)*): JValue =
   JObject(scala.collection.mutable.Map.from(fields))

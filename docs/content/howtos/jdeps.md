@@ -15,7 +15,7 @@ jdeps data is class-level: it has no file information, so `export` collapses it 
 nodes and edges, and `codeps report-files` errors on it (`no file nodes found in
 the input`) — use `report-packages` instead.
 It also carries no access information, so all nodes have `ports`/`mutPorts` 0 and
-`utilization` `null` — a known gap, not silently meaningful.
+`dependentsPerPublicPort` `null` — a known gap, not silently meaningful.
 
 ## Generating the input
 

@@ -62,6 +62,35 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(collapsed.edges, Set.empty[Edge]) // both directions collapse onto "com" -> self-loops dropped
   }
 
+  test("surface aggregation retains visibility counts and computes encapsulation ratios") {
+    val graph = DepsGraph(
+      nodes = Set(
+        Node("com.a", NodeKind.`package`),
+        Node("com.b", NodeKind.`package`),
+        Node("com.c", NodeKind.`package`),
+        Node("com.a.Api", NodeKind.`type`, Some("com.a"), None, ports = 3.0,
+          declarationSurface = DeclarationSurface(public = 3, publicMutable = 1)),
+        Node("com.a.Internal", NodeKind.member, Some("com.a.Api"), None, isExposed = false,
+          declarationSurface = DeclarationSurface(`protected` = 2, packageRestricted = 1, privateMembers = 4)),
+        Node("com.b.B", NodeKind.`type`, Some("com.b"), None),
+        Node("com.c.C", NodeKind.`type`, Some("com.c"), None)
+      ),
+      edges = Set(Edge("com.b.B", "com.a.Api"), Edge("com.c.C", "com.a.Api"))
+    )
+    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
+    val row = report.surface.find(_.node == "com.a").get
+    assertEquals(row.totalDeclaredSurface, 10.0)
+    assertEquals(row.publicSurface, 3.0)
+    assertEquals(row.protectedSurface, 2.0)
+    assertEquals(row.packageSurface, 1.0)
+    assertEquals(row.privateSurface, 4.0)
+    assertEquals(row.publicMutableSurface, 1.0)
+    assertEquals(row.encapsulationRatio, Some(0.3))
+    assertEquals(row.publicMutableRatio, Some(1.0 / 3.0))
+    assertEquals(row.dependentsPerPublicPort, Some(2.0 / 3.0))
+    assertEquals(row.utilization, row.dependentsPerPublicPort)
+  }
+
   test("packages scope: fans, surface, orphans, summary on an acyclic graph") {
     val graph = DepsGraph(
       nodes = Set(

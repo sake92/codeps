@@ -58,8 +58,8 @@ Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, to
 node                         fanIn  fanOut  score
 com.example.modules.module1  2      1       1.50
 com.example.modules.module2  1      2       1.50
-Surface (utilization asc; — = no fan-in)
-node                         fanIn  fanOut  ports  mutPorts  exposure  utilization
+Surface (dependentsPerPublicPort asc; — = no fan-in)
+node                         fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort
 com.example.modules.module2  1      2       4      0         4         0.25
 org.thirdparty               1      0       4      0         4         0.25
 com.example.modules.module1  2      1       4      0         4         0.50
@@ -73,7 +73,7 @@ Orphans
 - **Two input formats** — [SemanticDB](/howtos/semdb.html) (detailed, from Scala compiler output) and [jdeps](/howtos/jdeps.html) (JDK-only, no extra tooling)
 - **Cycles with explicit cut analysis** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`; default reports remain fast with `cutAnalysis.status=notRequested`, while `--analyze-cuts` adds budgeted greedy estimates and up to 3 complete ways to break the cycle
 - **Change propagators** — the nodes whose changes propagate most: a normalized `(fanIn/avgFanIn + fanOut/avgFanOut)/2` score, top 10
-- **Exposed-surface metrics** — per-node `ports` / `mutPorts` / `exposure` / `utilization` (sealed/given/var rules resolved by the SemanticDB exporter)
+- **Encapsulation and structural-use metrics** — per-node weighted `ports` / `mutPorts`, raw declaration visibility counters, `encapsulationRatio`, `publicMutableRatio`, and the `dependentsPerPublicPort` structural proxy (sealed/given/var rules resolved by the SemanticDB exporter)
 - **Orphans** — dead-code-removal candidates
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`); skip tests with `--skip-tests`
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)

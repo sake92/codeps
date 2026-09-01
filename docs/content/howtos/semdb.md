@@ -69,7 +69,8 @@ codeps report-packages --input deps.json
 ```
 
 - `report-packages` — metrics over the whole package graph: cycles with optional budgeted cut
-  analysis, per-package exposed-surface (`ports`/`mutPorts`/`exposure`/`utilization`),
+  analysis, per-package exposed-surface and encapsulation (`ports`/`mutPorts`/`exposure`/
+  `dependentsPerPublicPort` plus declaration visibility counters),
   and orphans
 - `report-files` — the same metrics over the **file graph** of the packages selected with
   `--include`; e.g. `--include com.example` descends into `com.example` and everything below it

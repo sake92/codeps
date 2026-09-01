@@ -6,7 +6,8 @@ Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or
 into the [standard JSON export format](https://sake92.github.io/codeps/reference/json-input.html),
 then emits a flat [metrics report](https://sake92.github.io/codeps/reference/report.html):
 SCC facts with optional budgeted cut analysis, per-node exposed-surface metrics
-(`ports`/`mutPorts`/`exposure`/`utilization`) and orphans —
+(`ports`/`mutPorts`/`exposure`/`dependentsPerPublicPort`) and declaration-surface
+encapsulation —
 over the package graph, or the file graph of the packages you select.
 
 - [Documentation](https://sake92.github.io/codeps/)

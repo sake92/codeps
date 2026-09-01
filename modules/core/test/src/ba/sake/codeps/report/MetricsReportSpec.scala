@@ -63,7 +63,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(!json.contains("\"mut_ports\""))
     assert(!json.contains("\"fan_in\""))
     assert(json.contains("\"exposure\":24"))
-    assert(json.contains("\"utilization\":0.33"))
+    assert(json.contains("\"dependentsPerPublicPort\":0.33"))
     assert(json.contains("\"members\":[\"cache\",\"scheduler\"]"))
     assert(json.contains("\"witnessCycle\":[\"cache\",\"scheduler\",\"cache\"]"))
     assert(json.contains("\"internalEdges\":2"))
@@ -83,12 +83,12 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(!report.toJson(spaces = 0, sort = false).contains("\"schemaVersion\":1"))
   }
 
-  test("integral doubles render as integers, null utilization renders as null") {
+  test("integral doubles render as integers, null structural proxy renders as null") {
     val row = SurfaceRow("x", 1, 0, 3.0, 0.0, 3.0, None)
     val json = row.toJson(spaces = 0, sort = false)
     assert(json.contains("\"ports\":3"))
     assert(!json.contains("3.0"))
-    assert(json.contains("\"utilization\":null"))
+    assert(json.contains("\"dependentsPerPublicPort\":null"))
   }
 
   test("report JSON retains complete solutions without display-only metadata") {

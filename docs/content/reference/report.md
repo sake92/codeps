@@ -55,7 +55,17 @@ and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoc
     { "node": "cache", "fanIn": 3, "fanOut": 2, "score": 2.5 }
   ],
   "surface": [
-    { "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24, "utilization": 0.33, "cycleId": "scc:cache" }
+    {
+      "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24,
+      "dependentsPerPublicPort": 0.33, "cycleId": "scc:cache",
+      "publicSurface": 3, "protectedSurface": 2, "packageSurface": 1, "privateSurface": 4,
+      "publicMutableSurface": 1, "protectedMutableSurface": 0, "packageMutableSurface": 0,
+      "privateMutableSurface": 1, "totalDeclaredSurface": 10,
+      "encapsulationRatio": 0.3, "publicMutableRatio": 0.33
+    }
+  ],
+  "publicSymbols": [
+    { "symbol": "com.example.cache.Cache", "consumerCount": 2, "referenceCount": 3, "usageConfidence": "semanticdbComplete" }
   ],
   "orphans": ["DeadUtil.scala"],
   "findings": [
@@ -88,11 +98,12 @@ and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoc
 ## Findings
 
 `findings` is a complete, deterministic index of actionable diagnostics. Each finding has a stable
-`id`, a `kind` (`cycle`, `propagator`, `mutableSurface`, or `structuralUse`), `severity`, and
+`id`, a `kind` (`cycle`, `propagator`, `mutableSurface`, `structuralUse`, or `unusedPublicSymbol`), `severity`, and
 `subject`, plus human-readable `evidence`, `confidence`, and a `nextAction`. Findings are ranked by
 severity, then metric score, then id. They cover every reported SCC, every above-average propagator,
-every node with exposed mutable ports, and every node whose structural utilization proxy is below
-`1.0`. The last kind is only a graph proxy, not proof that a public symbol is unused.
+every node with exposed mutable ports, and every node whose structural-use proxy is below `1.0`.
+The structural-use kind is only a graph proxy, not proof that a public symbol is unused. An
+`unusedPublicSymbol` finding is emitted only when the optional `publicSymbols` index is present.
 
 ## Cycles
 
@@ -159,12 +170,38 @@ One row per scope node is retained in JSON. The default table shows the top 10 r
 - `exposure` — `ports + mutPorts * 3`; mutable ports weighted 3× because they are a hidden
   channel on top of being exposed at all. Always look at the `ports`/`mutPorts` breakdown, never
   `exposure` alone.
-- `utilization` — `fanIn / ports` when `fanIn > 0` and `ports > 0`, else `null`. A `null`
-  utilization is meaningful (no consumers), not a 0.
+- `dependentsPerPublicPort` — `fanIn / ports` when `fanIn > 0` and `ports > 0`, else `null`.
+  This is a structural proxy: file/package edges do not prove that a particular public symbol
+  is used. A `null` value is meaningful (no consumers or no weighted public ports), not a 0.
 - `cycleId` — the nullable stable SCC id (`scc:` plus the lexicographically smallest member) for
   nodes in a reported cycle; `null` for nodes outside all cycles.
 
-Rows are sorted by `utilization` ascending (nulls last): the most exposed-for-its-use nodes first.
+Rows are sorted by `dependentsPerPublicPort` ascending (nulls last): the most exposed-for-its-use
+nodes first. Raw declaration counters are retained so consumers can triage public surface,
+public mutability, and encapsulation independently.
+
+### Declaration surface fields
+
+Each row also carries raw declaration counts, aggregated from the adapter-neutral
+`declarationSurface` counters in the export graph:
+
+- `publicSurface`, `protectedSurface`, `packageSurface`, `privateSurface` — declaration counts by
+  visibility (`packageSurface` corresponds to `private[pkg]`).
+- `publicMutableSurface`, `protectedMutableSurface`, `packageMutableSurface`,
+  `privateMutableSurface` — mutable declaration counts in the same buckets.
+- `totalDeclaredSurface` — sum of the four visibility counts.
+- `encapsulationRatio` — `publicSurface / totalDeclaredSurface` when the denominator is non-zero;
+  otherwise `null`. Lower means more of the declaration surface is encapsulated.
+- `publicMutableRatio` — `publicMutableSurface / publicSurface` when public declarations exist;
+  otherwise `null`.
+
+### Public-symbol use
+
+`publicSymbols` is omitted when the input graph has no complete symbol-reference index. When
+present, each row identifies a declared public symbol and reports `consumerCount` (distinct
+source files), `referenceCount` (reference occurrences), and `usageConfidence`. SemanticDB
+exports use `semanticdbComplete`; only these complete rows can produce an `unusedPublicSymbol`
+finding. Absence of the field never implies that public API is unused.
 
 ## Exposed surface
 
@@ -179,10 +216,10 @@ Rows are sorted by `utilization` ascending (nulls last): the most exposed-for-it
 - `1` `mutPort` per exposed `var`, or exposed val/def typed `scala.collection.mutable.*` or
   `scala.Array`
 
-`private[pkg]` and `protected` members are not exposed; class-private members are dropped by the
-exporter entirely; `var` setters are accessors and never count as surface. jdeps data carries no
-access info, so all its nodes have `ports`/`mutPorts` 0 and `utilization` `null` — a known gap,
-not silently meaningful.
+`private[pkg]` and `protected` members are not exposed; class-private members are omitted from
+dependency nodes but retained in file declaration counters; `var` setters are accessors and never
+count as surface. jdeps data carries no access info, so all its nodes have `ports`/`mutPorts` 0 and
+`dependentsPerPublicPort` `null` — a known gap, not silently meaningful.
 
 ## Orphans
 

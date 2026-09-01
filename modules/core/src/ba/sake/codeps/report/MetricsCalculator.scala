@@ -19,7 +19,10 @@ object MetricsCalculator:
       nodes: Set[String],
       edges: Set[Edge],
       ports: Map[String, Double],
-      mutPorts: Map[String, Double]
+      mutPorts: Map[String, Double],
+      declarationSurface: Map[String, DeclarationSurface] = Map.empty,
+      symbolReferences: Option[Seq[SymbolReference]] = None,
+      publicSymbols: Map[String, String] = Map.empty
   )
 
   def scopeGraph(graph: DepsGraph, scope: Scope): Either[String, ScopeGraph] =
@@ -40,6 +43,14 @@ object MetricsCalculator:
       val ids = mapped.map(_._2).toSet
       val ports = mapped.groupMapReduce(_._2)(_._1.ports)(_ + _)
       val mutPorts = mapped.groupMapReduce(_._2)(_._1.mutPorts)(_ + _)
+      val declarationSurface = mapped
+        .groupMapReduce(_._2)(_._1.declarationSurface)(_ + _)
+      val publicSymbols = mapped.collect {
+        case (n, scopeId)
+            if (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed =>
+          n.id -> scopeId
+      }.toMap
+      val symbolReferences = graph.symbolReferences.map(_.filter(r => publicSymbols.contains(r.targetSymbol)))
       val edges = graph.edges.toSeq
         .flatMap { e =>
           for
@@ -51,7 +62,7 @@ object MetricsCalculator:
         .groupMapReduce(_._1)(_._2)(_ + _)
         .map { case ((s, t), w) => Edge(s, t, w) }
         .toSet
-      Right(ScopeGraph(ids, edges, ports, mutPorts))
+      Right(ScopeGraph(ids, edges, ports, mutPorts, declarationSurface, symbolReferences, publicSymbols))
 
   /** Applies collapse rules; port sums follow the same id mapping as the nodes. */
   def collapse(sg: ScopeGraph, rules: Seq[CollapseRule]): ScopeGraph =
@@ -59,10 +70,24 @@ object MetricsCalculator:
     else
       val resolve = Collapser.resolveWith(rules)
       val (ids, edges) = Collapser.collapse(sg.nodes, sg.edges, rules)
-      ScopeGraph(ids, edges, reSum(sg.ports, resolve), reSum(sg.mutPorts, resolve))
+      ScopeGraph(
+        ids,
+        edges,
+        reSum(sg.ports, resolve),
+        reSum(sg.mutPorts, resolve),
+        reSumSurface(sg.declarationSurface, resolve),
+        sg.symbolReferences,
+        sg.publicSymbols
+      )
 
   private def reSum(perId: Map[String, Double], resolve: String => String): Map[String, Double] =
     perId.toSeq.groupMapReduce((id, v) => resolve(id))(_._2)(_ + _)
+
+  private def reSumSurface(
+      perId: Map[String, DeclarationSurface],
+      resolve: String => String
+  ): Map[String, DeclarationSurface] =
+    perId.toSeq.groupMapReduce((id, surface) => resolve(id))(_._2)(_ + _)
 
   // ---------- metrics ----------
 
@@ -115,7 +140,17 @@ object MetricsCalculator:
       .map { id =>
         val p = sg.ports.getOrElse(id, 0.0)
         val mp = sg.mutPorts.getOrElse(id, 0.0)
+        val declarations = sg.declarationSurface.getOrElse(id, DeclarationSurface())
         val fi = fanInOf(id)
+        val publicSurface = declarations.public.toDouble
+        val protectedSurface = declarations.`protected`.toDouble
+        val packageSurface = declarations.packageRestricted.toDouble
+        val privateSurface = declarations.privateMembers.toDouble
+        val publicMutableSurface = declarations.publicMutable.toDouble
+        val protectedMutableSurface = declarations.protectedMutable.toDouble
+        val packageMutableSurface = declarations.packageRestrictedMutable.toDouble
+        val privateMutableSurface = declarations.privateMutable.toDouble
+        val totalDeclaredSurface = publicSurface + protectedSurface + packageSurface + privateSurface
         SurfaceRow(
           node = id,
           fanIn = fi,
@@ -123,11 +158,22 @@ object MetricsCalculator:
           ports = p,
           mutPorts = mp,
           exposure = p + mp * 3,
-          utilization = if fi > 0 && p > 0 then Some(fi / p) else None,
-          cycleId = cycleIdByNode.get(id)
+          dependentsPerPublicPort = if fi > 0 && p > 0 then Some(fi / p) else None,
+          cycleId = cycleIdByNode.get(id),
+          publicSurface = publicSurface,
+          protectedSurface = protectedSurface,
+          packageSurface = packageSurface,
+          privateSurface = privateSurface,
+          publicMutableSurface = publicMutableSurface,
+          protectedMutableSurface = protectedMutableSurface,
+          packageMutableSurface = packageMutableSurface,
+          privateMutableSurface = privateMutableSurface,
+          totalDeclaredSurface = totalDeclaredSurface,
+          encapsulationRatio = if totalDeclaredSurface > 0 then Some(publicSurface / totalDeclaredSurface) else None,
+          publicMutableRatio = if publicSurface > 0 then Some(publicMutableSurface / publicSurface) else None
         )
       }
-      .sortBy(r => (if r.utilization.isEmpty then 1 else 0, r.utilization.getOrElse(0.0), r.node))
+      .sortBy(r => (if r.dependentsPerPublicPort.isEmpty then 1 else 0, r.dependentsPerPublicPort.getOrElse(0.0), r.node))
 
     val avgFanIn = if sg.nodes.isEmpty then 0.0 else sg.edges.size.toDouble / sg.nodes.size
     val avgFanOut = avgFanIn // sum(fanIn) == sum(fanOut) == edges.size
@@ -144,7 +190,14 @@ object MetricsCalculator:
           // Keep the report index complete. ReportTable applies the human-facing
           // top-10 bound at the presentation edge (or shows all with --all).
 
-    val findings = buildFindings(cycles, propagators, surface)
+    val publicSymbols = sg.symbolReferences.map { refs =>
+      sg.publicSymbols.keys.toSeq.sorted.map { symbol =>
+        val matching = refs.filter(_.targetSymbol == symbol)
+        PublicSymbolRow(symbol, matching.map(_.sourceFile).distinct.size, matching.size, "semanticdbComplete")
+      }
+    }
+
+    val findings = buildFindings(cycles, propagators, surface, publicSymbols)
 
     MetricsReport(
       scope = scope match
@@ -162,7 +215,8 @@ object MetricsCalculator:
       propagators = propagators,
       surface = surface,
       orphans = orphans,
-      findings = findings
+      findings = findings,
+      publicSymbols = publicSymbols
     )
 
   private case class RankedFinding(finding: Finding, score: Double)
@@ -173,7 +227,8 @@ object MetricsCalculator:
   private def buildFindings(
       cycles: Seq[Cycle],
       propagators: Seq[PropagatorRow],
-      surface: Seq[SurfaceRow]
+      surface: Seq[SurfaceRow],
+      publicSymbols: Option[Seq[PublicSymbolRow]]
   ): Seq[Finding] =
     val cycleFindings = cycles.map { cycle =>
       RankedFinding(
@@ -218,22 +273,36 @@ object MetricsCalculator:
       )
     }
     val structuralUseFindings = surface.flatMap { row =>
-      row.utilization.filter(_ < 1.0).map { utilization =>
+      row.dependentsPerPublicPort.filter(_ < 1.0).map { dependentsPerPublicPort =>
         RankedFinding(
           Finding(
             id = s"structuralUse:${row.node}",
             kind = "structuralUse",
             severity = "low",
             subject = row.node,
-            evidence = s"fanIn=${row.fanIn}, ports=${formatNumber(row.ports)}, utilization=${formatNumber(utilization)}",
+            evidence = s"fanIn=${row.fanIn}, ports=${formatNumber(row.ports)}, dependentsPerPublicPort=${formatNumber(dependentsPerPublicPort)}",
             confidence = "structuralProxy",
             nextAction = s"inspect-node ${row.node}"
           ),
-          1.0 - utilization
+          1.0 - dependentsPerPublicPort
         )
       }
     }
-    (cycleFindings ++ propagatorFindings ++ mutableSurfaceFindings ++ structuralUseFindings)
+    val unusedPublicSymbolFindings = publicSymbols.toSeq.flatten.filter(_.referenceCount == 0).map { row =>
+      RankedFinding(
+        Finding(
+          id = s"unusedPublicSymbol:${row.symbol}",
+          kind = "unusedPublicSymbol",
+          severity = "low",
+          subject = row.symbol,
+          evidence = "consumerCount=0, referenceCount=0",
+          confidence = row.usageConfidence,
+          nextAction = s"inspect-node ${row.symbol}"
+        ),
+        1.0
+      )
+    }
+    (cycleFindings ++ propagatorFindings ++ mutableSurfaceFindings ++ structuralUseFindings ++ unusedPublicSymbolFindings)
       .sortBy(r => (severityRank(r.finding.severity), -r.score, r.finding.id))
       .map(_.finding)
 
