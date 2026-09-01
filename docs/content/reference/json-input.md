@@ -9,9 +9,9 @@ description: the standard JSON graph format produced by codeps export and consum
 The standard JSON export format is the contract between the two codeps steps: `codeps export`
 *produces* it, and `codeps report-packages` or `codeps report-files` *consumes* it. It is a self-contained dependency
 graph produced by `codeps export` as `package` and `file` nodes only — the exporters
-collapse type/member symbols into their file (or root package for file-less jdeps
-types), with `ports`/`mutPorts` summed and edges aggregated at file level with
-summed weights. `type`/`member` kinds are still *accepted* on input for backward
+    collapse type/member symbols into their file (or root package for file-less jdeps
+    types), with `ports`/`mutPorts` and `declarationSurface` summed and edges aggregated at file level with
+    summed weights. `type`/`member` kinds are still *accepted* on input for backward
 compatibility with old graphs (the analyzer aggregates them), but exporters never
 emit them.
 
@@ -19,7 +19,9 @@ emit them.
 {
   "nodes": [
     {"id": "com.example.a", "kind": "package"},
-    {"id": "src/com/example/a/Foo.scala", "kind": "file", "parentId": "com.example.a", "ports": 3, "mutPorts": 1}
+    {"id": "src/com/example/a/Foo.scala", "kind": "file", "parentId": "com.example.a", "ports": 3, "mutPorts": 1,
+     "declarationSurface": {"public": 1, "protected": 0, "packageRestricted": 0, "privateMembers": 2,
+       "publicMutable": 0, "protectedMutable": 0, "packageRestrictedMutable": 0, "privateMutable": 1}}
   ],
   "edges": [
     {"source": "src/com/example/a/Foo.scala", "target": "src/com/example/b/Bar.scala", "weight": 5}
@@ -45,6 +47,13 @@ Node fields:
 | `isExposed` | boolean (optional) | part of the externally visible surface; resolved by the extraction backend (SemanticDB export), default `true` for graphs without exposure info |
 | `ports` | number (optional) | the node's own weighted exposure contribution (types 3, defs/vals 1, sealed-hierarchy members 0.5, givens/implicits +1); the report sums these per scope node, default `0` |
 | `mutPorts` | number (optional) | the node's own mutable-state exposure contribution (`var`s, mutable-collection-typed vals/defs), default `0` |
+| `declarationSurface` | object (optional) | raw declaration counts by visibility and mutable subset; absent fields default to `0` |
+
+`declarationSurface` fields are `public`, `protected`, `packageRestricted` (`private[pkg]`),
+`privateMembers` (class-private declarations), and their mutable counterparts
+`publicMutable`, `protectedMutable`, `packageRestrictedMutable`, and `privateMutable`.
+Unlike weighted `ports`, these are declaration counts and preserve private declarations even
+when a parser does not emit them as dependency nodes.
 
 The exposure weight rules are Scala-specific and live in the SemanticDB exporter — see the
 [Metrics report](/reference/report.html) for the definitions. A jdeps graph carries no access

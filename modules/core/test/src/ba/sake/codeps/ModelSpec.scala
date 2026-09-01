@@ -74,3 +74,19 @@ class ModelSpec extends munit.FunSuite:
     val n = """{"id":"p.a","kind":"package"}""".parseJson[Node]
     assertEquals(n, Node("p.a", NodeKind.`package`))
   }
+
+  test("declaration surface fields round-trip and default when missing") {
+    val surface = DeclarationSurface(
+      public = 3,
+      `protected` = 2,
+      packageRestricted = 1,
+      privateMembers = 4,
+      publicMutable = 1,
+      protectedMutable = 1,
+      packageRestrictedMutable = 0,
+      privateMutable = 2
+    )
+    val node = Node("p.a.Foo", NodeKind.`type`, declarationSurface = surface)
+    assertEquals(node.toJson(spaces = 0, sort = false).parseJson[Node], node)
+    assertEquals("""{"id":"p.a","kind":"package"}""".parseJson[Node].declarationSurface, DeclarationSurface())
+  }

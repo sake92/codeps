@@ -32,9 +32,15 @@ object SemanticDbParser:
     // contains one of these belong to a sealed hierarchy
     val sealedOwners = doc.symbols.iterator.filter(_.isSealed).map(_.symbol).toSet
     var nodes = Set.empty[Node]
-    nodes += Node(file, NodeKind.file)
+    var fileSurface = ba.sake.codeps.model.DeclarationSurface()
     for s <- doc.symbols do
-      symbolNode(s, file, sealedOwners).foreach(nodes += _)
+      val node = symbolNode(s, file, sealedOwners)
+      node.foreach(nodes += _)
+      // Class-private declarations are intentionally not dependency nodes, but
+      // they still belong to the file's declaration surface. Visible symbols
+      // carry their own counter and are summed into the file by Aggregator.
+      if node.isEmpty then declarationSurfaceOf(s).foreach(surface => fileSurface = fileSurface + surface)
+    nodes += Node(file, NodeKind.file, declarationSurface = fileSurface)
     // package declarations (e.g. "com/example/util/") are emitted as definition occurrences, not symbols
     for occ <- doc.occurrences do
       if occ.role.isDefinition && occ.symbol.endsWith("/") then
@@ -61,11 +67,36 @@ object SemanticDbParser:
 
   private def typeNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Node =
     Node(typeId(s.symbol), NodeKind.`type`, parentOf(s.symbol), Some(file),
-      isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s))
+      isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s),
+      declarationSurface = declarationSurfaceOf(s).getOrElse(ba.sake.codeps.model.DeclarationSurface()))
 
   private def memberNode(s: SymbolInformation, file: String, sealedOwners: Set[String]): Node =
     Node(memberId(s.symbol), NodeKind.member, parentOf(s.symbol), Some(file),
-      isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s))
+      isExposed = isExposed(s), ports = portsOf(s, sealedOwners), mutPorts = mutPortsOf(s),
+      declarationSurface = declarationSurfaceOf(s).getOrElse(ba.sake.codeps.model.DeclarationSurface()))
+
+  /** Counts source declarations independently of the weighted public-port
+    * calculation. Setters are compiler accessors, not declarations; locals,
+    * constructors and unsupported SemanticDB kinds are not surface entries. */
+  private def declarationSurfaceOf(s: SymbolInformation): Option[ba.sake.codeps.model.DeclarationSurface] =
+    if isConstructor(s.symbol) || s.kind.isLocal || s.displayName.endsWith("_=") then None
+    else if isTypeKind(s.kind) || isMemberKind(s.kind) then
+      val mutable = isMutableDeclaration(s)
+      val one = if mutable then 1 else 0
+      s.access match
+        case Access.Empty | _: PublicAccess => Some(ba.sake.codeps.model.DeclarationSurface(public = 1, publicMutable = one))
+        case _: ProtectedAccess             => Some(ba.sake.codeps.model.DeclarationSurface(`protected` = 1, protectedMutable = one))
+        case _: PrivateWithinAccess        => Some(ba.sake.codeps.model.DeclarationSurface(packageRestricted = 1, packageRestrictedMutable = one))
+        case _: PrivateAccess | _: PrivateThisAccess =>
+          Some(ba.sake.codeps.model.DeclarationSurface(privateMembers = 1, privateMutable = one))
+        case _ => Some(ba.sake.codeps.model.DeclarationSurface(privateMembers = 1, privateMutable = one))
+    else None
+
+  /** Mutable declaration rules intentionally match `mutPortsOf`, but without
+    * requiring public exposure: private mutable state is still useful evidence
+    * for encapsulation metrics. */
+  private def isMutableDeclaration(s: SymbolInformation): Boolean =
+    !s.isGiven && !s.isImplicit && (s.isVar || isMutableCollectionType(s.signature))
 
   // ---------- exposure (the Scala adapter's weight rules) ----------
 

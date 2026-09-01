@@ -9,7 +9,8 @@ class AggregatorSpec extends munit.FunSuite:
       Node("com.a", NodeKind.`package`),
       Node("com.b", NodeKind.`package`),
       Node("com.a.A", NodeKind.`type`, Some("com.a"), Some("src/A.scala"), ports = 3.0),
-      Node("com.a.A#m", NodeKind.member, Some("com.a.A"), Some("src/A.scala"), ports = 1.0, mutPorts = 1.0),
+      Node("com.a.A#m", NodeKind.member, Some("com.a.A"), Some("src/A.scala"), ports = 1.0, mutPorts = 1.0,
+        declarationSurface = DeclarationSurface(public = 1, publicMutable = 1)),
       Node("com.b.B", NodeKind.`type`, Some("com.b"), Some("src/B.scala"), ports = 0.5),
       Node("src/A.scala", NodeKind.file),
       Node("src/B.scala", NodeKind.file)
@@ -25,7 +26,8 @@ class AggregatorSpec extends munit.FunSuite:
     val agg = Aggregator.fileLevel(granular)
     assertEquals(agg.nodes.map(_.kind).toSet, Set(NodeKind.`package`, NodeKind.file))
     val a = agg.nodes.find(_.id == "src/A.scala").get
-    assertEquals(a, Node("src/A.scala", NodeKind.file, Some("com.a"), ports = 4.0, mutPorts = 1.0))
+    assertEquals(a, Node("src/A.scala", NodeKind.file, Some("com.a"), ports = 4.0, mutPorts = 1.0,
+      declarationSurface = DeclarationSurface(public = 1, publicMutable = 1)))
     assertEquals(agg.nodes.find(_.id == "src/B.scala").get.ports, 0.5)
     assertEquals(agg.edges, Set(Edge("src/A.scala", "src/B.scala"), Edge("src/B.scala", "src/A.scala")))
   }

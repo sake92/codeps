@@ -27,6 +27,9 @@ object Aggregator:
     val mutPorts = graph.nodes.toSeq
       .flatMap(n => aggId(n).map(id => id -> n.mutPorts))
       .groupMapReduce(_._1)(_._2)(_ + _)
+    val declarationSurface = graph.nodes.toSeq
+      .flatMap(n => aggId(n).map(id => id -> n.declarationSurface))
+      .groupMapReduce(_._1)(_._2)(_ + _)
 
     val filePackages = graph.nodes.toSeq
       .flatMap { n =>
@@ -54,11 +57,16 @@ object Aggregator:
         f.copy(
           parentId = filePackages.get(f.id),
           ports = ports.getOrElse(f.id, 0.0),
-          mutPorts = mutPorts.getOrElse(f.id, 0.0)
+          mutPorts = mutPorts.getOrElse(f.id, 0.0),
+          declarationSurface = declarationSurface.getOrElse(f.id, DeclarationSurface())
         )
     }
     val pkgNodes = graph.nodes.collect {
       case p if p.kind == NodeKind.`package` =>
-        p.copy(ports = ports.getOrElse(p.id, 0.0), mutPorts = mutPorts.getOrElse(p.id, 0.0))
+        p.copy(
+          ports = ports.getOrElse(p.id, 0.0),
+          mutPorts = mutPorts.getOrElse(p.id, 0.0),
+          declarationSurface = declarationSurface.getOrElse(p.id, DeclarationSurface())
+        )
     }
     DepsGraph(fileNodes ++ pkgNodes, edges)
