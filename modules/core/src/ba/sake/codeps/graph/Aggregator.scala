@@ -21,6 +21,10 @@ object Aggregator:
       case NodeKind.`package` | NodeKind.file => Some(n.id)
       case _                                   => n.file.orElse(n.rootPackageId(nodesById))
 
+    // Declaration metadata stores source-file ids. Resolve those ids once so
+    // the public-symbol projection does not scan every node for every symbol.
+    val aggregateIdsByNodeId = graph.nodes.iterator.map(n => n.id -> aggId(n)).toMap
+
     val ports = graph.nodes.toSeq
       .flatMap(n => aggId(n).map(id => id -> n.ports))
       .groupMapReduce(_._1)(_._2)(_ + _)
@@ -82,7 +86,7 @@ object Aggregator:
     )
     val declaredPublicSymbols =
       if graph.symbolReferences.nonEmpty then Some(sourceDeclarations.flatMap { case (symbol, file) =>
-        aggId(graph.nodes.find(_.id == file).getOrElse(Node(file, NodeKind.file))).map(id => symbol -> id)
+        aggregateIdsByNodeId.getOrElse(file, Some(file)).map(id => symbol -> id)
       }.filter((_, file) => fileIds.contains(file)))
       else graph.declaredPublicSymbols
     DepsGraph(fileNodes ++ pkgNodes, edges, graph.symbolReferences, declaredPublicSymbols)

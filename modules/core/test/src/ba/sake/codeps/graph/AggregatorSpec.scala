@@ -63,3 +63,23 @@ class AggregatorSpec extends munit.FunSuite:
     assertEquals(agg.symbolReferences, graph.symbolReferences)
     assertEquals(agg.declaredPublicSymbols, Some(Map("com.a.A#m" -> "src/A.scala")))
   }
+
+  test("aggregates many public declarations without changing their source-file targets") {
+    val declarationCount = 2_000
+    val declarations = (1 to declarationCount).map { i =>
+      val symbol = s"com.a.Api#$i"
+      symbol -> "src/A.scala"
+    }.toMap
+    val graph = granular.copy(
+      nodes = granular.nodes ++ (1 to declarationCount).map { i =>
+        Node(s"com.unrelated.Unused$i", NodeKind.`type`, Some("com.b"), Some("src/B.scala"))
+      },
+      symbolReferences = Some(Seq(SymbolReference("src/B.scala", "com.a.A#m"))),
+      declaredPublicSymbols = Some(declarations + ("com.a.A#m" -> "src/A.scala"))
+    )
+
+    val agg = Aggregator.fileLevel(graph)
+
+    assertEquals(agg.declaredPublicSymbols.map(_.size), Some(declarationCount + 1))
+    assert(agg.declaredPublicSymbols.toSeq.flatMap(_.values).forall(_ == "src/A.scala"))
+  }
