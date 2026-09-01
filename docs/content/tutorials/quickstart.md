@@ -67,7 +67,7 @@ For a file-level view of one package, use `report-files` with an include pattern
 codeps report-files --include com.example.modules.module1 --input deps.json
 ```
 
-The report contains cycles with cut solutions, exposed-surface metrics
+The report contains SCC facts (and optional budgeted cut analysis), exposed-surface metrics
 (`ports`/`mutPorts`/`exposure`/`utilization`) and orphans — see the
 [Metrics report](/reference/report.html) for the full field reference. It renders
 as plain aligned text by default; `--format json` emits machine-readable JSON.

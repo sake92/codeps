@@ -22,7 +22,7 @@ It works on two levels:
 
 - **`report-packages`** — the whole package graph: the level you use when
   **splitting modules**. Find the cycles that keep modules welded together,
-  with cut solutions, plus per-package exposed surface and orphans.
+  with optional budgeted cut analysis, plus per-package exposed surface and orphans.
 - **`report-files`** — the file graph of the packages selected with `--include`: the
   granularity that matters when you **optimize compile times** (zinc and other
   incremental compilers recompile by file).
@@ -48,11 +48,11 @@ Summary
   nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
 
 Cycles (size desc, extFanIn desc)
-id                               size  extFanIn  minCutsEstimate
-scc:com.example.modules.module1  2     1         1
+id                               size  extFanIn  greedyCutEstimate  status
+scc:com.example.modules.module1  2     1         —                  notRequested
 
   Cycle scc:com.example.modules.module1
-    solution 1: com.example.modules.module1 -> com.example.modules.module2 (w=1)
+    cut analysis: notRequested (pass --analyze-cuts)
 
 Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
 node                         fanIn  fanOut  score
@@ -71,7 +71,7 @@ Orphans
 ## Features
 
 - **Two input formats** — [SemanticDB](/howtos/semdb.html) (detailed, from Scala compiler output) and [jdeps](/howtos/jdeps.html) (JDK-only, no extra tooling)
-- **Cycles with cut solutions** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`, up to 3 complete ways to break it (each a set of edges whose removal together dissolves the cycle), and a greedy `minCutsEstimate`; table output samples up to 8 cuts per solution while JSON preserves every canonical id and cut
+- **Cycles with explicit cut analysis** — every multi-member strongly connected component is reported as a closed cycle path with `extFanIn`; default reports remain fast with `cutAnalysis.status=notRequested`, while `--analyze-cuts` adds budgeted greedy estimates and up to 3 complete ways to break the cycle
 - **Change propagators** — the nodes whose changes propagate most: a normalized `(fanIn/avgFanIn + fanOut/avgFanOut)/2` score, top 10
 - **Exposed-surface metrics** — per-node `ports` / `mutPorts` / `exposure` / `utilization` (sealed/given/var rules resolved by the SemanticDB exporter)
 - **Orphans** — dead-code-removal candidates

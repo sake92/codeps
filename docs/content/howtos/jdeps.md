@@ -53,7 +53,7 @@ or in one pipe:
 codeps export --from jdeps --input jdeps.txt | codeps report-packages --input -
 ```
 
-Cycles come with cut solutions, and the surface lists fanIn/fanOut
+Cycles can include optional budgeted cut analysis, and the surface lists fanIn/fanOut
 and orphans — see the [Metrics report](/reference/report.html).
 
 ## Filtering JDK noise

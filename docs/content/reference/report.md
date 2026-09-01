@@ -14,9 +14,10 @@ and emits a single flat JSON document: per-scope metrics over the graph's **pack
 codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - > report.json
 ```
 
-Every value is computed fresh from the graph's node/edge list on every run — the report is a pure
-function of the input, which is what makes diffing reports over time meaningful. Set the
-`SOURCE_DATE_EPOCH` env var (epoch seconds) to pin `generatedAt` for deterministic CI diffs.
+Core metrics are computed fresh from the graph's node/edge list on every run. The default report
+does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit
+and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoch seconds) to pin
+`generatedAt` for deterministic CI diffs.
 
 ## Structure
 
@@ -39,10 +40,12 @@ function of the input, which is what makes diffing reports over time meaningful.
       "witnessCycle": ["cache", "scheduler", "cache"],
       "size": 2,
       "extFanIn": 5,
-      "minCutsEstimate": 1,
-      "solutions": [
-        { "cuts": [{ "edge": ["scheduler", "cache"], "weight": 4 }] }
-      ]
+      "cutAnalysis": {
+        "status": "notRequested",
+        "greedyCutEstimate": null,
+        "solutions": [],
+        "examinedCandidates": 0
+      }
     }
   ],
   "propagators": [
@@ -58,7 +61,7 @@ function of the input, which is what makes diffing reports over time meaningful.
       "kind": "cycle",
       "severity": "high",
       "subject": "scc:cache",
-      "evidence": "size=2, extFanIn=5, minCutsEstimate=1",
+      "evidence": "size=2, extFanIn=5, greedyCutEstimate=none",
       "confidence": "high",
       "nextAction": "inspect-cycle scc:cache"
     }
@@ -103,24 +106,26 @@ components are just acyclic nodes and are never reported.
 - `extFanIn` — edges whose target is in the SCC and whose source is outside: how much outside
   stuff is exposed to the cycle's blast radius. Cycles are ranked by `size` first, `extFanIn`
   as tiebreaker.
-- `solutions` — up to 3 **complete** ways to break the cycle, simplest first. Each solution is
-  a list of `cuts` (`{edge, weight}`); removing ALL of them together dissolves the cycle (no
-  multi-member component remains among its members). A solution can be 1 edge or several — dense
-  interlocking cycles often need 2-3 cuts together, and a cycle with no single-edge fix lists only
-  multi-cut solutions. Ranked by: fewest cuts, then cheapest (lowest total weight), then
-  lexicographic. Sets containing a smaller working solution are never listed. Search bounds: set
-  size ≤ `minCutsEstimate` (capped at 4); SCCs with more than 60 internal edges fall back to the
-  greedy plan as a single solution. An empty list means nothing was found within those bounds —
-  it is never an error.
+- `cutAnalysis` — the explicit result of optional cut investigation. Its `status` is
+  `notRequested` for the default fast report, `completed` when the configured search finished,
+  or `budgetExceeded` when its time or candidate limit was reached. `budgetExceeded` is still a
+  successful report result.
+  - `greedyCutEstimate` — nullable greedy estimate of the total cuts needed to dissolve the
+    cycle. It is present only when the greedy pass completed before the budget was exhausted; it
+    is a heuristic, not a guaranteed-minimum feedback-edge set.
+  - `solutions` — up to 3 **complete** ways to break the cycle, simplest first. Each solution is
+    a list of `cuts` (`{edge, weight}`); removing ALL of them together dissolves the cycle (no
+    multi-member component remains among its members). A solution can be 1 edge or several.
+    Results are ranked by fewest cuts, cheapest total weight, then lexicographic order. Sets
+    containing a smaller working solution are skipped. Partial candidates are never serialized.
+  - `examinedCandidates` — number of candidate simulations started before the budget check
+    stopped the search.
+- Cut analysis is opt-in with `--analyze-cuts`; `--cut-time-limit` and
+  `--cut-candidate-limit` bound each SCC's investigation. The default report never invokes
+  feedback-edge search, so its cycle `cutAnalysis` has no estimate or solutions.
 - Table output is intentionally shorter than this JSON schema: it displays at most 8 cuts from
-  each solution and may replace a dense knot's cut list with structural guidance. A dense knot
-  with solutions directs readers to the full cut list in JSON; one with an empty `solutions` list
-  reports that no complete solution was found within the search bounds and does not promise a cut
-  list. `--format json` retains every solution, complete canonical ids, and every cut.
-- `minCutsEstimate` — a greedy estimate of the total cuts needed to dissolve the cycle: repeatedly
-  apply the best `resolved`-or-largest-reduction candidate, recompute against the largest remaining
-  multi-member component of the cycle, until no such component remains. A heuristic, not a
-  guaranteed-minimum feedback-edge set.
+  each complete solution and may replace a dense knot's cut list with structural guidance.
+  `--format json` retains every complete solution, canonical id, status, and budget count.
 
 ## Change propagators
 

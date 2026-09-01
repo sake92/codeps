@@ -2,11 +2,13 @@ package ba.sake.codeps.cli
 
 import ba.sake.codeps.graph.{Aggregator, Collapser, TestFilter}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
-import ba.sake.codeps.report.{MetricsCalculator, ReportTable}
+import ba.sake.codeps.report.{CutAnalysisBudget, MetricsCalculator, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
 import mainargs.{arg, main, ParserForMethods, TokensReader}
+
+import scala.concurrent.duration.{FiniteDuration, NANOSECONDS}
 
 object Main:
 
@@ -113,9 +115,15 @@ object Main:
       skipTests: Boolean,
       testPattern: Seq[String],
       showAll: Boolean,
+      analyzeCuts: Boolean,
+      cutTimeLimit: Option[String],
+      cutCandidateLimit: Option[Int],
       out: Option[String],
       input: String
   )
+
+  private val defaultCutTimeLimit = FiniteDuration(1, "second")
+  private val defaultCutCandidateLimit = 10000
 
   @main
   def reportPackages(
@@ -126,10 +134,13 @@ object Main:
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(name = "all") all: mainargs.Flag,
+      @arg(name = "analyze-cuts") analyzeCuts: mainargs.Flag,
+      @arg(name = "cut-time-limit") cutTimeLimit: Option[String],
+      @arg(name = "cut-candidate-limit") cutCandidateLimit: Option[Int],
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Packages, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, all.value, out, input))
+    skipTests.value, testPattern, all.value, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
   @main
   def reportFiles(
@@ -140,35 +151,84 @@ object Main:
       @arg(name = "skip-tests") skipTests: mainargs.Flag,
       @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
       @arg(name = "all") all: mainargs.Flag,
+      @arg(name = "analyze-cuts") analyzeCuts: mainargs.Flag,
+      @arg(name = "cut-time-limit") cutTimeLimit: Option[String],
+      @arg(name = "cut-candidate-limit") cutCandidateLimit: Option[Int],
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, all.value, out, input))
+    skipTests.value, testPattern, all.value, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
   private def runReport(scope: MetricsCalculator.Scope, options: ReportOptions): Int =
-    testPatternsOrError(options.skipTests, options.testPattern) match
+    parseCutBudget(options.analyzeCuts, options.cutTimeLimit, options.cutCandidateLimit) match
       case Left(err) =>
         System.err.println(s"error: $err")
         1
-      case Right(patterns) =>
-        readGraphInput(options.input) match
+      case Right(cutBudget) =>
+        testPatternsOrError(options.skipTests, options.testPattern) match
           case Left(err) =>
             System.err.println(s"error: $err")
             1
-          case Right(graph) =>
-            parseRules(options.collapse).flatMap { rules =>
-              MetricsCalculator.run(graph, scope, options.include, options.exclude, rules, patterns).map { metricsReport =>
-                options.format match
-                  case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
-                  case ReportFormat.Table => ReportTable.render(metricsReport, showAll = options.showAll)
-              }
-            } match
+          case Right(patterns) =>
+            readGraphInput(options.input) match
               case Left(err) =>
                 System.err.println(s"error: $err")
                 1
-              case Right(content) =>
-                writeOutput(content, options.out)
-                0
+              case Right(graph) =>
+                parseRules(options.collapse).flatMap { rules =>
+                  MetricsCalculator.run(
+                    graph,
+                    scope,
+                    options.include,
+                    options.exclude,
+                    rules,
+                    patterns,
+                    cutBudget
+                  ).map { metricsReport =>
+                    options.format match
+                      case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
+                      case ReportFormat.Table => ReportTable.render(metricsReport, showAll = options.showAll)
+                  }
+                } match
+                  case Left(err) =>
+                    System.err.println(s"error: $err")
+                    1
+                  case Right(content) =>
+                    writeOutput(content, options.out)
+                    0
+
+  private def parseCutBudget(
+      analyzeCuts: Boolean,
+      rawTimeLimit: Option[String],
+      rawCandidateLimit: Option[Int]
+  ): Either[String, Option[CutAnalysisBudget]] =
+    if !analyzeCuts then
+      if rawTimeLimit.nonEmpty || rawCandidateLimit.nonEmpty then
+        Left("--cut-time-limit and --cut-candidate-limit require --analyze-cuts")
+      else Right(None)
+    else
+      for
+        timeLimit <- rawTimeLimit.map(parseDuration).getOrElse(Right(defaultCutTimeLimit))
+        candidateLimit <- rawCandidateLimit match
+          case None    => Right(defaultCutCandidateLimit)
+          case Some(n) => if n > 0 then Right(n) else Left("--cut-candidate-limit must be positive")
+      yield Some(CutAnalysisBudget(timeLimit, candidateLimit))
+
+  private def parseDuration(raw: String): Either[String, FiniteDuration] =
+    val pattern = "^([0-9]+(?:\\.[0-9]+)?)(ms|s|m)$".r
+    raw match
+      case pattern(amount, unit) =>
+        val nanos =
+          try
+            val factor = unit match
+              case "ms" => BigDecimal(1000000)
+              case "s"  => BigDecimal(1000000000)
+              case "m"  => BigDecimal(60000000000L)
+            (BigDecimal(amount) * factor).toLongExact
+          catch case _: ArithmeticException => -1L
+        if nanos > 0 then Right(FiniteDuration(nanos, NANOSECONDS))
+        else Left(s"--cut-time-limit must be a positive duration (received: $raw)")
+      case _ => Left(s"invalid --cut-time-limit: $raw (expected a positive duration such as 1s or 250ms)")
 
   private def readGraphInput(input: String): Either[String, DepsGraph] =
     val text =

@@ -156,7 +156,8 @@ class MainSpec extends munit.FunSuite:
     val content = os.read(outJson)
     assert(content.contains("\"scope\": \"packages\""))
     assert(content.contains("\"id\": \"scc:com.example.modules.module1\""))
-    assert(content.contains("\"solutions\""))
+    assert(content.contains("\"status\": \"notRequested\""))
+    assert(content.contains("\"greedyCutEstimate\": null"))
     assert(content.contains("\"mutPorts\": 0"))
     assert(content.contains("\"nodesInCycles\": 2"))
     // table format renders the same cycle with camelCase headers
@@ -164,10 +165,43 @@ class MainSpec extends munit.FunSuite:
     assertEquals(tableRes.exitCode, 0)
     assert(tableRes.out.text().contains("scc:com.example.modules.module1"))
     assert(tableRes.out.text().contains("Cycle scc:com.example.modules.module1"))
-    assert(tableRes.out.text().contains("solution 1:"))
-    assert(tableRes.out.text().contains("minCutsEstimate"))
+    assert(tableRes.out.text().contains("cut analysis: notRequested"))
+    assert(tableRes.out.text().contains("greedyCutEstimate"))
+    assert(!tableRes.out.text().contains("solution 1:"))
     assert(tableRes.out.text().contains("mutPorts"))
     assert(!tableRes.out.text().contains("mut_ports"))
+
+    val analyzedRes = runCli("report-packages", "--format", "json", "--analyze-cuts", "--cut-time-limit", "1s", "--input", cyclic.toString)
+    assertEquals(analyzedRes.exitCode, 0)
+    assert(analyzedRes.out.text().contains("\"status\": \"completed\""))
+    assert(analyzedRes.out.text().contains("\"greedyCutEstimate\": 1"))
+  }
+
+  test("cut analysis candidate budget is a successful bounded report") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val res = runCli("report-packages", "--format", "json", "--analyze-cuts", "--cut-candidate-limit", "1", "--input", cyclic.toString)
+    assertEquals(res.exitCode, 0)
+    assert(res.out.text().contains("\"status\": \"budgetExceeded\""))
+    assert(res.out.text().contains("\"examinedCandidates\": 1"))
+  }
+
+  test("cut analysis limits validate and require explicit analysis") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val zeroCandidates = runCli("report-packages", "--cut-candidate-limit", "0", "--input", cyclic.toString)
+    assertEquals(zeroCandidates.exitCode, 1)
+    assert(zeroCandidates.err.text().contains("require --analyze-cuts"))
+
+    val zeroAnalyzed = runCli("report-packages", "--analyze-cuts", "--cut-candidate-limit", "0", "--input", cyclic.toString)
+    assertEquals(zeroAnalyzed.exitCode, 1)
+    assert(zeroAnalyzed.err.text().contains("must be positive"))
+
+    val negativeAnalyzed = runCli("report-packages", "--analyze-cuts", "--cut-candidate-limit", "-1", "--input", cyclic.toString)
+    assertEquals(negativeAnalyzed.exitCode, 1)
+    assert(negativeAnalyzed.err.text().contains("must be positive"))
+
+    val badDuration = runCli("report-packages", "--analyze-cuts", "--cut-time-limit", "0s", "--input", cyclic.toString)
+    assertEquals(badDuration.exitCode, 1)
+    assert(badDuration.err.text().contains("must be a positive duration"))
   }
 
   test("report-packages --skip-tests excludes test nodes") {

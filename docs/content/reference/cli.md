@@ -12,7 +12,7 @@ that form a two-step pipeline:
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
    emits the [standard JSON export format](/reference/json-input.html). No analysis.
 2. [`report-packages`](#report-packages) and [`report-files`](#report-files) — the *analyzers*: consume that JSON (a file or stdin) and emit the
-   flat [metrics report](/reference/report.html): cycles with cut solutions, change
+   flat [metrics report](/reference/report.html): SCC facts by default, with optional budgeted cut analysis, change
    propagators, per-node exposed-surface metrics and orphans.
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
@@ -82,8 +82,8 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [-o out] -i <file|->
-codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [-o out] -i <file|->
+codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
@@ -95,23 +95,28 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 
 | Option | Description |
 |---|---|
-| `-f` / `--format` | `table` (default) or `json`. The table is a compact presentation; JSON preserves canonical ids and every cut. |
+| `-f` / `--format` | `table` (default) or `json`. The table is a compact presentation; JSON preserves canonical ids and any cut-analysis evidence. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `--all` | In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
+| `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. Without this flag, cycle `cutAnalysis.status` is `notRequested` and no candidates are simulated. |
+| `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration such as `1s` or `250ms`. Defaults to `1s` when `--analyze-cuts` is present. |
+| `--cut-candidate-limit` | Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to `10000` when `--analyze-cuts` is present. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
 | `-i` / `--input` | The JSON graph to analyze — a file, or `-` for stdin, so `export` output can be piped straight in. Required. |
 
 ```shell
 codeps report-packages --input deps.json -o report.json
+# Optional cut investigation (bounded; status is explicit in JSON/table output)
+codeps report-packages --analyze-cuts --cut-time-limit 1s --cut-candidate-limit 10000 --input deps.json -o report-with-cuts.json
 codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-files --include com.example --input - > files.json
 codeps export --from jdeps --input jdeps.txt | codeps report-packages --format table --input -
 ```
 
-The `table` format:
+The `table` format (the sample below uses `--analyze-cuts`):
 
 ```text
 scope: packages    generatedAt: 2026-08-27T10:00:00Z
@@ -126,8 +131,8 @@ cycle  high      cache    size=2... high        inspect-cycle scc:modules.cache
 Cycles (top 10 of 1)
 (size desc, extFanIn desc)
 common prefix stripped: com.example. (full ids via --format json)
-id                 size  extFanIn  minCutsEstimate
-scc:modules.cache  10    5         9
+id                 size  extFanIn  greedyCutEstimate  status
+scc:modules.cache  10    5         9                  completed
 
   Cycle scc:modules.cache
     solution 1: modules.cache.A -> modules.scheduler.B (w=1), modules.cache.B -> modules.scheduler.C (w=1), modules.cache.C -> modules.scheduler.D (w=1), modules.cache.D -> modules.scheduler.E (w=1), modules.cache.E -> modules.scheduler.F (w=1), modules.cache.F -> modules.scheduler.G (w=1), modules.cache.G -> modules.scheduler.H (w=1), modules.cache.H -> modules.scheduler.I (w=1), … 1 more (full list in JSON)
@@ -145,16 +150,15 @@ Orphans (top 10 of 1)
   DeadUtil.scala
 ```
 
-The cycle table is deliberately bounded: its rows contain only identity and count
-columns, then each cycle gets separate numbered solution blocks. A table solution
-shows at most 8 cuts; if more exist, its exact omission count points to JSON. Use
-`--format json` when another tool or a review needs every canonical node id and
-every cut. Dense knots print `dense knot: inspect propagators; full cut list via
---format json` instead of an inline cut wall, because hundreds or thousands of
-cuts are not actionable there, but only when a complete solution was found. If
-the bounded search found no complete solution, they instead print `dense knot:
-inspect propagators; no complete solution was found within the search bounds`;
-JSON then has an empty `solutions` list and no complete cut list to inspect.
+The cycle table is deliberately bounded: its rows contain identity, count, greedy
+estimate, and cut-analysis status, then each analyzed cycle gets separate numbered
+solution blocks. A table solution shows at most 8 cuts; if more exist, its exact
+omission count points to JSON. Use `--format json` when another tool or a review
+needs every canonical node id and every cut. Without `--analyze-cuts`, the table
+explicitly reports `notRequested` and no solution blocks. With analysis enabled,
+`budgetExceeded` is still a successful report and may contain only safe partial
+evidence; complete solutions are never guessed or labeled complete after a budget
+is exhausted. Dense knots print structural guidance instead of a cut wall.
 
 When the rendered ids share a prefix, table output announces it once. Package
 reports remove only complete dot-separated segments; file reports remove only
@@ -170,6 +174,8 @@ Errors (exit 1): parser errors from mainargs — `Missing argument: --input ...`
 collapse rules, unknown format values, `invalid SOURCE_DATE_EPOCH: <value>`
 — and malformed or type-invalid
 JSON is a hard error, not a warning (see [Exit codes](#exit-codes-and-errors)).
+Cut controls also reject non-positive limits and reject `--cut-time-limit` or
+`--cut-candidate-limit` unless `--analyze-cuts` is present.
 
 ## Reproducible output
 
