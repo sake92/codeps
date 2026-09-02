@@ -16,7 +16,8 @@ It works in two steps:
    dependency graph as JSON: the [codeps export format](/reference/json-input.html).
 2. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
    via `-`) and spits out the [metrics report](/reference/report.html): a plain-text table by
-   default, or JSON with `--format json` — handy for agents, other tools and CI.
+   default, GitHub-Flavored Markdown with `--format markdown`, or JSON with `--format json` —
+   handy for agents, other tools and CI.
 
 It works on two levels:
 
@@ -96,7 +97,8 @@ Public exposure ratio (top 0 of 0)
 - **Orphans** — dead-code-removal candidates
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`); skip tests with `--skip-tests`
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
-- **Two output formats** — `table` (default, plain aligned text) and `json` (machine-readable)
+- **Three output formats** — `table` (default, plain aligned text), `markdown` (deterministic GFM
+  for reviews), and `json` (machine-readable)
 
 No build-system integration needed: your local build tools already produce the inputs,
 codeps just reads them.

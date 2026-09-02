@@ -2,7 +2,7 @@ package ba.sake.codeps.cli
 
 import ba.sake.codeps.graph.{Aggregator, Collapser, TestFilter}
 import ba.sake.codeps.model.{CollapseRule, DepsGraph}
-import ba.sake.codeps.report.{CutAnalysisBudget, MetricsCalculator, ReportInspector, ReportTable}
+import ba.sake.codeps.report.{CutAnalysisBudget, MetricsCalculator, ReportInspector, ReportMarkdown, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
@@ -48,7 +48,7 @@ object Main:
         case _                 => Left("expected exactly one input format")
 
   enum ReportFormat:
-    case Json, Table
+    case Json, Table, Markdown
 
   given TokensReader.Simple[ReportFormat] with
     def shortName: String = "format"
@@ -56,7 +56,8 @@ object Main:
       strs match
         case Seq("json")  => Right(ReportFormat.Json)
         case Seq("table") => Right(ReportFormat.Table)
-        case Seq(other)   => Left(s"unknown format: $other (expected json or table)")
+        case Seq("markdown") => Right(ReportFormat.Markdown)
+        case Seq(other)   => Left(s"unknown format: $other (expected json, table, or markdown)")
         case _            => Left("expected exactly one format")
 
   enum ColorMode:
@@ -214,6 +215,7 @@ object Main:
         val content = format match
           case ReportFormat.Json  => ReportInspector.renderJson(detail)
           case ReportFormat.Table => ReportInspector.renderTable(detail)
+          case ReportFormat.Markdown => ReportInspector.renderTable(detail)
         writeOutput(content, None)
         0
 
@@ -231,6 +233,7 @@ object Main:
         val content = format match
           case ReportFormat.Json  => ReportInspector.renderJson(detail)
           case ReportFormat.Table => ReportInspector.renderTable(detail)
+          case ReportFormat.Markdown => ReportInspector.renderTable(detail)
         writeOutput(content, None)
         0
 
@@ -268,6 +271,12 @@ object Main:
                           showAll = options.showAll,
                           columns = options.columns,
                           color = shouldColor(options.format, options.color, options.out)
+                        )
+                      case ReportFormat.Markdown =>
+                        ReportMarkdown.render(
+                          metricsReport,
+                          showAll = options.showAll,
+                          columns = options.columns
                         )
                   }
                 } match
@@ -363,6 +372,7 @@ object Main:
               case Some(path) if isTextOutput(path) => false
               case Some(_)                          => false
               case None                             => System.console() != null
+      case ReportFormat.Markdown => false
 
   private def isTextOutput(path: String): Boolean =
     val lower = path.toLowerCase(Locale.ROOT)

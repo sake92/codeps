@@ -149,6 +149,37 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("Surface"))
   }
 
+  test("report-packages --format markdown emits a bounded GFM report") {
+    val out = os.pwd / "tmp" / "cli-test" / "report-packages.md"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("report-packages", "--format", "markdown", "--color", "always",
+      "-o", out.toString, "--input", exportJson("deps.json").toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.startsWith("# codeps report\n"))
+    assert(content.contains("## Health summary"))
+    assert(content.contains("## Cycles"))
+    assert(content.contains("## Surface risks"))
+    assert(content.contains("|"))
+    assert(!content.contains("\u001b["))
+  }
+
+  test("report-files --format markdown emits the selected file graph") {
+    val out = os.pwd / "tmp" / "cli-test" / "report-files.md"
+    os.makeDir.all(out / os.up)
+    os.remove.all(out)
+    val res = runCli("report-files", "--include", "com.example.util", "--format", "markdown",
+      "-o", out.toString, "--input", exportJson("deps.json").toString)
+    assertEquals(res.exitCode, 0)
+    val content = os.read(out)
+    assert(content.startsWith("# codeps report\n"))
+    assert(content.contains("- Scope: `files`"))
+    assert(content.contains("src/com/example/util/Helper.scala"))
+    assert(!content.contains("src/com/example/app/Main.scala"))
+    assert(!content.contains("\u001b["))
+  }
+
   test("report table color modes keep JSON plain and style table output only when requested") {
     val cyclic = os.pwd / "testFixtures" / "cyclic.json"
     val always = runCli("report-packages", "--color", "always", "--input", cyclic.toString)

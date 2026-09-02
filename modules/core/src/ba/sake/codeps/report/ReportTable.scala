@@ -203,9 +203,9 @@ object ReportTable:
   private def num(d: Double): String =
     if !d.isNaN && !d.isInfinite && d == math.rint(d) then d.toLong.toString else d.toString
 
-  private case class SurfaceColumn(heading: String, value: SurfaceRow => String)
+  private[report] case class SurfaceColumn(heading: String, value: SurfaceRow => String)
 
-  private def surfaceColumns(
+  private[report] def surfaceColumns(
       requested: Seq[ColumnGroup],
       disp: String => String
   ): Seq[SurfaceColumn] =

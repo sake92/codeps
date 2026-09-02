@@ -83,8 +83,8 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <json|table>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
-codeps report-files [--format <json|table>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-packages [--format <json|table|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-files [--format <json|table|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
@@ -96,14 +96,14 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 
 | Option | Description |
 |---|---|
-| `-f` / `--format` | `table` (default) or `json`. The table is a compact presentation; JSON preserves canonical ids and any cut-analysis evidence. |
-| `--color` | Table styling mode: `auto` (default) styles only interactive stdout, `always` forces ANSI styling including file output, and `never` keeps the table plain. JSON never contains ANSI styling. `auto` also disables styling for `.txt` and `.md` output paths. |
+| `-f` / `--format` | `table` (default), `markdown`, or `json`. Table and Markdown are bounded human triage views; Markdown is deterministic GFM with headings and tables. JSON preserves canonical ids and any cut-analysis evidence. |
+| `--color` | Table styling mode: `auto` (default) styles only interactive stdout, `always` forces ANSI styling including file output, and `never` keeps the table plain. JSON and Markdown never contain ANSI styling. `auto` also disables styling for `.txt` and `.md` output paths. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
-| `--all` | In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
+| `--all` | In table or Markdown format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
 | `--columns` | Repeatable table surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. `visibility` covers declaration visibility; `mutability` covers mutable ports and declarations; `coupling` covers in/out flow, exposure, and structural use. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
 | `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. `cutAnalysis.status` distinguishes `completedExact` (the bounded candidate space was exhausted), `completedHeuristic` (greedy-only, including large SCCs), and `budgetExceeded`; without this flag it is `notRequested` and no candidates are simulated. |
 | `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration such as `1s` or `250ms`. Defaults to `1s` when `--analyze-cuts` is present. |
@@ -117,6 +117,7 @@ codeps report-packages --input deps.json -o report.json
 codeps report-packages --analyze-cuts --cut-time-limit 1s --cut-candidate-limit 10000 --input deps.json -o report-with-cuts.json
 codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-files --include com.example --input - > files.json
 codeps export --from jdeps --input jdeps.txt | codeps report-packages --format table --input -
+codeps report-packages --format markdown --input deps.json -o report.md
 ```
 
 The `table` format (the sample below uses `--analyze-cuts`):
@@ -172,6 +173,11 @@ cache  0.30
 Orphans (top 10 of 1)
   DeadUtil.scala
 ```
+
+The `markdown` format uses the same bounded human-triage content as `table`, rendered as
+deterministic GitHub-Flavored Markdown with a health summary, findings, cycles, propagators,
+surface-risk tables, and explicit omitted/truncation facts. It is always plain text, including
+when `--color always` is supplied, and is suitable for saving as `.md` or publishing in a review.
 
 Surface-risk tables use short headings: `node`, `in`, `out`, `ports`, `mut`, `encap%`, and `use`
 are the default core view. Add `--columns visibility`, `--columns mutability`, or

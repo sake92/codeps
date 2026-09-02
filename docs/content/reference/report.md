@@ -1,14 +1,16 @@
 ---
 layout: reference.html
 title: Metrics report
-description: the codeps report JSON format — findings, cycles, surface, orphans
+description: the codeps report JSON format and Markdown/table triage views — findings, cycles, surface, orphans
 ---
 
 # Metrics report
 
 `codeps report-packages` or `codeps report-files` consumes the [codeps export format](/reference/json-input.html) (a file, or stdin via `-`)
 and emits a single flat JSON document: per-scope metrics over the graph's **packages**, or over the
-**files** of the packages selected with `--include`.
+**files** of the packages selected with `--include`. The `table` and `markdown` formats present the
+same report as bounded human triage; Markdown is deterministic GitHub-Flavored Markdown and never
+contains ANSI styling.
 
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - > report.json
@@ -147,13 +149,13 @@ components are just acyclic nodes and are never reported.
 - Cut analysis is opt-in with `--analyze-cuts`; `--cut-time-limit` and
   `--cut-candidate-limit` bound each SCC's investigation. The default report never invokes
   feedback-edge search, so its cycle `cutAnalysis` has no estimate or solutions.
-- Table output is intentionally shorter than this JSON schema: it displays at most 8 cuts from
+- Table and Markdown output are intentionally shorter than this JSON schema: they display at most 8 cuts from
   each complete solution and may replace a dense knot's cut list with structural guidance.
   `--format json` retains every complete solution, canonical id, status, and budget count.
 
 ## Change propagators
 
-The JSON index contains every node above the normalized propagation threshold. The default table shows
+The JSON index contains every node above the normalized propagation threshold. The default table and Markdown views show
 the top 10 and reports its shown/total count; pass `--all` to either report command for the complete
 table inventory.
 
@@ -165,17 +167,17 @@ table inventory.
 
 ## Surface
 
-One row per scope node is retained in JSON. The default table shows the top 10 rows as
+One row per scope node is retained in JSON. The default table and Markdown views show the top 10 rows as
 `Surface risks (top 10 of N)`; `--all` shows every row.
 
-The table keeps its default surface view compact with the headings `node`, `in`, `out`,
+The table and Markdown views keep their default surface view compact with the headings `node`, `in`, `out`,
 `ports`, `mut`, `encap%`, and `use`. For a wider or focused table, repeat `--columns` with one
 or more semantic groups: `visibility` selects `pub`, `prot`, `pkg`, `priv`, and `total`;
 `mutability` selects the aggregate `mut`, mutable declaration counts (`pubMut`, `protMut`,
 `pkgMut`, and `privMut`), and `mut%`; and `coupling` selects `in`, `out`, `exp`, and `use`.
 The focused groups intentionally overlap the compact core where useful, while composed groups
 render each heading once. `--columns all` selects the complete accounting view. Groups are
-rendered in canonical order, and these short aliases apply only to table headings; JSON
+rendered in canonical order, and these short aliases apply to table and Markdown headings; JSON
 continues to use its camelCase field names. With no `--columns`, the `core` group is used.
 
 - `fanIn` / `fanOut` — count of distinct edges in/out. Always derived from the edge list, never
@@ -248,9 +250,9 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
 ## Orphans
 
 - `orphans` — node ids with `fanIn == 0 AND fanOut == 0`, sorted. Step 1 of the improvement
-  loop: dead-code-removal candidates. JSON retains the complete list; the table bounds it to the
+  loop: dead-code-removal candidates. JSON retains the complete list; table and Markdown bound it to the
   top 10 unless `--all` is supplied.
 
-The table format is a bounded triage view: findings, cycles, propagators, surface risks, and orphans
-each include a shown/total label and display at most 10 rows by default. `--all` is accepted by
-`report-packages` and `report-files` only and requests every table row. JSON is always complete.
+The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks,
+and orphans each include a shown/total label and display at most 10 rows by default. `--all` is accepted
+by `report-packages` and `report-files` only and requests every human-view row. JSON is always complete.

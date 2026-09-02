@@ -77,7 +77,8 @@ codeps report-packages --input deps.json
 - `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
 - `--include`/`--exclude`/`--collapse` filter and collapse (see below)
 - `--format json` emits machine-readable JSON with complete report data; the default `table` is
-  a compact plain-text presentation that may abbreviate cut lists
+  a compact plain-text presentation that may abbreviate cut lists; `--format markdown` emits the
+  same bounded triage view as deterministic GitHub-Flavored Markdown, always without ANSI styling
 
 No intermediate file needed — pipe `export` straight into `report-packages` (the `-` tells
 it to read the JSON from stdin):
