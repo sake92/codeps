@@ -16,6 +16,8 @@ object Main:
 
   private val defaultExportPath = ".codeps/export.json"
   private val defaultHealthHistoryPath = ".codeps/health.ndjson"
+  private val defaultPackagesReportPath = ".codeps/report-packages.json"
+  private val defaultFilesReportPath = ".codeps/report-files.json"
 
   def main(args: Array[String]): Unit = sys.exit(run(args))
 
@@ -76,6 +78,18 @@ object Main:
         case Seq("never")  => Right(ColorMode.Never)
         case Seq(other)    => Left(s"unknown color mode: $other (expected auto, always, or never)")
         case _             => Left("expected exactly one color mode")
+
+  enum CachedReportScope:
+    case Packages, Files
+
+  given TokensReader.Simple[CachedReportScope] with
+    def shortName: String = "scope"
+    def read(strs: Seq[String]): Either[String, CachedReportScope] =
+      strs match
+        case Seq("packages") => Right(CachedReportScope.Packages)
+        case Seq("files")    => Right(CachedReportScope.Files)
+        case Seq(other)       => Left(s"unknown report scope: $other (expected packages or files)")
+        case _                => Left("expected exactly one report scope")
 
   given TokensReader.Simple[ReportTable.ColumnGroup] with
     def shortName: String = "columns"
@@ -216,11 +230,12 @@ object Main:
 
   @main
   def inspectCycle(
-      @arg(name = "report") report: String,
       @arg(name = "id") id: String,
+      @arg(name = "report") report: Option[String] = None,
+      @arg(name = "scope") scope: CachedReportScope = CachedReportScope.Packages,
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
   ): Int =
-    readReportInput(report).flatMap(ReportInspector.inspectCycle(_, id)) match
+    readReportInput(report.getOrElse(cachedReportPath(scope))).flatMap(ReportInspector.inspectCycle(_, id)) match
       case Left(err) =>
         System.err.println(s"error: $err")
         1
@@ -234,11 +249,12 @@ object Main:
 
   @main
   def inspectNode(
-      @arg(name = "report") report: String,
       @arg(name = "id") id: String,
+      @arg(name = "report") report: Option[String] = None,
+      @arg(name = "scope") scope: CachedReportScope = CachedReportScope.Packages,
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
   ): Int =
-    readReportInput(report).flatMap(ReportInspector.inspectNode(_, id)) match
+    readReportInput(report.getOrElse(cachedReportPath(scope))).flatMap(ReportInspector.inspectNode(_, id)) match
       case Left(err) =>
         System.err.println(s"error: $err")
         1
@@ -276,7 +292,8 @@ object Main:
                     patterns,
                     cutBudget
                   ).map { metricsReport =>
-                    options.format match
+                    val cached = metricsReport.toJson(spaces = 2, sort = true)
+                    val rendered = options.format match
                       case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
                       case ReportFormat.Table =>
                         ReportTable.render(
@@ -291,12 +308,14 @@ object Main:
                           showAll = options.showAll,
                           columns = options.columns
                         )
+                    rendered -> cached
                   }
                 } match
                   case Left(err) =>
                     System.err.println(s"error: $err")
                     1
-                  case Right(content) =>
+                  case Right((content, cached)) =>
+                    writeCachedReport(scope, cached)
                     writeOutput(content, options.out)
                     0
 
@@ -461,6 +480,16 @@ object Main:
         if !os.isFile(path) then return Left(s"report path is not a file: $path")
         os.read(path)
     ReportInspector.parse(text).left.map(err => s"failed to parse report json: $err")
+
+  private def cachedReportPath(scope: CachedReportScope): String = scope match
+    case CachedReportScope.Packages => defaultPackagesReportPath
+    case CachedReportScope.Files    => defaultFilesReportPath
+
+  private def writeCachedReport(scope: MetricsCalculator.Scope, content: String): Unit =
+    val path = scope match
+      case MetricsCalculator.Scope.Packages => defaultPackagesReportPath
+      case MetricsCalculator.Scope.Files    => defaultFilesReportPath
+    writeOutput(content, Some(path))
 
   /** `--test-pattern` requires `--skip-tests`; when given it replaces the built-in patterns. */
   private def testPatternsOrError(skipTests: Boolean, testPattern: Seq[String]): Either[String, Option[Seq[String]]] =

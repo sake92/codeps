@@ -272,7 +272,7 @@ require or perform that commit.
 ## inspect-cycle
 
 ```shell
-codeps inspect-cycle --report <v2-report.json> --id <scc-id> [--format <table|json|markdown>]
+codeps inspect-cycle --id <scc-id> [--scope <packages|files>] [--report <v2-report.json>] [--format <table|json|markdown>]
 ```
 
 Reads one schema-version-2 metrics report and prints the selected cycle without
@@ -283,6 +283,9 @@ prints the same fields in a compact readable form. `--format` defaults to `table
 `markdown` is accepted by the shared parser and currently renders the same compact
 text as `table` for detail commands.
 
+Successful `report-packages` and `report-files` runs cache their JSON reports at
+`.codeps/report-packages.json` and `.codeps/report-files.json`. Inspection defaults to the
+package cache; pass `--scope files` for the file cache, or `--report` to override either cache.
 The report path may be `-` to read JSON from stdin. Errors (exit 1) include
 `report path does not exist`, `report path is not a file`, malformed report JSON,
 `incompatible schema version`, and `unknown cycle id`.
@@ -290,7 +293,7 @@ The report path may be `-` to read JSON from stdin. Errors (exit 1) include
 ## inspect-node
 
 ```shell
-codeps inspect-node --report <v2-report.json> --id <node-id> [--format <table|json|markdown>]
+codeps inspect-node --id <node-id> [--scope <packages|files>] [--report <v2-report.json>] [--format <table|json|markdown>]
 ```
 
 Reads one schema-version-2 metrics report and prints the selected node's complete

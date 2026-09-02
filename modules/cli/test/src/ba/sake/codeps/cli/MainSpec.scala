@@ -357,6 +357,26 @@ class MainSpec extends munit.FunSuite:
     assert(analyzedRes.out.text().contains("\"greedyCutEstimate\": 1"))
   }
 
+  test("reports cache each scope and inspection uses the selected cache") {
+    val packageCache = os.pwd / ".codeps" / "report-packages.json"
+    val fileCache = os.pwd / ".codeps" / "report-files.json"
+    os.remove.all(packageCache)
+    os.remove.all(fileCache)
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+
+    val packages = runCli("report-packages", "--input", cyclic.toString)
+    assertEquals(packages.exitCode, 0)
+    assert(os.exists(packageCache))
+    val packageInspect = runCli("inspect-cycle", "--id", "scc:com.example.modules.module1")
+    assertEquals(packageInspect.exitCode, 0)
+
+    val files = runCli("report-files", "--include", "com.example.util", "--input", exportJson("cache-deps.json").toString)
+    assertEquals(files.exitCode, 0)
+    assert(os.exists(fileCache))
+    val fileInspect = runCli("inspect-node", "--scope", "files", "--id", "src/com/example/util/Helper.scala")
+    assertEquals(fileInspect.exitCode, 0)
+  }
+
   test("report-packages surface columns are repeatable, canonical, and deduplicated") {
     val cyclic = os.pwd / "testFixtures" / "cyclic.json"
     val res = runCli(
