@@ -43,7 +43,7 @@ codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps rep
 codeps export --from <semanticdb|jdeps> [--root <dir>] [-o out] --input <path>...
 ```
 
-Pure producer: parses the raw input and emits the standard JSON export graph
+Pure producer: parses the raw input and emits the codeps export graph
 (`{"nodes": [...], "edges": [...]}`) to stdout, or to the `-o` file.
 There are no include/exclude/collapse flags here — filtering and aggregation are
 the analyzer's job.
@@ -83,11 +83,11 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <json|table|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
-codeps report-files [--format <json|table|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-packages [--format <table|json|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-files [--format <table|json|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
 ```
 
-Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
+Pure analyzer: reads the codeps export graph (a file, or stdin via `-`) and runs the pipeline
 (filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the
 flat [Metrics report](/reference/report.html), always exits `0` on success.
 
@@ -96,17 +96,17 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 
 | Option | Description |
 |---|---|
-| `-f` / `--format` | `table` (default), `markdown`, or `json`. Table and Markdown are bounded human triage views; Markdown is deterministic GFM with headings and tables. JSON preserves canonical ids and any cut-analysis evidence. |
-| `--color` | Table styling mode: `auto` (default) styles only interactive stdout, `always` forces ANSI styling including file output, and `never` keeps the table plain. JSON and Markdown never contain ANSI styling. `auto` also disables styling for `.txt` and `.md` output paths. |
+| `-f` / `--format` | `table` (default), `markdown`, or `json`. Table and Markdown are bounded human-triage views; Markdown is deterministic GFM with headings and tables. JSON emits the schema-v2 report, preserves canonical ids and cut-analysis evidence, and caps only `findings`/`publicSymbols` at 10,000 rows (with `truncation` counts when needed). |
+| `--color` | Table styling mode: `auto` (default) styles only interactive stdout and leaves file output unstyled, `always` forces ANSI styling including file output, and `never` keeps the table plain. JSON and Markdown never contain ANSI styling. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
-| `--all` | In table or Markdown format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
-| `--columns` | Repeatable table surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. `visibility` covers declaration visibility; `mutability` covers mutable ports and declarations; `coupling` covers in/out flow, exposure, and structural use. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
+| `--all` | In table or Markdown format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is unaffected: graph-derived inventories are complete, while `findings`/`publicSymbols` retain the 10,000-row serialization cap and `truncation` metadata. |
+| `--columns` | Repeatable table/Markdown surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. `visibility` covers declaration visibility; `mutability` covers mutable ports and declarations; `coupling` covers in/out flow, exposure, and structural use. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
 | `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. `cutAnalysis.status` distinguishes `completedExact` (the bounded candidate space was exhausted), `completedHeuristic` (greedy-only, including large SCCs), and `budgetExceeded`; without this flag it is `notRequested` and no candidates are simulated. |
-| `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration such as `1s` or `250ms`. Defaults to `1s` when `--analyze-cuts` is present. |
+| `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration with `ms`, `s`, or `m` units (for example `250ms`, `1s`, or `0.5m`). Defaults to `1s` when `--analyze-cuts` is present. |
 | `--cut-candidate-limit` | Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to `10000` when `--analyze-cuts` is present. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
 | `-i` / `--input` | The JSON graph to analyze — a file, or `-` for stdin, so `export` output can be piped straight in. Required. |
@@ -186,7 +186,7 @@ are the default core view. Add `--columns visibility`, `--columns mutability`, o
 respectively. The semantic groups intentionally overlap the compact core where useful, so
 each group is useful on its own; composed groups still render each heading once.
 `--columns all` selects every surface column. Group order and headings are deterministic.
-These aliases apply only to table headings; the JSON report keeps its camelCase field names.
+These aliases apply only to table and Markdown headings; the JSON report keeps its camelCase field names.
 
 The cycle table is deliberately bounded: its rows contain identity, count, greedy
 estimate, and cut-analysis status, then each analyzed cycle gets separate numbered
@@ -220,14 +220,16 @@ Cut controls also reject non-positive limits and reject `--cut-time-limit` or
 ## inspect-cycle
 
 ```shell
-codeps inspect-cycle --report <v2-report.json> --id <scc-id> [--format <json|table>]
+codeps inspect-cycle --report <v2-report.json> --id <scc-id> [--format <table|json|markdown>]
 ```
 
 Reads one schema-version-2 metrics report and prints the selected cycle without
 recomputing the graph or cut analysis. JSON includes the exhaustive sorted `members`,
 the closed `witnessCycle`, `size`, `internalEdges`, `incomingEdges`, `outgoingEdges`,
 `extFanIn`, the complete `cutAnalysis` record, and matching findings. Table output
-prints the same fields in a compact readable form. `--format` defaults to `table`.
+prints the same fields in a compact readable form. `--format` defaults to `table`;
+`markdown` is accepted by the shared parser and currently renders the same compact
+text as `table` for detail commands.
 
 The report path may be `-` to read JSON from stdin. Errors (exit 1) include
 `report path does not exist`, `report path is not a file`, malformed report JSON,
@@ -236,14 +238,15 @@ The report path may be `-` to read JSON from stdin. Errors (exit 1) include
 ## inspect-node
 
 ```shell
-codeps inspect-node --report <v2-report.json> --id <node-id> [--format <json|table>]
+codeps inspect-node --report <v2-report.json> --id <node-id> [--format <table|json|markdown>]
 ```
 
 Reads one schema-version-2 metrics report and prints the selected node's complete
 surface row, nullable `cycleId`, and matching findings. JSON and table output are
 report-only views; no graph or cut analysis is recomputed. `--format` defaults to
-`table`, and `--report -` reads from stdin. Unknown node IDs and incompatible report
-schema versions exit 1.
+`table`; `markdown` is accepted by the shared parser and currently renders the same
+compact text as `table` for detail commands. `--report -` reads from stdin. Unknown
+node IDs and incompatible report schema versions exit 1.
 
 ## Reproducible output
 

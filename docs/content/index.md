@@ -15,8 +15,9 @@ It works in two steps:
    [jdeps](/howtos/jdeps.html) (the JDK's own analyzer) — and spits out a
    dependency graph as JSON: the [codeps export format](/reference/json-input.html).
 2. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
-   via `-`) and spits out the [metrics report](/reference/report.html): a plain-text table by
-   default, GitHub-Flavored Markdown with `--format markdown`, or JSON with `--format json` —
+   via `-`) and spits out the [metrics report](/reference/report.html): a table by
+   default (ANSI styling on interactive stdout with `--color auto`), GitHub-Flavored Markdown
+   with `--format markdown`, or JSON with `--format json` —
    handy for agents, other tools and CI.
 
 It works on two levels:
@@ -35,7 +36,8 @@ level they degrade incremental compilation.
 
 ```shell
 codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-codeps report-packages --input deps.json
+codeps report-packages --color never --input deps.json
+# The sample below is reproduced with: codeps report-packages --color never --input testFixtures/cyclic.json
 ```
 
 Abbreviated table output of `codeps report-packages` on the repo's
@@ -43,17 +45,24 @@ Abbreviated table output of `codeps report-packages` on the repo's
 (`module1` ↔ `module2`):
 
 ```text
-scope: packages    generatedAt: 2026-08-28T14:20:56Z
+scope: packages    generatedAt: <timestamp>
 
 Summary
   nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
 
 --------------------------------------------------------------------------------
-Findings (top 0 of 0)
-  (none)
+Findings (top 6 of 6)
+kind           severity  subject                          evidence                                        confidence       nextAction
+cycle          high      scc:com.example.modules.module1  size=2, extFanIn=1, greedyCutEstimate=none      high             inspect-cycle scc:com.example.modules.module1
+propagator     medium    com.example.modules.module1      fanIn=2, fanOut=1, score=1.5000                 high             inspect-node com.example.modules.module1
+propagator     medium    com.example.modules.module2      fanIn=1, fanOut=2, score=1.5000                 high             inspect-node com.example.modules.module2
+structuralUse  low       com.example.modules.module2      fanIn=1, ports=4, dependentsPerPublicPort=0.25  structuralProxy  inspect-node com.example.modules.module2
+structuralUse  low       org.thirdparty                   fanIn=1, ports=4, dependentsPerPublicPort=0.25  structuralProxy  inspect-node org.thirdparty
+structuralUse  low       com.example.modules.module1      fanIn=2, ports=4, dependentsPerPublicPort=0.5   structuralProxy  inspect-node com.example.modules.module1
 
 --------------------------------------------------------------------------------
-Cycles (size desc, extFanIn desc)
+Cycles (top 1 of 1)
+(size desc, extFanIn desc)
 id                               size  extFanIn  greedyCutEstimate  status
 scc:com.example.modules.module1  2     1         —                  notRequested
 
@@ -61,7 +70,7 @@ scc:com.example.modules.module1  2     1         —                  notRequest
     cut analysis: notRequested (pass --analyze-cuts)
 
 --------------------------------------------------------------------------------
-Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
+Change propagators (top 2 of 2) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)
 node                         fanIn  fanOut  score
 com.example.modules.module1  2      1       1.50
 com.example.modules.module2  1      2       1.50
@@ -97,8 +106,12 @@ Public exposure ratio (top 0 of 0)
 - **Orphans** — dead-code-removal candidates
 - **Filtering** — keep only nodes matching `--include` patterns, drop noise with `--exclude` (e.g. `java.*`, `scala.*`); skip tests with `--skip-tests`
 - **Collapsing** — merge whole subtrees with `--collapse` rules (`com.example.**`, `org.lib.*`)
-- **Three output formats** — `table` (default, plain aligned text), `markdown` (deterministic GFM
-  for reviews), and `json` (machine-readable)
+- **Three output formats** — `table` (default, with optional ANSI styling), `markdown` (deterministic
+  GFM for reviews), and `json` (machine-readable)
+- **Report controls** — table/Markdown views show the top 10 rows per section by default; `--all`
+  expands them, `--color auto|always|never` controls ANSI table styling, and `--analyze-cuts`
+  enables bounded SCC cut analysis. JSON is schema v2; its `findings` and optional `publicSymbols`
+  arrays cap at 10,000 rows and report omissions in `truncation`.
 
 No build-system integration needed: your local build tools already produce the inputs,
 codeps just reads them.

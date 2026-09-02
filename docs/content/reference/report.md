@@ -108,8 +108,9 @@ The structural-use kind is only a graph proxy, not proof that a public symbol is
 `unusedPublicSymbol` finding is emitted only when the optional `publicSymbols` index is present.
 JSON serialization bounds both `findings` and `publicSymbols` at 10,000 rows each so large
 projects remain agent-usable. When rows are omitted, `truncation` is present with
-`findingsOmitted` and `publicSymbolsOmitted` counts; the in-memory report and `--all` table view
-retain the complete inventories.
+`findingsOmitted` and `publicSymbolsOmitted` counts. Cycles, propagators, surface rows, and
+orphans are not subject to this JSON inventory bound. The in-memory report and `--all` table or
+Markdown view retain the complete inventories; `--all` does not raise the JSON cap.
 
 ## Cycles
 
@@ -150,7 +151,7 @@ components are just acyclic nodes and are never reported.
   `--cut-candidate-limit` bound each SCC's investigation. The default report never invokes
   feedback-edge search, so its cycle `cutAnalysis` has no estimate or solutions.
 - Table and Markdown output are intentionally shorter than this JSON schema: they display at most 8 cuts from
-  each complete solution and may replace a dense knot's cut list with structural guidance.
+  each complete solution (even with `--all`) and may replace a dense knot's cut list with structural guidance.
   `--format json` retains every complete solution, canonical id, status, and budget count.
 
 ## Change propagators
@@ -171,7 +172,7 @@ One row per scope node is retained in JSON. The default table and Markdown views
 `Surface risks (top 10 of N)`; `--all` shows every row.
 
 The table and Markdown views keep their default surface view compact with the headings `node`, `in`, `out`,
-`ports`, `mut`, `encap%`, and `use`. For a wider or focused table, repeat `--columns` with one
+`ports`, `mut`, `encap%`, and `use`. For a wider or focused table or Markdown view, repeat `--columns` with one
 or more semantic groups: `visibility` selects `pub`, `prot`, `pkg`, `priv`, and `total`;
 `mutability` selects the aggregate `mut`, mutable declaration counts (`pubMut`, `protMut`,
 `pkgMut`, and `privMut`), and `mut%`; and `coupling` selects `in`, `out`, `exp`, and `use`.
@@ -255,4 +256,6 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
 
 The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks,
 and orphans each include a shown/total label and display at most 10 rows by default. `--all` is accepted
-by `report-packages` and `report-files` only and requests every human-view row. JSON is always complete.
+by `report-packages` and `report-files` only and requests every human-view row. JSON remains complete
+for graph-derived inventories; its `findings` and optional `publicSymbols` arrays are capped at 10,000
+rows and describe any omissions in `truncation`.

@@ -71,7 +71,13 @@ The report contains SCC facts (and optional budgeted cut analysis), exposed-surf
 (`ports`/`mutPorts`/`exposure`/`dependentsPerPublicPort` plus declaration visibility
 and encapsulation ratios) and orphans — see the
 [Metrics report](/reference/report.html) for the full field reference. It renders
-as plain aligned text by default; `--format json` emits machine-readable JSON.
+as a table by default. `--format markdown` emits deterministic GitHub-Flavored Markdown;
+`--format json` emits the schema-v2 report with canonical ids and cut evidence. Table and
+Markdown sections show at most 10 rows by default; add `--all` for every human-view row. The
+`findings` and optional `publicSymbols` arrays are capped at 10,000 rows in JSON, with omitted
+counts recorded in `truncation`.
+Use `--color auto|always|never` for table ANSI styling and add `--analyze-cuts` (with optional
+`--cut-time-limit` / `--cut-candidate-limit`) when you want bounded cut analysis.
 
 ## What's next?
 

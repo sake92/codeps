@@ -13,5 +13,5 @@ references:
     url: "/reference/cli.html"
   - label: "Metrics report"
     url: "/reference/report.html"
-  - label: "Standard JSON export format"
+  - label: "Codeps export format"
     url: "/reference/json-input.html"

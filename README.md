@@ -35,7 +35,10 @@ jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
 # or: java -jar codeps.jar export --from jdeps --input jdeps.txt -o deps.json
 java -jar codeps.jar report-packages --input deps.json
-# the default output is the plain-text table; pass --format json for machine-readable JSON
+# file-level view for one package:
+java -jar codeps.jar report-files --include com.example --input deps.json
+# table is the default; --color auto styles only interactive terminal output
+# use --format markdown for deterministic GFM or --format json for machine-readable JSON
 ```
 
 ### Other languages
@@ -52,12 +55,17 @@ The metrics are language-agnostic once the node/edge list carries per-node `isEx
 (see the [metrics report](https://sake92.github.io/codeps/reference/report.html#exposed-surface)) —
 a TS/Python extractor only has to emit the same generic JSON shape.
 
+Human reports are bounded to 10 rows per section; add `--all` for every table or Markdown row.
+Use `--analyze-cuts` (optionally with `--cut-time-limit` and `--cut-candidate-limit`) to request
+bounded SCC cut analysis. The [CLI reference](https://sake92.github.io/codeps/reference/cli.html)
+covers filtering, surface-column groups, ANSI color modes, and `inspect-cycle`/`inspect-node`.
+
 ## Development
 
 Developing codeps itself requires [deder](https://sake92.github.io/deder/) (`brew install sake92/tap/deder`):
 
 ```shell
-deder test      # run all tests
+deder exec -t test      # run all tests
 deder exec -t run -m cli export --from semanticdb --input tmp/examples/example1/classes/META-INF/semanticdb -o /tmp/deps.json
 deder exec -t run -m cli report-packages --input /tmp/deps.json
 ```

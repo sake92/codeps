@@ -54,7 +54,12 @@ codeps export --from jdeps --input jdeps.txt | codeps report-packages --input -
 ```
 
 Cycles can include optional budgeted cut analysis, and the surface lists fanIn/fanOut
-and orphans — see the [Metrics report](/reference/report.html).
+and orphans — see the [Metrics report](/reference/report.html). Use `--format table` (the
+default), `--format markdown` for deterministic GitHub-Flavored Markdown, or `--format json`
+for the schema-v2 report. Table and Markdown sections show at most 10 rows by default; pass
+`--all` for every human-view row. `--analyze-cuts` enables bounded cut investigation, with
+`--cut-time-limit` and `--cut-candidate-limit` available as per-SCC controls. Since jdeps has
+no symbol-reference index, reports have no `publicSymbols` or unused-public-symbol findings.
 
 ## Filtering JDK noise
 
@@ -66,7 +71,7 @@ codeps report-packages --include com.example -e java.** -e scala.** --input deps
 ```
 
 > Note: excludes are package patterns matched against each node's root package —
-> `java.**` collapses everything under `java` (see [Collapse rules](/reference/cli.html#collapse-rules)).
+> `java.**` excludes everything under `java` (see [Include / exclude patterns](/reference/cli.html#include--exclude-patterns)).
 
 ## Collapsing
 

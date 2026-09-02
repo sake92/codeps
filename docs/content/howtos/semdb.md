@@ -76,9 +76,17 @@ codeps report-packages --input deps.json
   `--include`; e.g. `--include com.example` descends into `com.example` and everything below it
 - `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
 - `--include`/`--exclude`/`--collapse` filter and collapse (see below)
-- `--format json` emits machine-readable JSON with complete report data; the default `table` is
-  a compact plain-text presentation that may abbreviate cut lists; `--format markdown` emits the
-  same bounded triage view as deterministic GitHub-Flavored Markdown, always without ANSI styling
+- `--format table` is the default compact human view; `--format markdown` emits the same bounded
+  triage content as deterministic GitHub-Flavored Markdown, always without ANSI styling; and
+  `--format json` emits the schema-v2 report with canonical ids and complete cut evidence
+- table and Markdown sections show at most 10 rows by default; pass `--all` to show every row
+- `--columns visibility`, `--columns mutability`, `--columns coupling`, or `--columns all` expands
+  the surface-risk columns (repeat the flag to compose groups); `--color auto|always|never` controls
+  ANSI styling for table output
+- `--analyze-cuts` enables bounded SCC cut analysis; `--cut-time-limit` and
+  `--cut-candidate-limit` set per-SCC budgets. Without it, `cutAnalysis.status` is `notRequested`.
+  JSON findings and optional public-symbol rows are capped at 10,000 each and report omissions in
+  `truncation` when a very large project exceeds those limits.
 
 No intermediate file needed — pipe `export` straight into `report-packages` (the `-` tells
 it to read the JSON from stdin):
@@ -87,7 +95,8 @@ it to read the JSON from stdin):
 codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
 ```
 
-See the [Metrics report](/reference/report.html) for the full field reference.
+See the [Metrics report](/reference/report.html) for the full field reference, including
+`inspect-cycle` and `inspect-node` report-only detail views.
 
 ## Filtering and collapsing
 

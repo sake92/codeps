@@ -1,13 +1,14 @@
 ---
 layout: reference.html
 title: Codeps export format
-description: the standard JSON graph format produced by codeps export and consumed by codeps report-packages or report-files
+description: the codeps export format produced by codeps export and consumed by codeps report-packages or report-files
 ---
 
 # Codeps export format
 
-The codeps export format is the contract between the two codeps steps: `codeps export`
-*produces* it, and `codeps report-packages` or `codeps report-files` *consumes* it. It is a self-contained dependency
+The codeps export format is the contract between the two codeps steps: `codeps export` *produces*
+it, and `codeps report-packages` or `codeps report-files`
+*consumes* it. It is a self-contained dependency
 graph produced by `codeps export` as `package` and `file` nodes only — the exporters
 collapse type/member symbols into their file (or root package for file-less jdeps
 types), with `ports`/`mutPorts` and `declarationSurface` summed and edges aggregated at file level with
@@ -111,8 +112,10 @@ member of one type referencing a member of another. On `export` output (package 
 file nodes), edges always go between files or packages.
 
 Only the project's own symbols appear: references to external symbols are dropped
-by the producers. The format has no `own` array, no `stats` and no version field;
-unknown node kinds or fields are rejected with a helpful parse error, e.g.:
+by the producers. The format has no `own` array, no `stats` and no version field.
+Node kinds outside `package`, `file`, `type`, and `member` are rejected. Unrecognized
+object fields are ignored for forward compatibility; malformed or type-invalid known
+fields are hard parse errors, e.g.:
 
 ```text
 error: failed to parse json: ...
