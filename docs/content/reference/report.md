@@ -169,11 +169,13 @@ One row per scope node is retained in JSON. The default table shows the top 10 r
 `Surface risks (top 10 of N)`; `--all` shows every row.
 
 The table keeps its default surface view compact with the headings `node`, `in`, `out`,
-`ports`, `mut`, `encap%`, and `use`. For a wider table, repeat `--columns` with one or more
-groups: `visibility` adds `pub`, `prot`, `pkg`, and `priv`; `mutability` adds `pubMut`,
-`protMut`, `pkgMut`, and `privMut`; and `coupling` adds `exp`, `total`, and `mut%`.
-`--columns all` selects the complete accounting view. Groups are rendered in canonical order,
-duplicate columns are removed, and these short aliases apply only to table headings; JSON
+`ports`, `mut`, `encap%`, and `use`. For a wider or focused table, repeat `--columns` with one
+or more semantic groups: `visibility` selects `pub`, `prot`, `pkg`, `priv`, and `total`;
+`mutability` selects the aggregate `mut`, mutable declaration counts (`pubMut`, `protMut`,
+`pkgMut`, and `privMut`), and `mut%`; and `coupling` selects `in`, `out`, `exp`, and `use`.
+The focused groups intentionally overlap the compact core where useful, while composed groups
+render each heading once. `--columns all` selects the complete accounting view. Groups are
+rendered in canonical order, and these short aliases apply only to table headings; JSON
 continues to use its camelCase field names. With no `--columns`, the `core` group is used.
 
 - `fanIn` / `fanOut` — count of distinct edges in/out. Always derived from the edge list, never

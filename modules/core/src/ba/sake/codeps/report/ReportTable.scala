@@ -15,6 +15,7 @@ object ReportTable:
     "dense knot: inspect propagators; no complete solution was found within the search bounds"
 
   private val maxRowsPerSection = 10
+  private val sectionSeparator = "-" * 80
 
   /** Render the human-facing triage view. The report model remains complete;
     * this edge applies a small, explicit bound unless the caller requests the
@@ -38,8 +39,8 @@ object ReportTable:
         report.propagators.map(_.node) ++
         report.surface.map(_.node) ++
         report.orphans
-    val separator = if report.scope == "files" then '/' else '.'
-    val (strippedPrefix, stripped) = PrefixStripper.strip(stripIds, separator)
+    val idSeparator = if report.scope == "files" then '/' else '.'
+    val (strippedPrefix, stripped) = PrefixStripper.strip(stripIds, idSeparator)
     def disp(id: String): String = stripped.getOrElse(id, id)
     sb.append(s"scope: ${report.scope}    generatedAt: ${report.generatedAt}\n\n")
     sb.append("Summary\n")
@@ -49,6 +50,9 @@ object ReportTable:
         s"    orphans: ${s.orphans}    criticalPathLength: ${s.criticalPathLength}\n\n"
     )
 
+    def appendSectionSeparator(): Unit = sb.append(s"$sectionSeparator\n")
+
+    appendSectionSeparator()
     sb.append(sectionTitle("Findings", report.findings.size, displayedFindings.size) + "\n")
     if displayedFindings.isEmpty then sb.append("  (none)\n")
     else
@@ -65,6 +69,7 @@ object ReportTable:
       ))
     sb.append("\n")
 
+    appendSectionSeparator()
     sb.append(sectionTitle("Cycles", report.cycles.size, displayedCycles.size) + "\n")
     sb.append("(size desc, extFanIn desc)\n")
     strippedPrefix.foreach(p => sb.append(s"common prefix stripped: $p (full ids via --format json)\n"))
@@ -101,6 +106,7 @@ object ReportTable:
       }
     sb.append("\n")
 
+    appendSectionSeparator()
     sb.append(sectionTitle("Change propagators", report.propagators.size, displayedPropagators.size) +
       " (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)\n")
     if displayedPropagators.isEmpty then sb.append("  (none)\n")
@@ -111,6 +117,7 @@ object ReportTable:
       ))
     sb.append("\n")
 
+    appendSectionSeparator()
     sb.append(sectionTitle("Surface risks", report.surface.size, displayedSurface.size) +
       " (dependentsPerPublicPort asc; — = no fan-in)\n")
     if displayedSurface.isEmpty then sb.append("  (none)\n")
@@ -124,6 +131,7 @@ object ReportTable:
 
     def rankedSection(label: String, rows: Seq[SurfaceRow], header: String)(metric: SurfaceRow => Double): Unit =
       val ranked = rows.filter(row => metric(row) > 0.0).sortBy(row => (-metric(row), row.node))
+      appendSectionSeparator()
       sb.append(sectionTitle(label, ranked.size, bounded(ranked).size) + "\n")
       if ranked.isEmpty then sb.append("  (none)\n")
       else sb.append(table(Seq("node", header), bounded(ranked).map(row => Seq(disp(row.node), num(metric(row))))))
@@ -133,15 +141,17 @@ object ReportTable:
     rankedSection("Public mutability", report.surface, "pubMut")(_.publicMutableSurface)
     val encapsulated = report.surface.filter(_.encapsulationRatio.exists(_ > 0.0))
       .sortBy(row => (-row.encapsulationRatio.getOrElse(0.0), row.node))
+    appendSectionSeparator()
     sb.append(sectionTitle("Public exposure ratio", encapsulated.size, bounded(encapsulated).size) + "\n")
     if encapsulated.isEmpty then sb.append("  (none)\n")
     else sb.append(table(Seq("node", "encap%"), bounded(encapsulated).map(row =>
       Seq(disp(row.node), row.encapsulationRatio.map(value => f"$value%.2f").getOrElse("—")))))
     sb.append("\n")
 
-    sb.append(sectionTitle("Orphans", report.orphans.size, displayedOrphans.size) + "\n")
-    if displayedOrphans.isEmpty then sb.append("  (none)\n")
-    else displayedOrphans.foreach(o => sb.append(s"  ${disp(o)}\n"))
+    if report.orphans.nonEmpty then
+      appendSectionSeparator()
+      sb.append(sectionTitle("Orphans", report.orphans.size, displayedOrphans.size) + "\n")
+      displayedOrphans.foreach(o => sb.append(s"  ${disp(o)}\n"))
     sb.result()
 
   /** Aligns columns to the widest cell, two-space gaps. */
@@ -162,6 +172,10 @@ object ReportTable:
       requested: Seq[ColumnGroup],
       disp: String => String
   ): Seq[SurfaceColumn] =
+    // Groups are semantic views, so a focused group can stand alone. Some
+    // indicators intentionally belong to more than one view (for example,
+    // fan-in is both a core risk signal and a coupling measure); the final
+    // fold below removes those overlaps when groups are composed.
     val core = Seq(
       SurfaceColumn("node", row => disp(row.node)),
       SurfaceColumn("in", _.fanIn.toString),
@@ -175,18 +189,22 @@ object ReportTable:
       SurfaceColumn("pub", row => num(row.publicSurface)),
       SurfaceColumn("prot", row => num(row.protectedSurface)),
       SurfaceColumn("pkg", row => num(row.packageSurface)),
-      SurfaceColumn("priv", row => num(row.privateSurface))
+      SurfaceColumn("priv", row => num(row.privateSurface)),
+      SurfaceColumn("total", row => num(row.totalDeclaredSurface))
     )
     val mutability = Seq(
+      SurfaceColumn("mut", row => num(row.mutPorts)),
       SurfaceColumn("pubMut", row => num(row.publicMutableSurface)),
       SurfaceColumn("protMut", row => num(row.protectedMutableSurface)),
       SurfaceColumn("pkgMut", row => num(row.packageMutableSurface)),
-      SurfaceColumn("privMut", row => num(row.privateMutableSurface))
+      SurfaceColumn("privMut", row => num(row.privateMutableSurface)),
+      SurfaceColumn("mut%", row => row.publicMutableRatio.map(value => f"$value%.2f").getOrElse("—"))
     )
     val coupling = Seq(
+      SurfaceColumn("in", _.fanIn.toString),
+      SurfaceColumn("out", _.fanOut.toString),
       SurfaceColumn("exp", row => num(row.exposure)),
-      SurfaceColumn("total", row => num(row.totalDeclaredSurface)),
-      SurfaceColumn("mut%", row => row.publicMutableRatio.map(value => f"$value%.2f").getOrElse("—"))
+      SurfaceColumn("use", row => usage(row.dependentsPerPublicPort))
     )
     val all = core ++ visibility ++ mutability ++ coupling
     val columnsByGroup = Map[ColumnGroup, Seq[SurfaceColumn]](

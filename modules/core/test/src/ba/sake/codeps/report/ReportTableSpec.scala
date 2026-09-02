@@ -33,6 +33,25 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("2.00"))
   }
 
+  test("major table sections have dashed separators") {
+    val text = ReportTable.render(report)
+    val lines = text.linesIterator.toSeq
+    val dashed = "-" * 80
+    Seq("Findings", "Cycles", "Change propagators", "Surface risks", "Public surface",
+      "Public mutability", "Public exposure ratio", "Orphans").foreach { title =>
+      val index = lines.indexWhere(_.startsWith(title))
+      assert(index > 0, s"missing section: $title")
+      assertEquals(lines(index - 1), dashed, s"missing separator before $title")
+    }
+  }
+
+  test("empty orphan inventory omits the Orphans section") {
+    val empty = report.copy(orphans = Seq.empty, summary = report.summary.copy(orphans = 0))
+    val text = ReportTable.render(empty)
+
+    assert(!text.contains("Orphans"))
+  }
+
   test("surface defaults to the compact core columns") {
     val rich = report.copy(surface = Seq(SurfaceRow(
       node = "cache",
@@ -80,7 +99,8 @@ class ReportTableSpec extends munit.FunSuite:
 
     assertEquals(
       header.trim.split("\\s+").toSeq,
-      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv", "pubMut", "protMut", "pkgMut", "privMut")
+      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv", "total",
+        "pubMut", "protMut", "pkgMut", "privMut", "mut%")
     )
     assertEquals(header.trim.split("\\s+").count(_ == "pub"), 1)
     assert(!header.contains("publicSurface"))
@@ -95,11 +115,26 @@ class ReportTableSpec extends munit.FunSuite:
     assertEquals(
       header.trim.split("\\s+").toSeq,
       Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv",
-        "pubMut", "protMut", "pkgMut", "privMut", "exp", "total", "mut%")
+        "total", "pubMut", "protMut", "pkgMut", "privMut", "mut%", "exp")
     )
     assert(!header.contains("fanIn"))
     assert(!header.contains("encapsulationRatio"))
     assert(!header.contains("totalDeclaredSurface"))
+  }
+
+  test("coupling and mutability groups expose distinct semantic columns") {
+    def surfaceHeader(columns: Seq[ReportTable.ColumnGroup]): Seq[String] =
+      val text = ReportTable.render(report, columns = columns)
+      val section = text.substring(text.indexOf("Surface risks"), text.indexOf("Public surface"))
+      section.linesIterator.find(_.startsWith("node")).get.trim.split("\\s+").toSeq
+
+    val coupling = surfaceHeader(Seq(ReportTable.ColumnGroup.Coupling))
+    val mutability = surfaceHeader(Seq(ReportTable.ColumnGroup.Mutability))
+
+    assertEquals(coupling, Seq("node", "in", "out", "exp", "use"))
+    assertEquals(mutability, Seq("node", "mut", "pubMut", "protMut", "pkgMut", "privMut", "mut%"))
+    assert(!coupling.contains("mut%"))
+    assert(!mutability.contains("exp"))
   }
 
   test("default table bounds each inventory and --all shows every row") {
@@ -227,6 +262,7 @@ class ReportTableSpec extends munit.FunSuite:
     )
     val text = ReportTable.render(empty)
     assert(text.contains("(none)"))
+    assert(!text.contains("Orphans"))
   }
 
   test("strips common prefix and announces it once") {

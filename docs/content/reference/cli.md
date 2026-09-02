@@ -103,7 +103,7 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
 | `--all` | In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete. |
-| `--columns` | Repeatable table surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
+| `--columns` | Repeatable table surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. `visibility` covers declaration visibility; `mutability` covers mutable ports and declarations; `coupling` covers in/out flow, exposure, and structural use. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
 | `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. `cutAnalysis.status` distinguishes `completedExact` (the bounded candidate space was exhausted), `completedHeuristic` (greedy-only, including large SCCs), and `budgetExceeded`; without this flag it is `notRequested` and no candidates are simulated. |
 | `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration such as `1s` or `250ms`. Defaults to `1s` when `--analyze-cuts` is present. |
 | `--cut-candidate-limit` | Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to `10000` when `--analyze-cuts` is present. |
@@ -126,10 +126,12 @@ scope: packages    generatedAt: 2026-08-27T10:00:00Z
 Summary
   nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
+--------------------------------------------------------------------------------
 Findings (top 10 of 1)
 kind   severity  subject  evidence  confidence  nextAction
 cycle  high      cache    size=2... high        inspect-cycle scc:modules.cache
 
+--------------------------------------------------------------------------------
 Cycles (top 10 of 1)
 (size desc, extFanIn desc)
 common prefix stripped: com.example. (full ids via --format json)
@@ -139,26 +141,45 @@ scc:modules.cache  10    5         9                  completedHeuristic
   Cycle scc:modules.cache
     solution 1: modules.cache.A -> modules.scheduler.B (w=1), modules.cache.B -> modules.scheduler.C (w=1), modules.cache.C -> modules.scheduler.D (w=1), modules.cache.D -> modules.scheduler.E (w=1), modules.cache.E -> modules.scheduler.F (w=1), modules.cache.F -> modules.scheduler.G (w=1), modules.cache.G -> modules.scheduler.H (w=1), modules.cache.H -> modules.scheduler.I (w=1), … 1 more (full list in JSON)
 
+--------------------------------------------------------------------------------
 Change propagators (top 10 of 1) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)
   node     fanIn  fanOut  score
   cache    3      2       2.50
 
+--------------------------------------------------------------------------------
 Surface risks (top 10 of 1) (dependentsPerPublicPort asc; — = no fan-in)
   node     in  out  ports  mut  encap%  use
   cache    3   2    9      5    0.30    0.33
   ...
 
+--------------------------------------------------------------------------------
+Public surface (top 10 of 1)
+node   pub
+cache  3
+
+--------------------------------------------------------------------------------
+Public mutability (top 10 of 1)
+node   pubMut
+cache  1
+
+--------------------------------------------------------------------------------
+Public exposure ratio (top 10 of 1)
+node   encap%
+cache  0.30
+
+--------------------------------------------------------------------------------
 Orphans (top 10 of 1)
   DeadUtil.scala
 ```
 
 Surface-risk tables use short headings: `node`, `in`, `out`, `ports`, `mut`, `encap%`, and `use`
 are the default core view. Add `--columns visibility`, `--columns mutability`, or
-`--columns coupling` (each flag may be repeated) to compose the `pub`/`prot`/`pkg`/`priv`,
-`pubMut`/`protMut`/`pkgMut`/`privMut`, and `exp`/`total`/`mut%` groups respectively.
-`--columns all` selects every surface column. Group order and headings are deterministic,
-and repeated groups never duplicate a column. These aliases apply only to table headings;
-the JSON report keeps its camelCase field names.
+`--columns coupling` (each flag may be repeated) to select the `pub`/`prot`/`pkg`/`priv`/`total`,
+`mut`/`pubMut`/`protMut`/`pkgMut`/`privMut`/`mut%`, and `in`/`out`/`exp`/`use` groups
+respectively. The semantic groups intentionally overlap the compact core where useful, so
+each group is useful on its own; composed groups still render each heading once.
+`--columns all` selects every surface column. Group order and headings are deterministic.
+These aliases apply only to table headings; the JSON report keeps its camelCase field names.
 
 The cycle table is deliberately bounded: its rows contain identity, count, greedy
 estimate, and cut-analysis status, then each analyzed cycle gets separate numbered

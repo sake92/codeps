@@ -214,7 +214,8 @@ class MainSpec extends munit.FunSuite:
     val header = surfaceSection.linesIterator.find(_.startsWith("node")).get
     assertEquals(
       header.trim.split("\\s+").toSeq,
-      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv", "pubMut", "protMut", "pkgMut", "privMut")
+      Seq("node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv", "total",
+        "pubMut", "protMut", "pkgMut", "privMut", "mut%")
     )
     assert(!header.contains("fanIn"))
     assert(!header.contains("publicSurface"))
@@ -233,8 +234,15 @@ class MainSpec extends munit.FunSuite:
     assertEquals(defaultHeader.trim.split("\\s+").toSeq, Seq("node", "in", "out", "ports", "mut", "encap%", "use"))
     assertEquals(allHeader.trim.split("\\s+").toSeq, Seq(
       "node", "in", "out", "ports", "mut", "encap%", "use", "pub", "prot", "pkg", "priv",
-      "pubMut", "protMut", "pkgMut", "privMut", "exp", "total", "mut%"
+      "total", "pubMut", "protMut", "pkgMut", "privMut", "mut%", "exp"
     ))
+  }
+
+  test("report-packages table omits an empty Orphans section") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val res = runCli("report-packages", "--input", cyclic.toString)
+    assertEquals(res.exitCode, 0)
+    assert(!res.out.text().contains("Orphans"))
   }
 
   test("surface column selection does not change JSON output") {

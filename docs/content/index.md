@@ -47,6 +47,11 @@ scope: packages    generatedAt: 2026-08-28T14:20:56Z
 Summary
   nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
 
+--------------------------------------------------------------------------------
+Findings (top 0 of 0)
+  (none)
+
+--------------------------------------------------------------------------------
 Cycles (size desc, extFanIn desc)
 id                               size  extFanIn  greedyCutEstimate  status
 scc:com.example.modules.module1  2     1         —                  notRequested
@@ -54,17 +59,30 @@ scc:com.example.modules.module1  2     1         —                  notRequest
   Cycle scc:com.example.modules.module1
     cut analysis: notRequested (pass --analyze-cuts)
 
+--------------------------------------------------------------------------------
 Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1, top 10)
 node                         fanIn  fanOut  score
 com.example.modules.module1  2      1       1.50
 com.example.modules.module2  1      2       1.50
+
+--------------------------------------------------------------------------------
 Surface risks (dependentsPerPublicPort asc; — = no fan-in)
 node                         in  out  ports  mut  encap%  use
 com.example.modules.module2  1   2    4      0    —       0.25
 org.thirdparty               1   0    4      0    —       0.25
 com.example.modules.module1  2   1    4      0    —       0.50
 com.example.app              0   1    4      0    —       —
-Orphans
+
+--------------------------------------------------------------------------------
+Public surface (top 0 of 0)
+  (none)
+
+--------------------------------------------------------------------------------
+Public mutability (top 0 of 0)
+  (none)
+
+--------------------------------------------------------------------------------
+Public exposure ratio (top 0 of 0)
   (none)
 ```
 
