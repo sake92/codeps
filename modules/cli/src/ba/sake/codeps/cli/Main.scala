@@ -9,6 +9,7 @@ import ba.sake.tupson.{*, given}
 import mainargs.{arg, main, ParserForMethods, TokensReader}
 
 import scala.concurrent.duration.{FiniteDuration, NANOSECONDS}
+import java.util.Locale
 
 object Main:
 
@@ -57,6 +58,19 @@ object Main:
         case Seq("table") => Right(ReportFormat.Table)
         case Seq(other)   => Left(s"unknown format: $other (expected json or table)")
         case _            => Left("expected exactly one format")
+
+  enum ColorMode:
+    case Auto, Always, Never
+
+  given TokensReader.Simple[ColorMode] with
+    def shortName: String = "color"
+    def read(strs: Seq[String]): Either[String, ColorMode] =
+      strs match
+        case Seq("auto")   => Right(ColorMode.Auto)
+        case Seq("always") => Right(ColorMode.Always)
+        case Seq("never")  => Right(ColorMode.Never)
+        case Seq(other)    => Left(s"unknown color mode: $other (expected auto, always, or never)")
+        case _             => Left("expected exactly one color mode")
 
   given TokensReader.Simple[ReportTable.ColumnGroup] with
     def shortName: String = "columns"
@@ -137,6 +151,7 @@ object Main:
       testPattern: Seq[String],
       showAll: Boolean,
       columns: Seq[ReportTable.ColumnGroup],
+      color: ColorMode,
       analyzeCuts: Boolean,
       cutTimeLimit: Option[String],
       cutCandidateLimit: Option[Int],
@@ -150,6 +165,7 @@ object Main:
   @main
   def reportPackages(
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
+      @arg(name = "color") color: ColorMode = ColorMode.Auto,
       @arg(name = "include") include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],
@@ -163,11 +179,12 @@ object Main:
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Packages, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, all.value, columns, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
+    skipTests.value, testPattern, all.value, columns, color, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
   @main
   def reportFiles(
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
+      @arg(name = "color") color: ColorMode = ColorMode.Auto,
       @arg(name = "include") include: Seq[String],
       @arg(short = 'e') exclude: Seq[String],
       @arg(short = 'c') collapse: Seq[String],
@@ -181,7 +198,7 @@ object Main:
       @arg(short = 'o') out: Option[String],
       @arg(short = 'i', name = "input") input: String
   ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
-    skipTests.value, testPattern, all.value, columns, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
+    skipTests.value, testPattern, all.value, columns, color, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
   @main
   def inspectCycle(
@@ -246,7 +263,12 @@ object Main:
                     options.format match
                       case ReportFormat.Json  => metricsReport.toJson(spaces = 2, sort = true)
                       case ReportFormat.Table =>
-                        ReportTable.render(metricsReport, showAll = options.showAll, columns = options.columns)
+                        ReportTable.render(
+                          metricsReport,
+                          showAll = options.showAll,
+                          columns = options.columns,
+                          color = shouldColor(options.format, options.color, options.out)
+                        )
                   }
                 } match
                   case Left(err) =>
@@ -328,3 +350,20 @@ object Main:
     out match
       case Some(path) => os.write.over(os.Path(path, os.pwd), content)
       case None       => print(content)
+
+  private def shouldColor(format: ReportFormat, mode: ColorMode, out: Option[String]): Boolean =
+    format match
+      case ReportFormat.Json => false
+      case ReportFormat.Table =>
+        mode match
+          case ColorMode.Never  => false
+          case ColorMode.Always => true
+          case ColorMode.Auto   =>
+            out match
+              case Some(path) if isTextOutput(path) => false
+              case Some(_)                          => false
+              case None                             => System.console() != null
+
+  private def isTextOutput(path: String): Boolean =
+    val lower = path.toLowerCase(Locale.ROOT)
+    lower.endsWith(".txt") || lower.endsWith(".md")

@@ -149,6 +149,37 @@ class MainSpec extends munit.FunSuite:
     assert(content.contains("Surface"))
   }
 
+  test("report table color modes keep JSON plain and style table output only when requested") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val always = runCli("report-packages", "--color", "always", "--input", cyclic.toString)
+    val never = runCli("report-packages", "--color", "never", "--input", cyclic.toString)
+    val json = runCli("report-packages", "--format", "json", "--color", "always", "--input", cyclic.toString)
+
+    assertEquals(always.exitCode, 0)
+    assert(always.out.text().contains("\u001b["))
+    assertEquals(never.exitCode, 0)
+    assert(!never.out.text().contains("\u001b["))
+    assertEquals(json.exitCode, 0)
+    assert(!json.out.text().contains("\u001b["))
+  }
+
+  test("auto color is disabled for text files and always overrides that policy") {
+    val cyclic = os.pwd / "testFixtures" / "cyclic.json"
+    val autoOut = os.pwd / "tmp" / "cli-test" / "report-table.md"
+    val alwaysOut = os.pwd / "tmp" / "cli-test" / "report-table-always.txt"
+    os.makeDir.all(autoOut / os.up)
+    os.remove.all(autoOut)
+    os.remove.all(alwaysOut)
+
+    val auto = runCli("report-packages", "--color", "auto", "-o", autoOut.toString, "--input", cyclic.toString)
+    val always = runCli("report-packages", "--color", "always", "-o", alwaysOut.toString, "--input", cyclic.toString)
+
+    assertEquals(auto.exitCode, 0)
+    assert(!os.read(autoOut).contains("\u001b["))
+    assertEquals(always.exitCode, 0)
+    assert(os.read(alwaysOut).contains("\u001b["))
+  }
+
   test("report-packages defaults --format to table") {
     val res = runCli("report-packages", "--input", exportJson("deps.json").toString)
     assertEquals(res.exitCode, 0)

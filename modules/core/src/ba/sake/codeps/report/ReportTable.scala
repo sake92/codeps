@@ -1,5 +1,7 @@
 package ba.sake.codeps.report
 
+import fansi.{Attrs, Bold, Color, Str}
+
 /** Plain aligned-text rendering of the same data as the JSON report — a secondary
   * presentation, never a separate computation. */
 object ReportTable:
@@ -23,7 +25,8 @@ object ReportTable:
   def render(
       report: MetricsReport,
       showAll: Boolean = false,
-      columns: Seq[ColumnGroup] = Nil
+      columns: Seq[ColumnGroup] = Nil,
+      color: Boolean = false
   ): String =
     val sb = new StringBuilder
     def bounded[A](rows: Seq[A]): Seq[A] = if showAll then rows else rows.take(maxRowsPerSection)
@@ -43,17 +46,19 @@ object ReportTable:
     val (strippedPrefix, stripped) = PrefixStripper.strip(stripIds, idSeparator)
     def disp(id: String): String = stripped.getOrElse(id, id)
     sb.append(s"scope: ${report.scope}    generatedAt: ${report.generatedAt}\n\n")
-    sb.append("Summary\n")
+    sb.append(styled("Summary", headingAttrs, color) + "\n")
     val s = report.summary
     sb.append(
       s"  nodes: ${s.nodes}    edges: ${s.edges}    nodesInCycles: ${s.nodesInCycles}" +
         s"    orphans: ${s.orphans}    criticalPathLength: ${s.criticalPathLength}\n\n"
     )
 
-    def appendSectionSeparator(): Unit = sb.append(s"$sectionSeparator\n")
+    def appendSectionSeparator(): Unit = sb.append(styled(sectionSeparator, separatorAttrs, color) + "\n")
+    def appendSectionTitle(label: String, total: Int, shown: Int, suffix: String = ""): Unit =
+      sb.append(styled(sectionTitle(label, total, shown) + suffix, headingAttrs, color) + "\n")
 
     appendSectionSeparator()
-    sb.append(sectionTitle("Findings", report.findings.size, displayedFindings.size) + "\n")
+    appendSectionTitle("Findings", report.findings.size, displayedFindings.size)
     if displayedFindings.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
@@ -65,12 +70,13 @@ object ReportTable:
           f.evidence,
           f.confidence,
           f.nextAction
-        ))
+        )),
+        color
       ))
     sb.append("\n")
 
     appendSectionSeparator()
-    sb.append(sectionTitle("Cycles", report.cycles.size, displayedCycles.size) + "\n")
+    appendSectionTitle("Cycles", report.cycles.size, displayedCycles.size)
     sb.append("(size desc, extFanIn desc)\n")
     strippedPrefix.foreach(p => sb.append(s"common prefix stripped: $p (full ids via --format json)\n"))
     if displayedCycles.isEmpty then sb.append("  (none)\n")
@@ -85,56 +91,61 @@ object ReportTable:
             k.cutAnalysis.greedyCutEstimate.map(_.toString).getOrElse("—"),
             k.cutAnalysis.status
           )
-        }
+        },
+        color
       ))
       displayedCycles.foreach { cycle =>
-        sb.append(s"\n  Cycle scc:${disp(cycle.members.head)}\n")
+        sb.append("\n  " + styled(s"Cycle scc:${disp(cycle.members.head)}", headingAttrs, color) + "\n")
         val analysis = cycle.cutAnalysis
         if analysis.status == "notRequested" then
           sb.append("    cut analysis: notRequested (pass --analyze-cuts)\n")
         else if isDenseKnot(cycle) then
           val note = if analysis.solutions.nonEmpty then denseKnotWithSolutionsNote else denseKnotWithoutSolutionsNote
-          sb.append(s"    $note\n")
+          sb.append("    " + styled(note, truncationAttrs, color) + "\n")
         else
           analysis.solutions.zipWithIndex.foreach { (solution, index) =>
               val displayedCuts = solution.cuts.take(maxDisplayedCuts)
                 .map(c => s"${disp(c.source)} -> ${disp(c.target)} (w=${c.weight})")
               val omitted = solution.cuts.size - maxDisplayedCuts
               val suffix = if omitted > 0 then s", … $omitted more (full list in JSON)" else ""
-              sb.append(s"    solution ${index + 1}: ${displayedCuts.mkString(", ")}$suffix\n")
+              sb.append(s"    solution ${index + 1}: ${displayedCuts.mkString(", ")}")
+              if omitted > 0 then sb.append(styled(suffix, truncationAttrs, color))
+              sb.append("\n")
             }
       }
     sb.append("\n")
 
     appendSectionSeparator()
-    sb.append(sectionTitle("Change propagators", report.propagators.size, displayedPropagators.size) +
-      " (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)\n")
+    appendSectionTitle("Change propagators", report.propagators.size, displayedPropagators.size,
+      " (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)")
     if displayedPropagators.isEmpty then sb.append("  (none)\n")
     else
       sb.append(table(
         Seq("node", "fanIn", "fanOut", "score"),
-        displayedPropagators.map(p => Seq(disp(p.node), p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f"))
+        displayedPropagators.map(p => Seq(disp(p.node), p.fanIn.toString, p.fanOut.toString, f"${p.score}%.2f")),
+        color
       ))
     sb.append("\n")
 
     appendSectionSeparator()
-    sb.append(sectionTitle("Surface risks", report.surface.size, displayedSurface.size) +
-      " (dependentsPerPublicPort asc; — = no fan-in)\n")
+    appendSectionTitle("Surface risks", report.surface.size, displayedSurface.size,
+      " (dependentsPerPublicPort asc; — = no fan-in)")
     if displayedSurface.isEmpty then sb.append("  (none)\n")
     else
       val selectedColumns = surfaceColumns(columns, disp)
       sb.append(table(
         selectedColumns.map(_.heading),
-        displayedSurface.map(row => selectedColumns.map(_.value(row)))
+        displayedSurface.map(row => selectedColumns.map(_.value(row))),
+        color
       ))
     sb.append("\n")
 
     def rankedSection(label: String, rows: Seq[SurfaceRow], header: String)(metric: SurfaceRow => Double): Unit =
       val ranked = rows.filter(row => metric(row) > 0.0).sortBy(row => (-metric(row), row.node))
       appendSectionSeparator()
-      sb.append(sectionTitle(label, ranked.size, bounded(ranked).size) + "\n")
+      appendSectionTitle(label, ranked.size, bounded(ranked).size)
       if ranked.isEmpty then sb.append("  (none)\n")
-      else sb.append(table(Seq("node", header), bounded(ranked).map(row => Seq(disp(row.node), num(metric(row))))))
+      else sb.append(table(Seq("node", header), bounded(ranked).map(row => Seq(disp(row.node), num(metric(row)))), color))
       sb.append("\n")
 
     rankedSection("Public surface", report.surface, "pub")(_.publicSurface)
@@ -142,26 +153,52 @@ object ReportTable:
     val encapsulated = report.surface.filter(_.encapsulationRatio.exists(_ > 0.0))
       .sortBy(row => (-row.encapsulationRatio.getOrElse(0.0), row.node))
     appendSectionSeparator()
-    sb.append(sectionTitle("Public exposure ratio", encapsulated.size, bounded(encapsulated).size) + "\n")
+    appendSectionTitle("Public exposure ratio", encapsulated.size, bounded(encapsulated).size)
     if encapsulated.isEmpty then sb.append("  (none)\n")
     else sb.append(table(Seq("node", "encap%"), bounded(encapsulated).map(row =>
-      Seq(disp(row.node), row.encapsulationRatio.map(value => f"$value%.2f").getOrElse("—")))))
+      Seq(disp(row.node), row.encapsulationRatio.map(value => f"$value%.2f").getOrElse("—"))), color))
     sb.append("\n")
 
     if report.orphans.nonEmpty then
       appendSectionSeparator()
-      sb.append(sectionTitle("Orphans", report.orphans.size, displayedOrphans.size) + "\n")
+      appendSectionTitle("Orphans", report.orphans.size, displayedOrphans.size)
       displayedOrphans.foreach(o => sb.append(s"  ${disp(o)}\n"))
     sb.result()
 
-  /** Aligns columns to the widest cell, two-space gaps. */
-  private def table(header: Seq[String], rows: Seq[Seq[String]]): String =
+  /** Aligns columns to the widest visible cell, two-space gaps. */
+  private def table(header: Seq[String], rows: Seq[Seq[String]], color: Boolean): String =
+    val styledHeader = header.map(value => styledStr(value, headingAttrs, color))
+    val styledRows = rows.map(_.zip(header).map { case (value, heading) =>
+      styledCell(heading, value, color)
+    })
     val widths = header.indices.map { i =>
-      (header(i) +: rows.map(_(i))).map(_.length).max
+      (styledHeader(i) +: styledRows.map(_(i))).map(_.length).max
     }
-    def line(cells: Seq[String]): String =
-      cells.indices.map(i => cells(i).padTo(widths(i), ' ')).mkString("  ")
-    (line(header) +: rows.map(line)).mkString("\n")
+    def line(cells: Seq[Str]): String =
+      cells.indices.map { i =>
+        cells(i).render + (" " * (widths(i) - cells(i).length))
+      }.mkString("  ")
+    (line(styledHeader) +: styledRows.map(line)).mkString("\n")
+
+  private val headingAttrs: Attrs = Attrs(Bold.On, Color.Cyan)
+  private val separatorAttrs: Attrs = Color.DarkGray
+  private val truncationAttrs: Attrs = Color.DarkGray
+
+  private def styled(value: String, attrs: Attrs, color: Boolean): String =
+    styledStr(value, attrs, color).render
+
+  private def styledStr(value: String, attrs: Attrs, color: Boolean): Str =
+    if color then attrs(Str(value)) else Str(value)
+
+  private def styledCell(heading: String, value: String, color: Boolean): Str =
+    if !color || heading != "severity" then Str(value)
+    else
+      value match
+        case "critical" => Attrs(Bold.On, Color.Red)(Str(value))
+        case "high"     => Attrs(Bold.On, Color.Red)(Str(value))
+        case "medium"   => Attrs(Bold.On, Color.Yellow)(Str(value))
+        case "low"      => Color.Cyan(Str(value))
+        case _           => Str(value)
 
   private def num(d: Double): String =
     if !d.isNaN && !d.isInfinite && d == math.rint(d) then d.toLong.toString else d.toString

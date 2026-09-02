@@ -2,6 +2,7 @@ package ba.sake.codeps.report
 
 import ba.sake.codeps.model.{DepsGraph, Edge, Node, NodeKind}
 import ba.sake.codeps.report.MetricsCalculator.Scope
+import fansi.Str
 
 class ReportTableSpec extends munit.FunSuite:
 
@@ -31,6 +32,18 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("iso"))
     assert(text.contains("Change propagators"))
     assert(text.contains("2.00"))
+  }
+
+  test("ANSI styling preserves the plain table and visible cell widths") {
+    val withFinding = report.copy(findings = Seq(
+      Finding("finding:cache", "cycle", "high", "cache", "size=2", "high", "inspect-cycle cache")
+    ))
+    val plain = ReportTable.render(withFinding)
+    val colored = ReportTable.render(withFinding, color = true)
+
+    assert(colored.contains("\u001b["))
+    assert(colored.contains("\u001b[31m")) // high-severity finding
+    assertEquals(Str.Strip(colored).plainText, plain)
   }
 
   test("major table sections have dashed separators") {
@@ -195,6 +208,16 @@ class ReportTableSpec extends munit.FunSuite:
     assert(text.contains("source8 -> target8 (w=8)"))
     assert(!text.contains("source9 -> target9 (w=9)"))
     assert(text.contains("… 1 more (full list in JSON)"))
+  }
+
+  test("ANSI styling marks truncated solution details without changing their text") {
+    val cuts = (1 to 9).map(i => CutCandidate(s"source$i", s"target$i", i))
+    val large = report.copy(cycles = Seq(report.cycles.head.copy(cutAnalysis = CutAnalysis("completedExact", Some(1), Seq(Solution(cuts)), 1))))
+    val plain = ReportTable.render(large)
+    val colored = ReportTable.render(large, color = true)
+
+    assert(colored.contains("\u001b[90m, … 1 more (full list in JSON)"))
+    assertEquals(Str.Strip(colored).plainText, plain)
   }
 
   test("dense knot omits its cut wall and directs the user to propagators and JSON") {

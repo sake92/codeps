@@ -83,8 +83,8 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
-codeps report-files [--format <json|table>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-packages [--format <json|table>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-files [--format <json|table>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
 ```
 
 Pure analyzer: reads the standard JSON export graph (a file, or stdin via `-`) and runs the pipeline
@@ -97,6 +97,7 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 | Option | Description |
 |---|---|
 | `-f` / `--format` | `table` (default) or `json`. The table is a compact presentation; JSON preserves canonical ids and any cut-analysis evidence. |
+| `--color` | Table styling mode: `auto` (default) styles only interactive stdout, `always` forces ANSI styling including file output, and `never` keeps the table plain. JSON never contains ANSI styling. `auto` also disables styling for `.txt` and `.md` output paths. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
