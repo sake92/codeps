@@ -16,8 +16,8 @@ contains ANSI styling.
 codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - > report.json
 ```
 
-Core metrics are computed fresh from the graph's node/edge list on every run. The default report
-does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit
+Core metrics are computed fresh from the graph's node/edge list on every run. A report
+without `--analyze-cuts` does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit
 and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoch seconds) to pin
 `generatedAt` for deterministic CI diffs.
 
@@ -128,7 +128,7 @@ components are just acyclic nodes and are never reported.
   `extFanIn`, retained as an explicit directional edge count for inspection consumers.
 - `outgoingEdges` — distinct edges leaving the SCC to outside nodes.
 - `cutAnalysis` — the explicit result of optional cut investigation. Its `status` is
-  `notRequested` for the default fast report, `completedExact` when bounded enumeration finished
+  `notRequested` when cut analysis is not requested, `completedExact` when bounded enumeration finished
   its complete candidate space, `completedHeuristic` when only the greedy pass was available
   (including large SCCs), or `budgetExceeded` when its time or candidate limit was reached.
   `budgetExceeded` is still a successful report result. Every serialized solution is validated
@@ -144,7 +144,7 @@ components are just acyclic nodes and are never reported.
   - `examinedCandidates` — number of candidate simulations started before the budget check
     stopped the search.
 - Cut analysis is opt-in with `--analyze-cuts`; `--cut-time-limit` and
-  `--cut-candidate-limit` bound each SCC's investigation. The default report never invokes
+  `--cut-candidate-limit` bound each SCC's investigation. A report without `--analyze-cuts` never invokes
   feedback-edge search, so its cycle `cutAnalysis` has no estimate or solutions.
 - Table and Markdown output are intentionally shorter than this JSON schema: they display at most 8 cuts from
   each complete solution (even with `--all`) and may replace a dense knot's cut list with structural guidance.
@@ -152,7 +152,7 @@ components are just acyclic nodes and are never reported.
 
 ## Change propagators
 
-The JSON index contains every node above the normalized propagation threshold. The default table and Markdown views show
+The JSON index contains every node above the normalized propagation threshold. Table and Markdown views show
 the top 10 and reports its shown/total count; pass `--all` to either report command for the complete
 table inventory.
 
@@ -164,10 +164,10 @@ table inventory.
 
 ## Surface
 
-One row per scope node is retained in JSON. The default table and Markdown views show the top 10 rows as
+One row per scope node is retained in JSON. Table and Markdown views show the top 10 rows as
 `Surface risks (top 10 of N)`; `--all` shows every row.
 
-The table and Markdown views keep their default surface view compact with the headings `node`, `in`, `out`,
+The compact surface view in table and Markdown output uses the headings `node`, `in`, `out`,
 `ports`, `mut`, `encap%`, and `use`. For a wider or focused table or Markdown view, repeat `--columns` with one
 or more semantic groups: `visibility` selects `pub`, `prot`, `pkg`, `priv`, and `total`;
 `mutability` selects the aggregate `mut`, mutable declaration counts (`pubMut`, `protMut`,
@@ -235,7 +235,7 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
   top 10 unless `--all` is supplied.
 
 The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks,
-and orphans each include a shown/total label and display at most 10 rows by default. `--all` is accepted
+and orphans each include a shown/total label and display at most 10 rows. `--all` is accepted
 by `report-packages` and `report-files` only and requests every human-view row. JSON remains complete
 for graph-derived inventories; its `findings` array is capped at 10,000 rows and describes any
 omissions in `truncation`.

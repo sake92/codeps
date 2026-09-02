@@ -75,10 +75,10 @@ codeps report-packages --input deps.json
   `--include`; e.g. `--include com.example` descends into `com.example` and everything below it
 - `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
 - `--include`/`--exclude`/`--collapse` filter and collapse (see below)
-- `--format table` is the default compact human view; `--format markdown` emits the same bounded
+- `--format table` is the compact human view; `--format markdown` emits the same bounded
   triage content as deterministic GitHub-Flavored Markdown, always without ANSI styling; and
   `--format json` emits the schema-v2 report with canonical ids and complete cut evidence
-- table and Markdown sections show at most 10 rows by default; pass `--all` to show every row
+- table and Markdown sections show at most 10 rows; pass `--all` to show every row
 - `--columns visibility`, `--columns mutability`, `--columns coupling`, or `--columns all` expands
   the surface-risk columns (repeat the flag to compose groups); `--color auto|always|never` controls
   ANSI styling for table output

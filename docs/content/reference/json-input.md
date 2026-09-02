@@ -43,7 +43,7 @@ that scope. It never includes declarations, members, types, or symbol references
 `ports` and `mutPorts` are numbers. `declarationSurface` is an object with optional
 integer fields: `public`, `protected`, `packageRestricted`, `privateMembers`,
 `publicMutable`, `protectedMutable`, `packageRestrictedMutable`, and `privateMutable`.
-Missing declaration fields are zero. `weight` defaults to `1` when omitted.
+Missing declaration fields are zero. An omitted `weight` is `1`.
 
 The exporter derives both graphs from the same input projection. Package node summaries
 include the summaries of their files; package edges aggregate inter-package file edges and

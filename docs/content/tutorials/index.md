@@ -5,10 +5,11 @@ pagination:
   enabled: false
 ---
 
-# {{ page.title }}
+# Learn codeps
 
-> **Use this section** for step-by-step guides to get things working.
-> If you're looking for a specific recipe, see [How Tos](/howtos).
+Follow these in order. They use the same small loop: record overall health,
+identify the package worth changing, then narrow the investigation to files.
+Input setup for Scala and Java lives in [How-Tos](/howtos).
 
 {% for tut in site.data.project.tutorials %}- [{{ tut.label }}]({{ tut.url }})
 {% endfor %}

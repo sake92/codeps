@@ -54,9 +54,9 @@ codeps export --from jdeps --input jdeps.txt -o - | codeps report-packages --inp
 ```
 
 Cycles can include optional budgeted cut analysis, and the surface lists fanIn/fanOut
-and orphans — see the [Metrics report](/reference/report.html). Use `--format table` (the
-default), `--format markdown` for deterministic GitHub-Flavored Markdown, or `--format json`
-for the schema-v2 report. Table and Markdown sections show at most 10 rows by default; pass
+and orphans — see the [Metrics report](/reference/report.html). Use `--format table`,
+`--format markdown` for deterministic GitHub-Flavored Markdown, or `--format json`
+for the schema-v2 report. Table and Markdown sections show at most 10 rows; pass
 `--all` for every human-view row. `--analyze-cuts` enables bounded cut investigation, with
 `--cut-time-limit` and `--cut-candidate-limit` available as per-SCC controls. jdeps exports package
 nodes and an empty file graph.

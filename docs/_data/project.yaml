@@ -1,11 +1,17 @@
 tutorials:
-  - label: "Quickstart"
+  - label: "First health snapshot"
     url: "/tutorials/quickstart.html"
+  - label: "Track health in CI"
+    url: "/tutorials/health-in-ci.html"
+  - label: "Find package pain points"
+    url: "/tutorials/package-triage.html"
+  - label: "Drill into files"
+    url: "/tutorials/file-triage.html"
 
 howtos:
-  - label: "Export & analyze Scala/SemanticDB projects"
+  - label: "Export Scala/SemanticDB projects"
     url: "/howtos/semdb.html"
-  - label: "Export & analyze Java/JVM projects with jdeps"
+  - label: "Export Java/JVM projects with jdeps"
     url: "/howtos/jdeps.html"
 
 references:
