@@ -30,8 +30,8 @@
 ## Key Conventions
 - Sources: `modules/<id>/src/` (main), `modules/<id>/test/src/` (tests); test module id is `<id>-test`.
 - Tests: munit `FunSuite`, files named `*Spec.scala`.
-- Fixtures: sources in `testFixtures/example1/`; compiled at test runtime by `FixtureCompiler` into `tmp/` (gitignored). `testFixtures/cyclic.json` is a checked-in graph in the standard JSON export format — used by CLI tests and as the homepage example output.
-- JSON: all emitted JSON field names are camelCase (`generatedAt`, `nodesInCycles`, `solutions`, `propagators`, `score`, `extFanIn`, `fanIn`, `mutPorts`, ...); CLI table headers use the same names. The export graph format is called the *standard JSON export format* (page title/label; never "common JSON").
+- Fixtures: sources in `testFixtures/example1/`; compiled at test runtime by `FixtureCompiler` into `tmp/` (gitignored). `testFixtures/cyclic.json` is a checked-in graph in the codeps export format — used by CLI tests and as the homepage example output.
+- JSON: all emitted JSON field names are camelCase (`generatedAt`, `nodesInCycles`, `solutions`, `propagators`, `score`, `extFanIn`, `fanIn`, `mutPorts`, ...); CLI table headers use the same names. The export graph format is called the *codeps export format* (page title/label; never "common JSON").
 - Generated — do not edit: `docs/_site/`, `.deder/out/`, `tmp/`.
 
 ## Commit Attribution
@@ -42,3 +42,6 @@ Co-Authored-By: (the agent's name and attribution byline)
 
 ## Planning Artifacts
 - Specs and implementation plans are local working artifacts (`docs/superpowers/`); never stage or commit them.
+
+## Local Artifacts
+- Store local exports, reports, health snapshots, and rough plans under `.codeps/`; never stage or commit this directory.
