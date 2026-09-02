@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="the codeps report JSON format — findings, cycles, surface, orphans">
+  <meta name="description" content="the codeps report JSON format and Markdown/table triage views — findings, cycles, surface, orphans">
   <title> Metrics report | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
@@ -54,7 +54,6 @@
           <li><a href="#surface">Surface</a>
            <ul>
             <li><a href="#declaration-surface-fields">Declaration surface fields</a></li>
-            <li><a href="#public-symbol-use">Public-symbol use</a></li>
            </ul></li>
           <li><a href="#exposed-surface">Exposed surface</a></li>
           <li><a href="#orphans">Orphans</a></li>
@@ -68,10 +67,10 @@
     <div></div>
    </div>
    <h1 id="metrics-report">Metrics report<a href="#metrics-report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps report-packages</code> or <code>codeps report-files</code> consumes the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> (a file, or stdin via <code>-</code>) and emits a single flat JSON document: per-scope metrics over the graph's <strong>packages</strong>, or over the <strong>files</strong> of the packages selected with <code>--include</code>.</p>
+   <p><code>codeps report-packages</code> or <code>codeps report-files</code> consumes the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> (a file, or stdin via <code>-</code>) and emits a single flat JSON document: per-scope metrics over the graph's <strong>packages</strong>, or over the <strong>files</strong> of the packages selected with <code>--include</code>. The <code>table</code> and <code>markdown</code> formats present the same report as bounded human triage; Markdown is deterministic GitHub-Flavored Markdown and never contains ANSI styling.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - &gt; report.json
 </code></pre>
-   <p>Core metrics are computed fresh from the graph's node/edge list on every run. The default report does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit and can stop at a wall-clock deadline. Set the <code>SOURCE_DATE_EPOCH</code> env var (epoch seconds) to pin <code>generatedAt</code> for deterministic CI diffs.</p>
+   <p>Core metrics are computed fresh from the graph's node/edge list on every run. A report without <code>--analyze-cuts</code> does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit and can stop at a wall-clock deadline. Set the <code>SOURCE_DATE_EPOCH</code> env var (epoch seconds) to pin <code>generatedAt</code> for deterministic CI diffs.</p>
    <h2 id="structure">Structure<a href="#structure" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"schemaVersion"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span>
@@ -115,9 +114,6 @@
       <span class="hljs-attr">"encapsulationRatio"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"publicMutableRatio"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.33</span>
     <span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"publicSymbols"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-punctuation">{</span> <span class="hljs-attr">"symbol"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.cache.Cache"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"consumerCount"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"referenceCount"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"usageConfidence"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"semanticdbComplete"</span> <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"orphans"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"DeadUtil.scala"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"findings"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-punctuation">{</span>
@@ -151,7 +147,7 @@
     </li>
    </ul>
    <h2 id="findings">Findings<a href="#findings" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>findings</code> is a deterministic index of actionable diagnostics. Each finding has a stable <code>id</code>, a <code>kind</code> (<code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, <code>structuralUse</code>, or <code>unusedPublicSymbol</code>), <code>severity</code>, and <code>subject</code>, plus human-readable <code>evidence</code>, <code>confidence</code>, and a <code>nextAction</code>. Findings are ranked by severity, then metric score, then id. They cover every reported SCC, every above-average propagator, every node with exposed mutable ports, and every node whose structural-use proxy is below <code>1.0</code>. The structural-use kind is only a graph proxy, not proof that a public symbol is unused. An <code>unusedPublicSymbol</code> finding is emitted only when the optional <code>publicSymbols</code> index is present. JSON serialization bounds both <code>findings</code> and <code>publicSymbols</code> at 10,000 rows each so large projects remain agent-usable. When rows are omitted, <code>truncation</code> is present with <code>findingsOmitted</code> and <code>publicSymbolsOmitted</code> counts; the in-memory report and <code>--all</code> table view retain the complete inventories.</p>
+   <p><code>findings</code> is a deterministic index of actionable diagnostics. Each finding has a stable <code>id</code>, a <code>kind</code> (<code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, or <code>structuralUse</code>), <code>severity</code>, and <code>subject</code>, plus human-readable <code>evidence</code>, <code>confidence</code>, and a <code>nextAction</code>. Findings are ranked by severity, then metric score, then id. They cover every reported SCC, every above-average propagator, every node with exposed mutable ports, and every node whose structural-use proxy is below <code>1.0</code>. The structural-use kind is a graph proxy based on file/package edges; it does not identify individual declarations. JSON serialization bounds <code>findings</code> at 10,000 rows so large projects remain agent-usable. When rows are omitted, <code>truncation.findingsOmitted</code> records the count. Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound. The in-memory report and <code>--all</code> table or Markdown view retain the complete findings; <code>--all</code> does not raise the JSON cap.</p>
    <h2 id="cycles">Cycles<a href="#cycles" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>A cycle is a strongly connected component with more than 1 member (Tarjan's algorithm). Singleton components are just acyclic nodes and are never reported.</p>
    <ul>
@@ -163,29 +159,30 @@
     <li><code>internalEdges</code> — distinct edges whose source and target are both in the SCC.</li>
     <li><code>incomingEdges</code> — distinct edges entering the SCC from outside. This is the same count as <code>extFanIn</code>, retained as an explicit directional edge count for inspection consumers.</li>
     <li><code>outgoingEdges</code> — distinct edges leaving the SCC to outside nodes.</li>
-    <li><code>cutAnalysis</code> — the explicit result of optional cut investigation. Its <code>status</code> is <code>notRequested</code> for the default fast report, <code>completedExact</code> when bounded enumeration finished its complete candidate space, <code>completedHeuristic</code> when only the greedy pass was available (including large SCCs), or <code>budgetExceeded</code> when its time or candidate limit was reached. <code>budgetExceeded</code> is still a successful report result. Every serialized solution is validated against the original SCC; a greedy plan is never emitted if it leaves any cyclic component.
+    <li><code>cutAnalysis</code> — the explicit result of optional cut investigation. Its <code>status</code> is <code>notRequested</code> when cut analysis is not requested, <code>completedExact</code> when bounded enumeration finished its complete candidate space, <code>completedHeuristic</code> when only the greedy pass was available (including large SCCs), or <code>budgetExceeded</code> when its time or candidate limit was reached. <code>budgetExceeded</code> is still a successful report result. Every serialized solution is validated against the original SCC; a greedy plan is never emitted if it leaves any cyclic component.
      <ul>
       <li><code>greedyCutEstimate</code> — nullable greedy estimate of the total cuts needed to dissolve the cycle. It is present only when the greedy pass completed before the budget was exhausted; it is a heuristic, not a guaranteed-minimum feedback-edge set.</li>
       <li><code>solutions</code> — up to 3 <strong>complete</strong> ways to break the cycle, simplest first. Each solution is a list of <code>cuts</code> (<code>{edge, weight}</code>); removing ALL of them together dissolves the cycle (no multi-member component remains among its members). A solution can be 1 edge or several. Results are ranked by fewest cuts, cheapest total weight, then lexicographic order. Sets containing a smaller working solution are skipped. Partial candidates are never serialized.</li>
       <li><code>examinedCandidates</code> — number of candidate simulations started before the budget check stopped the search.</li>
      </ul></li>
-    <li>Cut analysis is opt-in with <code>--analyze-cuts</code>; <code>--cut-time-limit</code> and <code>--cut-candidate-limit</code> bound each SCC's investigation. The default report never invokes feedback-edge search, so its cycle <code>cutAnalysis</code> has no estimate or solutions.</li>
-    <li>Table output is intentionally shorter than this JSON schema: it displays at most 8 cuts from each complete solution and may replace a dense knot's cut list with structural guidance. <code>--format json</code> retains every complete solution, canonical id, status, and budget count.</li>
+    <li>Cut analysis is opt-in with <code>--analyze-cuts</code>; <code>--cut-time-limit</code> and <code>--cut-candidate-limit</code> bound each SCC's investigation. A report without <code>--analyze-cuts</code> never invokes feedback-edge search, so its cycle <code>cutAnalysis</code> has no estimate or solutions.</li>
+    <li>Table and Markdown output are intentionally shorter than this JSON schema: they display at most 8 cuts from each complete solution (even with <code>--all</code>) and may replace a dense knot's cut list with structural guidance. <code>--format json</code> retains every complete solution, canonical id, status, and budget count.</li>
    </ul>
    <h2 id="change-propagators">Change propagators<a href="#change-propagators" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>The JSON index contains every node above the normalized propagation threshold. The default table shows the top 10 and reports its shown/total count; pass <code>--all</code> to either report command for the complete table inventory.</p>
+   <p>The JSON index contains every node above the normalized propagation threshold. Table and Markdown views show the top 10 and reports its shown/total count; pass <code>--all</code> to either report command for the complete table inventory.</p>
    <ul>
     <li><code>score</code> — <code>(fanIn / avgFanIn + fanOut / avgFanOut) / 2</code>, where <code>avgFanIn</code>/<code>avgFanOut</code> are the graph-wide means (<code>edges / nodes</code>). An exactly average node scores <code>1.0</code>; a hub with twice the average fan-in and no fan-out scores <code>2.0</code>. Only nodes above <code>1.0</code> are listed, sorted by score descending. A graph with no edges has no propagators.</li>
     <li><code>fanIn</code>/<code>fanOut</code> — the raw counts (same values as in <code>surface</code>), shown for context.</li>
    </ul>
    <h2 id="surface">Surface<a href="#surface" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>One row per scope node is retained in JSON. The default table shows the top 10 rows as <code>Surface risks (top 10 of N)</code>; <code>--all</code> shows every row.</p>
+   <p>One row per scope node is retained in JSON. Table and Markdown views show the top 10 rows as <code>Surface risks (top 10 of N)</code>; <code>--all</code> shows every row.</p>
+   <p>The compact surface view in table and Markdown output uses the headings <code>node</code>, <code>in</code>, <code>out</code>, <code>ports</code>, <code>mut</code>, <code>encap%</code>, and <code>use</code>. For a wider or focused table or Markdown view, repeat <code>--columns</code> with one or more semantic groups: <code>visibility</code> selects <code>pub</code>, <code>prot</code>, <code>pkg</code>, <code>priv</code>, and <code>total</code>; <code>mutability</code> selects the aggregate <code>mut</code>, mutable declaration counts (<code>pubMut</code>, <code>protMut</code>, <code>pkgMut</code>, and <code>privMut</code>), and <code>mut%</code>; and <code>coupling</code> selects <code>in</code>, <code>out</code>, <code>exp</code>, and <code>use</code>. The focused groups intentionally overlap the compact core where useful, while composed groups render each heading once. <code>--columns all</code> selects the complete accounting view. Groups are rendered in canonical order, and these short aliases apply to table and Markdown headings; JSON continues to use its camelCase field names. With no <code>--columns</code>, the <code>core</code> group is used.</p>
    <ul>
     <li><code>fanIn</code> / <code>fanOut</code> — count of distinct edges in/out. Always derived from the edge list, never stored separately.</li>
     <li><code>ports</code> — weighted count of exposed members (see <a href="#exposed-surface">Exposed surface</a>).</li>
     <li><code>mutPorts</code> — count of exposed <strong>mutable</strong> members: <code>var</code>s, or vals/defs typed as a mutable collection. A coupling channel that never shows up as a graph edge.</li>
     <li><code>exposure</code> — <code>ports + mutPorts * 3</code>; mutable ports weighted 3× because they are a hidden channel on top of being exposed at all. Always look at the <code>ports</code>/<code>mutPorts</code> breakdown, never <code>exposure</code> alone.</li>
-    <li><code>dependentsPerPublicPort</code> — <code>fanIn / ports</code> when <code>fanIn &gt; 0</code> and <code>ports &gt; 0</code>, else <code>null</code>. This is a structural proxy: file/package edges do not prove that a particular public symbol is used. A <code>null</code> value is meaningful (no consumers or no weighted public ports), not a 0.</li>
+    <li><code>dependentsPerPublicPort</code> — <code>fanIn / ports</code> when <code>fanIn &gt; 0</code> and <code>ports &gt; 0</code>, else <code>null</code>. This is a structural proxy: file/package edges do not identify which public declarations are used. A <code>null</code> value is meaningful (no consumers or no weighted public ports), not a 0.</li>
     <li><code>cycleId</code> — the nullable stable SCC id (<code>scc:</code> plus the lexicographically smallest member) for nodes in a reported cycle; <code>null</code> for nodes outside all cycles.</li>
    </ul>
    <p>Rows are sorted by <code>dependentsPerPublicPort</code> ascending (nulls last): the most exposed-for-its-use nodes first. Raw declaration counters are retained so consumers can triage public surface, public mutability, and encapsulation independently.</p>
@@ -198,8 +195,6 @@
     <li><code>encapsulationRatio</code> — <code>publicSurface / totalDeclaredSurface</code> when the denominator is non-zero; otherwise <code>null</code>. Lower means more of the declaration surface is encapsulated.</li>
     <li><code>publicMutableRatio</code> — <code>publicMutableSurface / publicSurface</code> when public declarations exist; otherwise <code>null</code>.</li>
    </ul>
-   <h3 id="public-symbol-use">Public-symbol use<a href="#public-symbol-use" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h3>
-   <p><code>publicSymbols</code> is omitted when the input graph has no complete symbol-reference index. When present, each row identifies a declared public symbol and reports <code>consumerCount</code> (distinct source files), <code>referenceCount</code> (reference occurrences), and <code>usageConfidence</code>. SemanticDB exports use <code>semanticdbComplete</code>; only these complete rows can produce an <code>unusedPublicSymbol</code> finding. Include/exclude and test filters apply to both declaration targets and source-file references, so consumers outside the selected report surface are not counted. If any SemanticDB document fails to parse during <code>export</code>, the optional indexes are omitted because the remaining records are partial. An <code>unusedPublicSymbol</code> finding's <code>nextAction</code> is <code>inspect-node &lt;scope-id&gt;</code>, where <code>&lt;scope-id&gt;</code> is the declaring package or file and is valid for the report's detail workflow; the symbol id itself is not a surface node. Absence of the field never implies that public API is unused. Compiler-generated SemanticDB symbols without a source definition (such as case-class <code>copy</code>/<code>apply</code> methods and Product <code>_1</code> accessors), as well as symbols marked <code>SYNTHETIC</code>, are excluded; a source-defined identifier with the same spelling remains eligible.</p>
    <h2 id="exposed-surface">Exposed surface<a href="#exposed-surface" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>isExposed</code>, <code>ports</code> and <code>mutPorts</code> are resolved <strong>per node by the extraction backend</strong> (SemanticDB export), using Scala-specific weight rules that never leak into the metrics layer:</p>
    <ul>
@@ -212,13 +207,13 @@
    <p><code>private[pkg]</code> and <code>protected</code> members are not exposed; class-private members are omitted from dependency nodes but retained in file declaration counters; <code>var</code> setters are accessors and never count as surface. jdeps data carries no access info, so all its nodes have <code>ports</code>/<code>mutPorts</code> 0 and <code>dependentsPerPublicPort</code> <code>null</code> — a known gap, not silently meaningful.</p>
    <h2 id="orphans">Orphans<a href="#orphans" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
-    <li><code>orphans</code> — node ids with <code>fanIn == 0 AND fanOut == 0</code>, sorted. Step 1 of the improvement loop: dead-code-removal candidates. JSON retains the complete list; the table bounds it to the top 10 unless <code>--all</code> is supplied.</li>
+    <li><code>orphans</code> — node ids with <code>fanIn == 0 AND fanOut == 0</code>, sorted. Step 1 of the improvement loop: dead-code-removal candidates. JSON retains the complete list; table and Markdown bound it to the top 10 unless <code>--all</code> is supplied.</li>
    </ul>
-   <p>The table format is a bounded triage view: findings, cycles, propagators, surface risks, and orphans each include a shown/total label and display at most 10 rows by default. <code>--all</code> is accepted by <code>report-packages</code> and <code>report-files</code> only and requests every table row. JSON is always complete.</p>
+   <p>The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks, and orphans each include a shown/total label and display at most 10 rows. <code>--all</code> is accepted by <code>report-packages</code> and <code>report-files</code> only and requests every human-view row. JSON remains complete for graph-derived inventories; its <code>findings</code> array is capped at 10,000 rows and describes any omissions in <code>truncation</code>.</p>
    <div role="group">
-    <a role="button" href="https://sake92.github.io/codeps/reference/cli.html">⬅️ CLI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/json-input.html">Standard JSON export format ➡️</a>
+    <a role="button" href="https://sake92.github.io/codeps/reference/cli.html">⬅️ CLI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/json-input.html">Codeps export format ➡️</a>
    </div>
   </main>
-  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
  </body>
 </html>

@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="codeps Quickstart">
-  <title> Quickstart | codeps </title>
+  <meta name="description" content="Record your first codeps health baseline">
+  <title> First health snapshot | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
@@ -44,12 +44,12 @@
       <summary>Table of Contents</summary>
       <div>
        <ul>
-        <li><a href="#quickstart">Quickstart</a>
+        <li><a href="#first-health-snapshot">First health snapshot</a>
          <ul>
           <li><a href="#prerequisites">Prerequisites</a></li>
           <li><a href="#get-the-cli">Get the CLI</a></li>
-          <li><a href="#export-the-graph">Export the graph</a></li>
-          <li><a href="#analyze">Analyze</a></li>
+          <li><a href="#export-then-record-health">Export, then record health</a></li>
+          <li><a href="#read-the-result">Read the result</a></li>
           <li><a href="#whats-next">What's next?</a></li>
          </ul></li>
        </ul>
@@ -60,7 +60,8 @@
     <div></div>
     <div></div>
    </div>
-   <h1 id="quickstart">Quickstart<a href="#quickstart" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <h1 id="first-health-snapshot">First health snapshot<a href="#first-health-snapshot" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>Use this once your compiler output is available. It produces a dependency graph, records the first baseline, and shows the next thing worth investigating. The examples use SemanticDB; the <a href="https://sake92.github.io/codeps/howtos/semdb.html">Scala setup guide</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps setup guide</a> explain where that input comes from.</p>
    <h2 id="prerequisites">Prerequisites<a href="#prerequisites" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li>JDK 11+</li>
@@ -69,39 +70,41 @@
    <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
 </code></pre>
    <p>(<code>codeps</code> below is shorthand for <code>java -jar codeps.jar</code>.)</p>
-   <h2 id="export-the-graph">Export the graph<a href="#export-the-graph" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <h2 id="export-then-record-health">Export, then record health<a href="#export-then-record-health" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>codeps reads what your compiler already produced — no build integration required.</p>
    <p><strong>Scala</strong> — compile with SemanticDB enabled (here with scala-cli):</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">scala-cli compile --server=false --semanticdb -d classes src/
 <span class="hljs-meta prompt_"># </span><span class="language-bash">-&gt; classes/META-INF/semanticdb/**/*.semanticdb</span>
 </code></pre>
-   <p>Then export the graph to the codeps export format:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+   <p>Then export the graph and record an overall baseline:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
+codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
 </code></pre>
    <p>If your build tool already enables SemanticDB (sbt/Maven with the <code>semanticdb</code> compiler plugin), the <code>.semanticdb</code> files are already on disk — just point <code>export --input</code> at the directory that contains them.</p>
-   <p><strong>Java or mixed</strong> — use the JDK's own analyzer:</p>
+   <p>For Java or mixed projects, produce jdeps input instead:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:class -filter:none -cp classes classes &gt; jdeps.txt
-codeps export --from jdeps --input jdeps.txt -o deps.json
+codeps export --from jdeps --input jdeps.txt --out .codeps/export.json
 </code></pre>
    <p>See <a href="https://sake92.github.io/codeps/howtos/semdb.html">Scala/SemanticDB projects</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">Java/JVM projects with jdeps</a> for details.</p>
-   <h2 id="analyze">Analyze<a href="#analyze" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Emit the metrics report over the whole package graph:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input deps.json
+   <p>The commands above write the graph to <code>.codeps/export.json</code> and append a compact record to <code>.codeps/health.ndjson</code>. Commit that history if you want to review health changes in Git history.</p>
+   <h2 id="read-the-result">Read the result<a href="#read-the-result" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Print a review-friendly snapshot:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
 </code></pre>
-   <p>or pipe export straight into <code>report-packages</code>:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
+   <p>The snapshot is deliberately small: overall structure, cycles, exposed surface, and finding counts. Treat it as a signal, not a refactoring plan. When it shows cycles or high findings, continue with <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage</a>.</p>
+   <p>To see the full package report now:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input .codeps/export.json
 </code></pre>
-   <p>For a file-level view of one package, use <code>report-files</code> with an include pattern:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-files --include com.example.modules.module1 --input deps.json
-</code></pre>
-   <p>The report contains SCC facts (and optional budgeted cut analysis), exposed-surface metrics (<code>ports</code>/<code>mutPorts</code>/<code>exposure</code>/<code>dependentsPerPublicPort</code> plus declaration visibility and encapsulation ratios) and orphans — see the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the full field reference. It renders as plain aligned text by default; <code>--format json</code> emits machine-readable JSON.</p>
    <h2 id="whats-next">What's next?<a href="#whats-next" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
-    <li>Filter and collapse packages: <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a></li>
-    <li>Understand the metrics: <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a></li>
-    <li>The export JSON schema: <a href="https://sake92.github.io/codeps/reference/json-input.html">Codeps export format</a></li>
+    <li><a href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">Track health in CI</a></li>
+    <li><a href="https://sake92.github.io/codeps/tutorials/package-triage.html">Find package pain points</a></li>
+    <li><a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for every option</li>
    </ul>
+   <div role="group">
+    <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">Track health in CI ➡️</a>
+   </div>
   </main>
-  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
  </body>
 </html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Turn a health signal into a focused package investigation">
+  <title> Find package pain points | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#find-package-pain-points">Find package pain points</a>
+         <ul>
+          <li><a href="#try-the-bundled-example-optional">Try the bundled example (optional)</a></li>
+          <li><a href="#1-scope-the-report-to-your-code">1. Scope the report to your code</a></li>
+          <li><a href="#2-choose-one-finding">2. Choose one finding</a></li>
+          <li><a href="#3-investigate-the-package-not-every-metric">3. Investigate the package, not every metric</a></li>
+          <li><a href="#4-keep-large-graphs-readable">4. Keep large graphs readable</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="find-package-pain-points">Find package pain points<a href="#find-package-pain-points" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>Start broad. A package report tells you which dependency knot, change hub, or over-exposed package deserves attention—not how to rewrite the whole system.</p>
+   <h2 id="try-the-bundled-example-optional">Try the bundled example (optional)<a href="#try-the-bundled-example-optional" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>If you want to explore the report before exporting your own project, clone the <a href="https://github.com/sake92/codeps">codeps repository</a> and run the CLI against its small checked-in graph:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input testFixtures/cyclic.json
+</code></pre>
+   <p>The rest of this tutorial works exactly the same way with your own <code>.codeps/export.json</code>.</p>
+   <h2 id="1-scope-the-report-to-your-code">1. Scope the report to your code<a href="#1-scope-the-report-to-your-code" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Use the graph created by <code>export</code>. An include pattern covers a package and its children; excludes win. This keeps platform and third-party noise out of the ranking.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example -e java -e scala
+</code></pre>
+   <p>For review output, write deterministic Markdown instead of copying terminal text:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example --format markdown -o codeps-report.md
+</code></pre>
+   <h2 id="2-choose-one-finding">2. Choose one finding<a href="#2-choose-one-finding" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Read the sections in this order:</p>
+   <ol>
+    <li><strong>Cycles</strong> — a package SCC blocks clean module boundaries. Start with the largest SCC; <code>extFanIn</code> shows how much code feeds into it.</li>
+    <li><strong>Change propagators</strong> — high <code>fanIn</code> and <code>fanOut</code> identify packages whose changes spread widely. They are useful candidates for a narrower API or a split.</li>
+    <li><strong>Surface risks</strong> — low <code>use</code> (<code>dependentsPerPublicPort</code>) can indicate a package exposing more API than its consumers need. Check <code>ports</code>, <code>mut</code>, and <code>encap%</code> together; no single score is a verdict.</li>
+    <li><strong>Orphans</strong> — isolated nodes are dead-code-removal candidates. Confirm they are not entry points or reflection targets before deleting anything.</li>
+   </ol>
+   <h2 id="3-investigate-the-package-not-every-metric">3. Investigate the package, not every metric<a href="#3-investigate-the-package-not-every-metric" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Ask codeps for a cached report detail using an id printed in the report:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id scc:com.example.orders
+codeps inspect-node --id com.example.orders
+</code></pre>
+   <p>If a cycle is the problem, ask for bounded cut analysis only then:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example --analyze-cuts
+codeps inspect-cycle --id scc:com.example.orders
+</code></pre>
+   <p>The suggested cuts are investigation leads. Validate the dependency direction and domain ownership before changing an API. For field meanings and cut-analysis guarantees, see <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>.</p>
+   <h2 id="4-keep-large-graphs-readable">4. Keep large graphs readable<a href="#4-keep-large-graphs-readable" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Collapse an uninteresting subtree to one node, then rerun the same question:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example -c com.example.generated.**
+</code></pre>
+   <p>When a package is clearly the problem, move to <a href="https://sake92.github.io/codeps/tutorials/file-triage.html">file-level drill-down</a> rather than trying to infer the responsible files from package totals.</p>
+   <div role="group">
+    <a role="button" href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">⬅️ Track health in CI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/tutorials/file-triage.html">Drill into files ➡️</a>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
+ </body>
+</html>

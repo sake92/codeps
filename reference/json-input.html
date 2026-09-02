@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="the standard JSON graph format produced by codeps export and consumed by codeps report-packages or report-files">
+  <meta name="description" content="the codeps export format produced by codeps export and consumed by codeps reports">
   <title> Codeps export format | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
@@ -46,10 +46,7 @@
        <ul>
         <li><a href="#codeps-export-format">Codeps export format</a>
          <ul>
-          <li><a href="#schema">Schema</a>
-           <ul>
-            <li><a href="#id-rules">Id rules</a></li>
-           </ul></li>
+          <li><a href="#schema">Schema</a></li>
           <li><a href="#producing-it">Producing it</a></li>
          </ul></li>
        </ul>
@@ -61,22 +58,21 @@
     <div></div>
    </div>
    <h1 id="codeps-export-format">Codeps export format<a href="#codeps-export-format" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>The codeps export format is the contract between the two codeps steps: <code>codeps export</code> <em>produces</em> it, and <code>codeps report-packages</code> or <code>codeps report-files</code> <em>consumes</em> it. It is a self-contained dependency graph produced by <code>codeps export</code> as <code>package</code> and <code>file</code> nodes only — the exporters collapse type/member symbols into their file (or root package for file-less jdeps types), with <code>ports</code>/<code>mutPorts</code> and <code>declarationSurface</code> summed and edges aggregated at file level with summed weights. <code>type</code>/<code>member</code> kinds are still <em>accepted</em> on input for backward compatibility with old graphs (the analyzer aggregates them), but exporters never emit them.</p>
+   <p>The codeps export format is the contract between <code>codeps export</code> and the report commands. It has two independent, materialized graphs: <code>packages</code> for <code>report-packages</code>, and <code>files</code> for <code>report-files</code>. Each graph contains only the ids, summary values, and edges needed for that scope. It never includes declarations, members, types, or symbol references.</p>
    <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"package"</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-    <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"file"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"parentId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"ports"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"mutPorts"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
-     <span class="hljs-attr">"declarationSurface"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"public"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"protected"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"packageRestricted"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"privateMembers"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span>
-       <span class="hljs-attr">"publicMutable"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"protectedMutable"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"packageRestrictedMutable"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"privateMutable"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/b/Bar.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"weight"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"symbolReferences"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-punctuation">{</span><span class="hljs-attr">"sourceFile"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/b/Bar.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"targetSymbol"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a.Foo#api"</span><span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"declaredPublicSymbols"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">"com.example.a.Foo#api"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span>
+  <span class="hljs-attr">"packages"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+      <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"ports"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"mutPorts"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
+       <span class="hljs-attr">"declarationSurface"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"public"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"privateMembers"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.b"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"weight"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span>
+  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+      <span class="hljs-punctuation">{</span><span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"packageId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"com.example.a"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"ports"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"mutPorts"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span>
+       <span class="hljs-attr">"declarationSurface"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"public"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"privateMembers"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">}</span>
+    <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-punctuation">{</span><span class="hljs-attr">"source"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/a/Foo.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"target"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"src/com/example/b/Bar.scala"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"weight"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">]</span>
   <span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -91,161 +87,45 @@
     </thead>
     <tbody>
      <tr>
-      <td><code>nodes</code></td>
-      <td><code>[{id, kind, parentId?, file?}]</code></td>
-      <td>the graph's nodes; a set, so each <code>id</code> appears once</td>
+      <td><code>packages</code></td>
+      <td><code>{nodes, edges}</code></td>
+      <td>package-level graph consumed by <code>report-packages</code></td>
      </tr>
      <tr>
-      <td><code>edges</code></td>
+      <td><code>files</code></td>
+      <td><code>{nodes, edges}</code></td>
+      <td>file-level graph consumed by <code>report-files</code></td>
+     </tr>
+     <tr>
+      <td><code>packages.nodes</code></td>
+      <td><code>[{id, ports, mutPorts, declarationSurface}]</code></td>
+      <td>one summary per package</td>
+     </tr>
+     <tr>
+      <td><code>files.nodes</code></td>
+      <td><code>[{id, packageId?, ports, mutPorts, declarationSurface}]</code></td>
+      <td>one summary per source file; <code>packageId</code> supports package filtering</td>
+     </tr>
+     <tr>
+      <td><code>*.edges</code></td>
       <td><code>[{source, target, weight}]</code></td>
-      <td>directed dependency edges between node ids; a set (deduplicated); <code>weight</code> = number of finer-grained references merged into the edge</td>
-     </tr>
-     <tr>
-      <td><code>symbolReferences</code></td>
-      <td>array (optional)</td>
-      <td>exact public-symbol reference occurrences; omitted when the producer cannot provide a complete SemanticDB reference index</td>
-     </tr>
-     <tr>
-      <td><code>declaredPublicSymbols</code></td>
-      <td>object (optional)</td>
-      <td>public declaration ids mapped to their source-file ids when type/member nodes are aggregated away; paired with <code>symbolReferences</code></td>
+      <td>directed edges whose endpoints belong to the same graph</td>
      </tr>
     </tbody>
    </table>
-   <p>Node fields:</p>
-   <table>
-    <thead>
-     <tr>
-      <th>Field</th>
-      <th>Type</th>
-      <th>Meaning</th>
-     </tr>
-    </thead>
-    <tbody>
-     <tr>
-      <td><code>id</code></td>
-      <td>string</td>
-      <td>hierarchical id, unique within the graph</td>
-     </tr>
-     <tr>
-      <td><code>kind</code></td>
-      <td>string</td>
-      <td><code>package</code> or <code>file</code>; <code>type</code>/<code>member</code> (deprecated — accepted on input for backward compatibility, never emitted by <code>export</code>)</td>
-     </tr>
-     <tr>
-      <td><code>parentId</code></td>
-      <td>string (optional)</td>
-      <td>nearest enclosing node; on <code>file</code> nodes: their root package; <code>package</code> nodes are standalone (no <code>parentId</code>)</td>
-     </tr>
-     <tr>
-      <td><code>file</code></td>
-      <td>string (optional)</td>
-      <td>on <code>type</code>/<code>member</code> nodes: the id of their source <code>file</code> node</td>
-     </tr>
-     <tr>
-      <td><code>isExposed</code></td>
-      <td>boolean (optional)</td>
-      <td>part of the externally visible surface; resolved by the extraction backend (SemanticDB export), default <code>true</code> for graphs without exposure info</td>
-     </tr>
-     <tr>
-      <td><code>ports</code></td>
-      <td>number (optional)</td>
-      <td>the node's own weighted exposure contribution (types 3, defs/vals 1, sealed-hierarchy members 0.5, givens/implicits +1); the report sums these per scope node, default <code>0</code></td>
-     </tr>
-     <tr>
-      <td><code>mutPorts</code></td>
-      <td>number (optional)</td>
-      <td>the node's own mutable-state exposure contribution (<code>var</code>s, mutable-collection-typed vals/defs), default <code>0</code></td>
-     </tr>
-     <tr>
-      <td><code>declarationSurface</code></td>
-      <td>object (optional)</td>
-      <td>raw declaration counts by visibility and mutable subset; absent fields default to <code>0</code></td>
-     </tr>
-    </tbody>
-   </table>
-   <p><code>declarationSurface</code> fields are <code>public</code>, <code>protected</code>, <code>packageRestricted</code> (<code>private[pkg]</code>), <code>privateMembers</code> (class-private declarations), and their mutable counterparts <code>publicMutable</code>, <code>protectedMutable</code>, <code>packageRestrictedMutable</code>, and <code>privateMutable</code>. Unlike weighted <code>ports</code>, these are declaration counts and preserve private declarations even when a parser does not emit them as dependency nodes.</p>
-   <p>The exposure weight rules are Scala-specific and live in the SemanticDB exporter — see the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the definitions. A jdeps graph carries no access info, so its nodes are all <code>isExposed: true</code> with <code>ports</code>/<code>mutPorts</code> 0.</p>
-   <p>Edge fields:</p>
-   <table>
-    <thead>
-     <tr>
-      <th>Field</th>
-      <th>Type</th>
-      <th>Meaning</th>
-     </tr>
-    </thead>
-    <tbody>
-     <tr>
-      <td><code>source</code></td>
-      <td>string</td>
-      <td>node id the dependency comes from</td>
-     </tr>
-     <tr>
-      <td><code>target</code></td>
-      <td>string</td>
-      <td>node id the dependency goes to</td>
-     </tr>
-     <tr>
-      <td><code>weight</code></td>
-      <td>number (optional)</td>
-      <td>number of finer-grained references this edge represents; 1 when absent (producers that don't emit it are accepted)</td>
-     </tr>
-    </tbody>
-   </table>
-   <p>Symbol-reference fields:</p>
-   <table>
-    <thead>
-     <tr>
-      <th>Field</th>
-      <th>Type</th>
-      <th>Meaning</th>
-     </tr>
-    </thead>
-    <tbody>
-     <tr>
-      <td><code>sourceFile</code></td>
-      <td>string</td>
-      <td>source file containing the reference occurrence</td>
-     </tr>
-     <tr>
-      <td><code>targetSymbol</code></td>
-      <td>string</td>
-      <td>stable dotted declaration id, such as <code>com.example.a.Foo#api</code></td>
-     </tr>
-    </tbody>
-   </table>
-   <p>SemanticDB export emits <code>symbolReferences</code> and <code>declaredPublicSymbols</code>; after all input documents are merged, references to missing or non-public declarations are removed. Parsers without complete symbol information omit both fields, so reports never infer unused public API from their absence. If any SemanticDB document fails to parse, <code>export</code> omits both fields from the merged output rather than advertising the successful subset as a complete index.</p>
-   <h3 id="id-rules">Id rules<a href="#id-rules" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h3>
-   <ul>
-    <li><strong>package</strong> — dotted name: <code>com.example.a</code>. Standalone (no <code>parentId</code>).</li>
-    <li><strong>file</strong> — workspace-relative path: <code>src/com/example/a/Foo.scala</code>. <code>parentId</code> is the root package (lexicographically smallest when a file hosts several packages).</li>
-    <li><strong>type</strong> (deprecated on input) — <code>com.example.a.Foo</code>; nested types use <code>#</code>: <code>com.example.a.Outer#Inner</code>. <code>parentId</code> is the enclosing type or the package.</li>
-    <li><strong>member</strong> (deprecated on input) — <code>com.example.a.Foo#doWork</code> (a type member; <code>parentId</code> = the type) or <code>com.example.a.topLevelHelper</code> (a package member; <code>parentId</code> = the package, no <code>#</code>).</li>
-   </ul>
-   <p><code>export</code> collapses type/member symbols into their file node (or root package for file-less jdeps types), sums their <code>ports</code>/<code>mutPorts</code>, and aggregates edges at file level with summed weights — so the graphs it emits only ever contain package and file nodes. The granular package → type → member hierarchy remains the <em>internal</em> parser contract; the analyzer aggregates such old graphs the same way <code>export</code> does.</p>
-   <p>On granular (pre-aggregation) input, the hierarchy is only package → type → member, plus member → package directly; edges can go between nodes of any kinds, e.g. a member of one type referencing a member of another. On <code>export</code> output (package + file nodes), edges always go between files or packages.</p>
-   <p>Only the project's own symbols appear: references to external symbols are dropped by the producers. The format has no <code>own</code> array, no <code>stats</code> and no version field; unknown node kinds or fields are rejected with a helpful parse error, e.g.:</p>
-   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">error: failed to parse json: ...
-</code></pre>
+   <p><code>ports</code> and <code>mutPorts</code> are numbers. <code>declarationSurface</code> is an object with optional integer fields: <code>public</code>, <code>protected</code>, <code>packageRestricted</code>, <code>privateMembers</code>, <code>publicMutable</code>, <code>protectedMutable</code>, <code>packageRestrictedMutable</code>, and <code>privateMutable</code>. Missing declaration fields are zero. An omitted <code>weight</code> is <code>1</code>.</p>
+   <p>The exporter derives both graphs from the same input projection. Package node summaries include the summaries of their files; package edges aggregate inter-package file edges and drop intra-package self-edges. The file graph retains file-to-file edges. jdeps has no source-file data, so its <code>files</code> graph is empty and its package summaries have zero surface values.</p>
+   <p>Ids are dotted package names (<code>com.example.a</code>) and workspace-relative source paths (<code>src/com/example/a/Foo.scala</code>). Only project-owned dependencies appear; external symbols are dropped by the producers.</p>
+   <p>This is a breaking schema: report commands accept this split shape only.</p>
    <h2 id="producing-it">Producing it<a href="#producing-it" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>The easiest way to see the exact shape is to run the exporter:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps report-packages --input deps.json
 </code></pre>
-   <p>External tools can emit nodes+edges JSON directly (matching the schema above) and pipe it into <code>codeps report-packages ... --input -</code>. The examples below are sketches; adapt them to your tool's output. The key points: give every node a unique <code>id</code> and a valid <code>kind</code>, and reference only existing ids in <code>edges</code>.</p>
-   <p>JavaScript/TypeScript (file-level deps from <a href="https://github.com/pahen/madge">madge</a> mapped to file/package nodes, e.g. by tsconfig <code>rootDir</code>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">madge --json src | jq '...' | codeps report-files --input -
-</code></pre>
-   <p>Python (module-level deps from <a href="https://github.com/thebjorn/pydeps">pydeps</a>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">pydeps --json mypackage | jq '...' | codeps report-packages --input -
-</code></pre>
-   <p>Go (<code>go list</code> already emits package-level import deps):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">go list -json ./... | jq '...' | codeps report-packages --input -
-</code></pre>
+   <p>External tools should emit both scopes. A package-only tool such as <code>go list</code> or <code>pydeps</code> can emit package nodes and edges with an empty file graph; a file-level tool can emit both when it can map files to packages. Pipe the JSON to a report with <code>--input -</code>.</p>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/reference/report.html">⬅️ Metrics report</a> <span></span> <span></span>
    </div>
   </main>
-  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
  </body>
 </html>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Code package dependency analyzer">
+  <meta name="description" content="Code deps health tracker">
   <title> codeps | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
@@ -46,7 +46,7 @@
        <ul>
         <li><a href="#codeps">codeps</a>
          <ul>
-          <li><a href="#example">Example</a></li>
+          <li><a href="#example-health-history">Example health history</a></li>
           <li><a href="#features">Features</a></li>
           <li><a href="#site-map">Site Map</a></li>
          </ul></li>
@@ -59,57 +59,61 @@
     <div></div>
    </div>
    <h1 id="codeps">codeps<a href="#codeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>codeps is a <strong>code dependency analyzer</strong> for JVM projects (Java and Scala). It works in two steps:</p>
+   <p>codeps is a <strong>code deps health tracker</strong> for JVM projects (Java and Scala). Start by recording one compact overall dependency-health snapshot per meaningful change, then use detailed reports when you want to refactor a cycle, reduce coupling, or improve encapsulation.</p>
+   <p>The normal workflow is:</p>
    <ol>
     <li><strong><code>codeps export</code></strong> parses output your compiler already produced — <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB</a> (<code>.semanticdb</code> files from Scala) or <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps</a> (the JDK's own analyzer) — and spits out a dependency graph as JSON: the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a>.</li>
-    <li><strong><code>codeps report-packages</code></strong> or <strong><code>codeps report-files</code></strong> takes that JSON (a file, or stdin via <code>-</code>) and spits out the <a href="https://sake92.github.io/codeps/reference/report.html">metrics report</a>: a plain-text table by default, or JSON with <code>--format json</code> — handy for agents, other tools and CI.</li>
+    <li><strong><code>codeps health-snapshot</code></strong> derives compact overall <code>structure</code>, <code>cycles</code>, <code>surface</code>, and <code>findings</code> sections and appends a point to <code>.codeps/health.ndjson</code> only when health changes significantly (or the periodic checkpoint is due).</li>
+    <li><strong><code>codeps report-packages</code></strong> or <strong><code>codeps report-files</code></strong> takes that JSON (a file, or stdin via <code>-</code>) and provides the detailed <a href="https://sake92.github.io/codeps/reference/report.html">metrics report</a>: a table with <code>--format table</code>, GitHub-Flavored Markdown with <code>--format markdown</code>, or JSON with <code>--format json</code> — handy for agents, other tools and CI.</li>
    </ol>
+   <p>For CI, keep artifact paths explicit:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
+codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
+</code></pre>
+   <p>The history file is ordinary NDJSON and committing it to the measured repository is recommended when you want trends in Git history or on GitHub Pages. The CLI does not commit it for you.</p>
    <p>It works on two levels:</p>
    <ul>
     <li><strong><code>report-packages</code></strong> — the whole package graph: the level you use when <strong>splitting modules</strong>. Find the cycles that keep modules welded together, with optional budgeted cut analysis, plus per-package exposed surface and orphans.</li>
     <li><strong><code>report-files</code></strong> — the file graph of the packages selected with <code>--include</code>: the granularity that matters when you <strong>optimize compile times</strong> (zinc and other incremental compilers recompile by file).</li>
    </ul>
    <p>Cycles are bad in both: at package level they make modules inseparable; at file level they degrade incremental compilation.</p>
-   <h2 id="example">Example<a href="#example" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-codeps report-packages --input deps.json
+   <h2 id="example-health-history">Example health history<a href="#example-health-history" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>health-snapshot</code> stores compact NDJSON records. Request Markdown when you want a review-friendly summary:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps health-snapshot --format markdown
 </code></pre>
-   <p>Abbreviated table output of <code>codeps report-packages</code> on the repo's <a href="https://github.com/sake92/codeps/blob/main/testFixtures/cyclic.json">cyclic test fixture</a> (<code>module1</code> ↔ <code>module2</code>):</p>
-   <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">scope: packages    generatedAt: 2026-08-28T14:20:56Z
+   <pre><code class="language-markdown hljs" data-highlighted="yes"><span class="hljs-section"># Overall dependency health</span>
 
-Summary
-  nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
+<span class="hljs-strong">**Status:**</span> critical<span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">br</span>&gt;</span></span>
+<span class="hljs-strong">**Commit:**</span> <span class="hljs-code">`abc123`</span><span class="language-xml"><span class="hljs-tag">&lt;<span class="hljs-name">br</span>&gt;</span></span>
+<span class="hljs-strong">**Recorded:**</span> 2026-09-02 12:00 UTC
 
-Cycles (size desc, extFanIn desc)
-id                               size  extFanIn  greedyCutEstimate  status
-scc:com.example.modules.module1  2     1         —                  notRequested
+| Section | Metric | Current | Change |
+|---|---|---:|---:|
+| Structure | Nodes | 351 | +2.0% |
+| Structure | Edges | 2,408 | +1.4% |
+| Cycles | Nodes in cycles | 336 | +12.0% |
+| Cycles | Largest SCC | 336 | +12.0% |
+| Surface | Public surface | 12,345 | +0.8% |
+| Surface | Encapsulation ratio | 18.1% | −0.4% |
+| Findings | Critical | 1 | +1 |
+| Findings | High | 8 | −2 |
 
-  Cycle scc:com.example.modules.module1
-    cut analysis: notRequested (pass --analyze-cuts)
-
-Change propagators (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score &gt; 1, top 10)
-node                         fanIn  fanOut  score
-com.example.modules.module1  2      1       1.50
-com.example.modules.module2  1      2       1.50
-Surface (dependentsPerPublicPort asc; — = no fan-in)
-node                         fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort
-com.example.modules.module2  1      2       4      0         4         0.25
-org.thirdparty               1      0       4      0         4         0.25
-com.example.modules.module1  2      1       4      0         4         0.50
-com.example.app              0      1       4      0         4         —
-Orphans
-  (none)
+<span class="hljs-emphasis">_Snapshot recorded: cycle size changed by more than the 1% threshold._</span>
 </code></pre>
+   <p>The underlying <code>.codeps/health.ndjson</code> is JSON on every line, which makes it particularly useful in CI: jobs can inspect the latest status, compare metrics, or feed the history into a dashboard without parsing human-oriented report text. The Markdown view is only the convenient presentation layer.</p>
+   <p>For the full dependency graph, cycle members, cut candidates, propagators, and per-node surface details, continue to the <a href="https://sake92.github.io/codeps/reference/report.html">metrics report reference</a> and the <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a>.</p>
    <h2 id="features">Features<a href="#features" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li><strong>Two input formats</strong> — <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB</a> (detailed, from Scala compiler output) and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps</a> (JDK-only, no extra tooling)</li>
-    <li><strong>Cycles with explicit cut analysis</strong> — every multi-member strongly connected component is reported as a closed cycle path with <code>extFanIn</code>; default reports remain fast with <code>cutAnalysis.status=notRequested</code>, while <code>--analyze-cuts</code> adds budgeted greedy estimates and up to 3 complete ways to break the cycle</li>
+    <li><strong>Cycles with explicit cut analysis</strong> — every multi-member strongly connected component is reported as a closed cycle path with <code>extFanIn</code>; reports without <code>--analyze-cuts</code> have <code>cutAnalysis.status=notRequested</code>, while the flag adds budgeted greedy estimates and up to 3 complete ways to break the cycle</li>
     <li><strong>Change propagators</strong> — the nodes whose changes propagate most: a normalized <code>(fanIn/avgFanIn + fanOut/avgFanOut)/2</code> score, top 10</li>
     <li><strong>Encapsulation and structural-use metrics</strong> — per-node weighted <code>ports</code> / <code>mutPorts</code>, raw declaration visibility counters, <code>encapsulationRatio</code>, <code>publicMutableRatio</code>, and the <code>dependentsPerPublicPort</code> structural proxy (sealed/given/var rules resolved by the SemanticDB exporter)</li>
+    <li><strong>Compact surface tables</strong> — <code>node,in,out,ports,mut,encap%,use</code> headings, with repeatable <code>--columns visibility</code>, <code>--columns mutability</code>, <code>--columns coupling</code>, or <code>--columns all</code> groups for wider reviews; JSON field names remain camelCase</li>
     <li><strong>Orphans</strong> — dead-code-removal candidates</li>
     <li><strong>Filtering</strong> — keep only nodes matching <code>--include</code> patterns, drop noise with <code>--exclude</code> (e.g. <code>java.*</code>, <code>scala.*</code>); skip tests with <code>--skip-tests</code></li>
     <li><strong>Collapsing</strong> — merge whole subtrees with <code>--collapse</code> rules (<code>com.example.**</code>, <code>org.lib.*</code>)</li>
-    <li><strong>Two output formats</strong> — <code>table</code> (default, plain aligned text) and <code>json</code> (machine-readable)</li>
+    <li><strong>Three output formats</strong> — <code>table</code> (with optional ANSI styling), <code>markdown</code> (deterministic GFM for reviews), and <code>json</code> (machine-readable)</li>
+    <li><strong>Report controls</strong> — table/Markdown views show the top 10 rows per section; <code>--all</code> expands them, <code>--color auto|always|never</code> controls ANSI table styling, and <code>--analyze-cuts</code> enables bounded SCC cut analysis. JSON is schema v2; its <code>findings</code> array caps at 10,000 rows and reports omissions in <code>truncation</code>.</li>
    </ul>
    <p>No build-system integration needed: your local build tools already produce the inputs, codeps just reads them.</p>
    <h2 id="site-map">Site Map<a href="#site-map" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
@@ -117,14 +121,17 @@ Orphans
     <li>
      <p><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a> — step-by-step guides to get things working</p>
      <ul>
-      <li><a href="https://sake92.github.io/codeps/tutorials/quickstart.html">Quickstart</a></li>
+      <li><a href="https://sake92.github.io/codeps/tutorials/quickstart.html">First health snapshot</a></li>
+      <li><a href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">Track health in CI</a></li>
+      <li><a href="https://sake92.github.io/codeps/tutorials/package-triage.html">Find package pain points</a></li>
+      <li><a href="https://sake92.github.io/codeps/tutorials/file-triage.html">Drill into files</a></li>
      </ul>
     </li>
     <li>
      <p><a href="https://sake92.github.io/codeps/howtos">How Tos</a> — goal-oriented recipes for specific tasks</p>
      <ul>
-      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">Export &amp; analyze Scala/SemanticDB projects</a></li>
-      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">Export &amp; analyze Java/JVM projects with jdeps</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/semdb.html">Export Scala/SemanticDB projects</a></li>
+      <li><a href="https://sake92.github.io/codeps/howtos/jdeps.html">Export Java/JVM projects with jdeps</a></li>
      </ul>
     </li>
     <li>
@@ -132,11 +139,11 @@ Orphans
      <ul>
       <li><a href="https://sake92.github.io/codeps/reference/cli.html">CLI</a></li>
       <li><a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a></li>
-      <li><a href="https://sake92.github.io/codeps/reference/json-input.html">Standard JSON export format</a></li>
+      <li><a href="https://sake92.github.io/codeps/reference/json-input.html">Codeps export format</a></li>
      </ul>
     </li>
    </ul>
   </main>
-  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
  </body>
 </html>

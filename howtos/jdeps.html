@@ -71,8 +71,8 @@
     <li><code>-filter:none</code> keeps all edges (JDK-internal noise like <code>java.*</code> can be filtered later with <code>-e</code>)</li>
    </ul>
    <h2 id="exporting-the-graph">Exporting the graph<a href="#exporting-the-graph" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>codeps export</code> parses the text file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> (<code>nodes</code> + <code>edges</code>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps --input jdeps.txt -o deps.json
+   <p><code>codeps export</code> parses the text file and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> (a package graph and an empty file graph):</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps --input jdeps.txt
 </code></pre>
    <p>Only the project's own classes appear — the exporter drops edges to external classes that are not themselves defined in the input.</p>
    <h2 id="analyzing">Analyzing<a href="#analyzing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
@@ -80,15 +80,15 @@
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input deps.json
 </code></pre>
    <p>or in one pipe:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps --input jdeps.txt | codeps report-packages --input -
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from jdeps --input jdeps.txt -o - | codeps report-packages --input -
 </code></pre>
-   <p>Cycles can include optional budgeted cut analysis, and the surface lists fanIn/fanOut and orphans — see the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>.</p>
+   <p>Cycles can include optional budgeted cut analysis, and the surface lists fanIn/fanOut and orphans — see the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>. Use <code>--format table</code>, <code>--format markdown</code> for deterministic GitHub-Flavored Markdown, or <code>--format json</code> for the schema-v2 report. Table and Markdown sections show at most 10 rows; pass <code>--all</code> for every human-view row. <code>--analyze-cuts</code> enables bounded cut investigation, with <code>--cut-time-limit</code> and <code>--cut-candidate-limit</code> available as per-SCC controls. jdeps exports package nodes and an empty file graph.</p>
    <h2 id="filtering-jdk-noise">Filtering JDK noise<a href="#filtering-jdk-noise" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>The raw <code>jdeps -verbose:class</code> output includes edges to <code>java.*</code>, <code>scala.*</code> and other platform classes. Exclude them to keep the graph focused on your code:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example -e java.** -e scala.** --input deps.json
 </code></pre>
    <blockquote>
-    <p>Note: excludes are package patterns matched against each node's root package — <code>java.**</code> collapses everything under <code>java</code> (see <a href="https://sake92.github.io/codeps/reference/cli.html#collapse-rules">Collapse rules</a>).</p>
+    <p>Note: excludes are package patterns matched against each node's root package — <code>java.**</code> excludes everything under <code>java</code> (see <a href="https://sake92.github.io/codeps/reference/cli.html#include--exclude-patterns">Include / exclude patterns</a>).</p>
    </blockquote>
    <h2 id="collapsing">Collapsing<a href="#collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Just like with SemanticDB input, <code>--collapse</code>/<code>-c</code> rules apply:</p>
@@ -96,9 +96,9 @@
 </code></pre>
    <p>See <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for the full option list.</p>
    <div role="group">
-    <a role="button" href="https://sake92.github.io/codeps/howtos/semdb.html">⬅️ Export &amp; analyze Scala/SemanticDB projects</a> <span></span> <span></span>
+    <a role="button" href="https://sake92.github.io/codeps/howtos/semdb.html">⬅️ Export Scala/SemanticDB projects</a> <span></span> <span></span>
    </div>
   </main>
-  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
  </body>
 </html>

@@ -46,6 +46,7 @@
        <ul>
         <li><a href="#cli">CLI</a>
          <ul>
+          <li><a href="#health-snapshot">health-snapshot</a></li>
           <li><a href="#export">export</a></li>
           <li><a href="#report-packages-and-report-files">report-packages and report-files</a></li>
           <li><a href="#inspect-cycle">inspect-cycle</a></li>
@@ -66,11 +67,12 @@
     <div></div>
    </div>
    <h1 id="cli">CLI<a href="#cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>) with five subcommands that form a two-step pipeline:</p>
+   <p><code>codeps</code> is a single binary/entry point (<code>ba.sake.codeps.cli.Main</code>). Start with health, then progress from a graph to a broad report and only then to detail:</p>
    <ol>
-    <li><a href="#export"><code>export</code></a> — the <em>producer</em>: parses raw input (<code>semanticdb</code> or <code>jdeps</code>) and emits the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a>. No analysis.</li>
-    <li><a href="#report-packages"><code>report-packages</code></a> and <a href="#report-files"><code>report-files</code></a> — the <em>analyzers</em>: consume that JSON (a file or stdin) and emit the flat <a href="https://sake92.github.io/codeps/reference/report.html">metrics report</a>: SCC facts by default, with optional budgeted cut analysis, change propagators, per-node exposed-surface metrics and orphans.</li>
-    <li><a href="#inspect-cycle"><code>inspect-cycle</code></a> and <a href="#inspect-node"><code>inspect-node</code></a> — report-only detail views for one cycle or node.</li>
+    <li><a href="#health-snapshot"><code>health-snapshot</code></a> — records compact, overall repository-health history.</li>
+    <li><a href="#export"><code>export</code></a> — parses raw SemanticDB or jdeps input into the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a>.</li>
+    <li><a href="#report-packages"><code>report-packages</code></a> and <a href="#report-packages-and-report-files"><code>report-files</code></a> — analyze that graph.</li>
+    <li><a href="#inspect-cycle"><code>inspect-cycle</code></a> and <a href="#inspect-node"><code>inspect-node</code></a> — open one item from a saved report.</li>
    </ol>
    <p>Download the prebuilt jar (requires a JDK, 11+) and run it with <code>java -jar</code>:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
@@ -78,13 +80,71 @@ java -jar codeps.jar &lt;subcommand&gt; [options]
 </code></pre>
    <p>The CLI is strict: inputs are passed as <code>--input</code> flags, there are no positional arguments, and unknown flags/values are rejected by the parser itself with a clean error and exit 1. <code>java -jar codeps.jar --version</code> prints the version (jar manifest <code>Implementation-Version</code>; <code>dev</code> when run from the classpath); <code>--help</code> prints usage for all subcommands.</p>
    <p>The examples below use <code>codeps</code> as shorthand for <code>java -jar codeps.jar</code>.</p>
-   <p>The steps pipe together — <code>export</code> writes the graph to stdout, and either report command reads it from stdin (<code>-</code>):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
+   <p>Use explicit repository-local paths in automation:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
+codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
 </code></pre>
+   <p>For guided examples, see <a href="https://sake92.github.io/codeps/tutorials">Tutorials</a>. The sections below are the complete option reference, ordered from the simplest workflow to detailed analysis.</p>
+   <h2 id="health-snapshot">health-snapshot<a href="#health-snapshot" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps health-snapshot [--format &lt;table|markdown|json&gt;] [--color &lt;auto|always|never&gt;] [--input &lt;file&gt;] [--history &lt;file&gt;] [--significance &lt;decimal&gt;] [--max-snapshot-age &lt;duration|off&gt;] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--test-pattern glob] [--commit sha] [--generatedAt instant] [-o out]
+</code></pre>
+   <p>Records a compact overall repository-health record as NDJSON. First use <code>export</code>, then provide the graph and history paths; see <a href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">Track health in CI</a> for the recommended workflow.</p>
+   <p>A new record is appended when a tracked metric changes by more than <code>--significance</code>, crosses zero, or reaches the checkpoint age (<code>--max-snapshot-age</code>; <code>off</code> disables checkpoints). It does not store full graphs or make Git commits.</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Option</th>
+      <th>Description</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>-i</code> / <code>--input</code></td>
+      <td>Export graph.</td>
+     </tr>
+     <tr>
+      <td><code>--history</code></td>
+      <td>NDJSON history path.</td>
+     </tr>
+     <tr>
+      <td><code>-f</code> / <code>--format</code></td>
+      <td>Printed snapshot: <code>table</code>, <code>markdown</code>, or <code>json</code>.</td>
+     </tr>
+     <tr>
+      <td><code>--color</code></td>
+      <td>Table color mode: <code>auto</code>, <code>always</code>, or <code>never</code>.</td>
+     </tr>
+     <tr>
+      <td><code>-o</code> / <code>--out</code></td>
+      <td>Write printed output to a file.</td>
+     </tr>
+     <tr>
+      <td><code>--significance</code></td>
+      <td>Non-negative relative-change threshold.</td>
+     </tr>
+     <tr>
+      <td><code>--max-snapshot-age</code></td>
+      <td>Checkpoint interval such as <code>7d</code>, or <code>off</code>.</td>
+     </tr>
+     <tr>
+      <td><code>--include</code>, <code>--exclude</code>, <code>--collapse</code>, <code>--skip-tests</code>, <code>--test-pattern</code></td>
+      <td>The same selection rules as package reports.</td>
+     </tr>
+     <tr>
+      <td><code>--commit</code></td>
+      <td>Commit value.</td>
+     </tr>
+     <tr>
+      <td><code>--generatedAt</code></td>
+      <td>UTC ISO-8601 instant.</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Committing <code>.codeps/health.ndjson</code> is recommended when you want a history in Git or GitHub Pages, but codeps never commits it for you.</p>
    <h2 id="export">export<a href="#export" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from &lt;semanticdb|jdeps&gt; [--root &lt;dir&gt;] [-o out] --input &lt;path&gt;...
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export [--from &lt;semanticdb|jdeps&gt;] [--root &lt;dir&gt;] [-o out] --input &lt;path&gt;...
 </code></pre>
-   <p>Pure producer: parses the raw input and emits the standard JSON export graph (<code>{"nodes": [...], "edges": [...]}</code>) to stdout, or to the <code>-o</code> file. There are no include/exclude/collapse flags here — filtering and aggregation are the analyzer's job.</p>
+   <p>Pure producer: parses the raw input and writes the codeps export graph (<code>{"packages": {"nodes": [...], "edges": [...]}, "files": {"nodes": [...], "edges": [...]}}</code>). Pass <code>-o -</code> to write to stdout, or provide an <code>-o</code> path for a file. There are no include/exclude/collapse flags here — filtering and aggregation are the analyzer's job.</p>
    <table>
     <thead>
      <tr>
@@ -95,15 +155,15 @@ java -jar codeps.jar &lt;subcommand&gt; [options]
     <tbody>
      <tr>
       <td><code>--from</code> (<code>-f</code>)</td>
-      <td>Input format: <code>semanticdb</code> or <code>jdeps</code>. Required.</td>
+      <td>Input format: <code>semanticdb</code> or <code>jdeps</code>.</td>
      </tr>
      <tr>
       <td><code>--root</code></td>
-      <td>semanticdb only. Makes source URIs relative to this directory (default: the current working directory).</td>
+      <td>semanticdb only. Makes source URIs relative to this directory.</td>
      </tr>
      <tr>
       <td><code>-o</code> / <code>--out</code></td>
-      <td>Write the JSON to this file instead of stdout.</td>
+      <td>Output path; use <code>-</code> for stdout.</td>
      </tr>
      <tr>
       <td><code>-i</code> / <code>--input</code></td>
@@ -117,17 +177,17 @@ java -jar codeps.jar &lt;subcommand&gt; [options]
     <li><code>jdeps</code> — <strong>files</strong> containing <code>jdeps -verbose:class</code> text output.</li>
    </ul>
    <p>For a mill build, point SemanticDB export at the compiled output for the module you want to inspect, for example <code>out/&lt;module&gt;/compiledClassesAndSemanticDbFiles.dest/META-INF/semanticdb</code>, not the whole <code>out/</code> tree. The latter also walks mill's build-definition output and can add a phantom <code>build_</code> package to the report.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb
 codeps export --from jdeps --input jdeps.txt
 </code></pre>
    <p>Errors (exit 1): <code>at least one input is required</code>, <code>input path does not exist: &lt;path&gt;</code>, <code>not a directory: &lt;path&gt;</code> (semanticdb), <code>not a file: &lt;path&gt;</code> (jdeps), <code>no .semanticdb files found</code>. Per-file parse failures are warnings on stderr and the run continues:</p>
    <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">warning: failed to parse semanticdb: ...
 </code></pre>
    <h2 id="report-packages-and-report-files">report-packages and report-files<a href="#report-packages-and-report-files" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i &lt;file|-&gt;
-codeps report-files [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i &lt;file|-&gt;
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages [--format &lt;table|json|markdown&gt;] [--color &lt;auto|always|never&gt;] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns &lt;group&gt;] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] [-i &lt;file|-&gt;]
+codeps report-files [--format &lt;table|json|markdown&gt;] [--color &lt;auto|always|never&gt;] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns &lt;group&gt;] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] [-i &lt;file|-&gt;]
 </code></pre>
-   <p>Pure analyzer: reads the standard JSON export graph (a file, or stdin via <code>-</code>) and runs the pipeline (filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the flat <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>, always exits <code>0</code> on success.</p>
+   <p>Pure analyzer: reads the codeps export graph (a file, or stdin via <code>-</code>) and runs the pipeline (filter → skip-tests? → aggregate to the scope → collapse → metrics) in one pass. Emits the flat <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>, always exits <code>0</code> on success.</p>
    <p><code>report-packages</code> analyzes the whole package graph; <code>report-files</code> analyzes the file graph of the packages selected with <code>--include</code> (jdeps data has no file-level info and errors here).</p>
    <table>
     <thead>
@@ -139,7 +199,11 @@ codeps report-files [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c c
     <tbody>
      <tr>
       <td><code>-f</code> / <code>--format</code></td>
-      <td><code>table</code> (default) or <code>json</code>. The table is a compact presentation; JSON preserves canonical ids and any cut-analysis evidence.</td>
+      <td><code>table</code>, <code>markdown</code>, or <code>json</code>. Table and Markdown are bounded human-triage views; Markdown is deterministic GFM with headings and tables. JSON emits the schema-v2 report, preserves canonical ids and cut-analysis evidence, and caps <code>findings</code> at 10,000 rows (with <code>truncation</code> counts when needed).</td>
+     </tr>
+     <tr>
+      <td><code>--color</code></td>
+      <td>Table styling mode: <code>auto</code> styles only interactive stdout and leaves file output unstyled, <code>always</code> forces ANSI styling including file output, and <code>never</code> keeps the table plain. JSON and Markdown never contain ANSI styling.</td>
      </tr>
      <tr>
       <td><code>--include</code></td>
@@ -163,7 +227,11 @@ codeps report-files [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c c
      </tr>
      <tr>
       <td><code>--all</code></td>
-      <td>In table format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is always complete.</td>
+      <td>In table or Markdown format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is unaffected: graph-derived inventories are complete, while <code>findings</code> retains the 10,000-row serialization cap and <code>truncation</code> metadata.</td>
+     </tr>
+     <tr>
+      <td><code>--columns</code></td>
+      <td>Repeatable table/Markdown surface-column group: <code>core</code>, <code>visibility</code>, <code>mutability</code>, <code>coupling</code>, or <code>all</code>. With no flag, <code>core</code> is used. <code>visibility</code> covers declaration visibility; <code>mutability</code> covers mutable ports and declarations; <code>coupling</code> covers in/out flow, exposure, and structural use. Groups compose in canonical order and duplicate columns are shown once; <code>all</code> exposes the complete accounting view. JSON is unaffected.</td>
      </tr>
      <tr>
       <td><code>--analyze-cuts</code></td>
@@ -171,11 +239,11 @@ codeps report-files [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c c
      </tr>
      <tr>
       <td><code>--cut-time-limit</code></td>
-      <td>Maximum time per SCC's cut analysis, using a positive duration such as <code>1s</code> or <code>250ms</code>. Defaults to <code>1s</code> when <code>--analyze-cuts</code> is present.</td>
+      <td>Maximum time per SCC's cut analysis, using a positive duration with <code>ms</code>, <code>s</code>, <code>m</code>, or <code>d</code> units (for example <code>250ms</code>, <code>1s</code>, or <code>0.5m</code>).</td>
      </tr>
      <tr>
       <td><code>--cut-candidate-limit</code></td>
-      <td>Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to <code>10000</code> when <code>--analyze-cuts</code> is present.</td>
+      <td>Maximum candidate simulations per SCC's cut analysis. Must be positive.</td>
      </tr>
      <tr>
       <td><code>-o</code> / <code>--out</code></td>
@@ -183,15 +251,16 @@ codeps report-files [--format &lt;json|table&gt;] [--include inc] [-e exc] [-c c
      </tr>
      <tr>
       <td><code>-i</code> / <code>--input</code></td>
-      <td>The JSON graph to analyze — a file, or <code>-</code> for stdin, so <code>export</code> output can be piped straight in. Required.</td>
+      <td>The JSON graph to analyze; use <code>-</code> for stdin.</td>
      </tr>
     </tbody>
    </table>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input deps.json -o report.json
 <span class="hljs-meta prompt_"># </span><span class="language-bash">Optional <span class="hljs-built_in">cut</span> investigation (bounded; status is explicit <span class="hljs-keyword">in</span> JSON/table output)</span>
 codeps report-packages --analyze-cuts --cut-time-limit 1s --cut-candidate-limit 10000 --input deps.json -o report-with-cuts.json
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-files --include com.example --input - &gt; files.json
-codeps export --from jdeps --input jdeps.txt | codeps report-packages --format table --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o - | codeps report-files --include com.example --input - &gt; files.json
+codeps export --from jdeps --input jdeps.txt -o - | codeps report-packages --format table --input -
+codeps report-packages --format markdown --input deps.json -o report.md
 </code></pre>
    <p>The <code>table</code> format (the sample below uses <code>--analyze-cuts</code>):</p>
    <pre><code class="language-text hljs language-plaintext" data-highlighted="yes">scope: packages    generatedAt: 2026-08-27T10:00:00Z
@@ -199,10 +268,12 @@ codeps export --from jdeps --input jdeps.txt | codeps report-packages --format t
 Summary
   nodes: 100    edges: 214    nodesInCycles: 34    orphans: 3    criticalPathLength: 7
 
+--------------------------------------------------------------------------------
 Findings (top 10 of 1)
 kind   severity  subject  evidence  confidence  nextAction
 cycle  high      cache    size=2... high        inspect-cycle scc:modules.cache
 
+--------------------------------------------------------------------------------
 Cycles (top 10 of 1)
 (size desc, extFanIn desc)
 common prefix stripped: com.example. (full ids via --format json)
@@ -212,36 +283,56 @@ scc:modules.cache  10    5         9                  completedHeuristic
   Cycle scc:modules.cache
     solution 1: modules.cache.A -&gt; modules.scheduler.B (w=1), modules.cache.B -&gt; modules.scheduler.C (w=1), modules.cache.C -&gt; modules.scheduler.D (w=1), modules.cache.D -&gt; modules.scheduler.E (w=1), modules.cache.E -&gt; modules.scheduler.F (w=1), modules.cache.F -&gt; modules.scheduler.G (w=1), modules.cache.G -&gt; modules.scheduler.H (w=1), modules.cache.H -&gt; modules.scheduler.I (w=1), … 1 more (full list in JSON)
 
+--------------------------------------------------------------------------------
 Change propagators (top 10 of 1) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score &gt; 1)
   node     fanIn  fanOut  score
   cache    3      2       2.50
 
+--------------------------------------------------------------------------------
 Surface risks (top 10 of 1) (dependentsPerPublicPort asc; — = no fan-in)
-  node     fanIn  fanOut  ports  mutPorts  exposure  dependentsPerPublicPort
-  cache    3       2        9      5          24        0.33
+  node     in  out  ports  mut  encap%  use
+  cache    3   2    9      5    0.30    0.33
   ...
 
+--------------------------------------------------------------------------------
+Public surface (top 10 of 1)
+node   pub
+cache  3
+
+--------------------------------------------------------------------------------
+Public mutability (top 10 of 1)
+node   pubMut
+cache  1
+
+--------------------------------------------------------------------------------
+Public exposure ratio (top 10 of 1)
+node   encap%
+cache  0.30
+
+--------------------------------------------------------------------------------
 Orphans (top 10 of 1)
   DeadUtil.scala
 </code></pre>
+   <p>The <code>markdown</code> format uses the same bounded human-triage content as <code>table</code>, rendered as deterministic GitHub-Flavored Markdown with a health summary, findings, cycles, propagators, surface-risk tables, and explicit omitted/truncation facts. It is always plain text, including when <code>--color always</code> is supplied, and is suitable for saving as <code>.md</code> or publishing in a review.</p>
+   <p>Surface-risk tables use short headings: <code>node</code>, <code>in</code>, <code>out</code>, <code>ports</code>, <code>mut</code>, <code>encap%</code>, and <code>use</code> make up the compact core view. Add <code>--columns visibility</code>, <code>--columns mutability</code>, or <code>--columns coupling</code> (each flag may be repeated) to select the <code>pub</code>/<code>prot</code>/<code>pkg</code>/<code>priv</code>/<code>total</code>, <code>mut</code>/<code>pubMut</code>/<code>protMut</code>/<code>pkgMut</code>/<code>privMut</code>/<code>mut%</code>, and <code>in</code>/<code>out</code>/<code>exp</code>/<code>use</code> groups respectively. The semantic groups intentionally overlap the compact core where useful, so each group is useful on its own; composed groups still render each heading once. <code>--columns all</code> selects every surface column. Group order and headings are deterministic. These aliases apply only to table and Markdown headings; the JSON report keeps its camelCase field names.</p>
    <p>The cycle table is deliberately bounded: its rows contain identity, count, greedy estimate, and cut-analysis status, then each analyzed cycle gets separate numbered solution blocks. A table solution shows at most 8 cuts; if more exist, its exact omission count points to JSON. Use <code>--format json</code> when another tool or a review needs every canonical node id and every cut. Without <code>--analyze-cuts</code>, the table explicitly reports <code>notRequested</code> and no solution blocks. With analysis enabled, <code>budgetExceeded</code> is still a successful report and may contain only safe partial evidence; complete solutions are never guessed or labeled complete after a budget is exhausted. Dense knots print structural guidance instead of a cut wall.</p>
    <p>When the rendered ids share a prefix, table output announces it once. Package reports remove only complete dot-separated segments; file reports remove only complete slash-separated path segments. JSON always keeps the full canonical ids. Mixed SemanticDB source roots can leave file ids without a useful common slash-prefix; in that case no prefix is stripped.</p>
-   <p>Errors (exit 1): parser errors from mainargs — <code>Missing argument: --input ...</code>, <code>Unknown argument(s): ...</code>, <code>Duplicate arguments for ...: ...</code> — and input errors: <code>input path does not exist: &lt;path&gt;</code>, <code>not a file: &lt;path&gt;</code>, <code>no nodes remain after filtering</code>, <code>no file nodes found in the input (jdeps data has no file-level info)</code>, invalid collapse rules, unknown format values, <code>invalid SOURCE_DATE_EPOCH: &lt;value&gt;</code> — and malformed or type-invalid JSON is a hard error, not a warning (see <a href="#exit-codes-and-errors">Exit codes</a>). Cut controls also reject non-positive limits and reject <code>--cut-time-limit</code> or <code>--cut-candidate-limit</code> unless <code>--analyze-cuts</code> is present.</p>
+   <p>Errors (exit 1): parser errors from mainargs — <code>Missing argument: --input ...</code>, <code>Unknown argument(s): ...</code>, <code>Duplicate arguments for ...: ...</code> — and input errors: <code>input path does not exist: &lt;path&gt;</code>, <code>not a file: &lt;path&gt;</code>, <code>no nodes remain after filtering</code>, <code>no file nodes found in the input (jdeps data has no file-level info)</code>, invalid collapse rules, unknown format values, <code>invalid SOURCE_DATE_EPOCH: &lt;value&gt;</code> — and malformed or type-invalid JSON is a hard error, not a warning (see <a href="#exit-codes-and-errors">Exit codes</a>). Unknown <code>--columns</code> groups are parser errors and must be one of <code>core</code>, <code>visibility</code>, <code>mutability</code>, <code>coupling</code>, or <code>all</code>. Cut controls also reject non-positive limits and reject <code>--cut-time-limit</code> or <code>--cut-candidate-limit</code> unless <code>--analyze-cuts</code> is present.</p>
    <h2 id="inspect-cycle">inspect-cycle<a href="#inspect-cycle" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --report &lt;v2-report.json&gt; --id &lt;scc-id&gt; [--format &lt;json|table&gt;]
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id &lt;scc-id&gt; [--scope &lt;packages|files&gt;] [--report &lt;v2-report.json&gt;] [--format &lt;table|json|markdown&gt;]
 </code></pre>
-   <p>Reads one schema-version-2 metrics report and prints the selected cycle without recomputing the graph or cut analysis. JSON includes the exhaustive sorted <code>members</code>, the closed <code>witnessCycle</code>, <code>size</code>, <code>internalEdges</code>, <code>incomingEdges</code>, <code>outgoingEdges</code>, <code>extFanIn</code>, the complete <code>cutAnalysis</code> record, and matching findings. Table output prints the same fields in a compact readable form. <code>--format</code> defaults to <code>table</code>.</p>
-   <p>The report path may be <code>-</code> to read JSON from stdin. Errors (exit 1) include <code>report path does not exist</code>, <code>report path is not a file</code>, malformed report JSON, <code>incompatible schema version</code>, and <code>unknown cycle id</code>.</p>
+   <p>Reads one schema-version-2 metrics report and prints the selected cycle without recomputing the graph or cut analysis. JSON includes the exhaustive sorted <code>members</code>, the closed <code>witnessCycle</code>, <code>size</code>, <code>internalEdges</code>, <code>incomingEdges</code>, <code>outgoingEdges</code>, <code>extFanIn</code>, the complete <code>cutAnalysis</code> record, and matching findings. Table output prints the same fields in a compact readable form. Choose <code>table</code>, <code>json</code>, or <code>markdown</code> with <code>--format</code>; <code>markdown</code> is accepted by the shared parser and currently renders the same compact text as <code>table</code> for detail commands.</p>
+   <p>Successful <code>report-packages</code> and <code>report-files</code> runs cache their JSON reports at <code>.codeps/report-packages.json</code> and <code>.codeps/report-files.json</code>. Pass <code>--scope packages</code> or <code>--scope files</code> to select a cache, or <code>--report</code> to provide a report path. The report path may be <code>-</code> to read JSON from stdin. Errors (exit 1) include <code>report path does not exist</code>, <code>report path is not a file</code>, malformed report JSON, <code>incompatible schema version</code>, and <code>unknown cycle id</code>.</p>
    <h2 id="inspect-node">inspect-node<a href="#inspect-node" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-node --report &lt;v2-report.json&gt; --id &lt;node-id&gt; [--format &lt;json|table&gt;]
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-node --id &lt;node-id&gt; [--scope &lt;packages|files&gt;] [--report &lt;v2-report.json&gt;] [--format &lt;table|json|markdown&gt;]
 </code></pre>
-   <p>Reads one schema-version-2 metrics report and prints the selected node's complete surface row, nullable <code>cycleId</code>, and matching findings. JSON and table output are report-only views; no graph or cut analysis is recomputed. <code>--format</code> defaults to <code>table</code>, and <code>--report -</code> reads from stdin. Unknown node IDs and incompatible report schema versions exit 1.</p>
+   <p>Reads one schema-version-2 metrics report and prints the selected node's complete surface row, nullable <code>cycleId</code>, and matching findings. JSON and table output are report-only views; no graph or cut analysis is recomputed. <code>markdown</code> is accepted by the shared parser and currently renders the same compact text as <code>table</code> for detail commands. <code>--report -</code> reads from stdin. Unknown node IDs and incompatible report schema versions exit 1.</p>
    <h2 id="reproducible-output">Reproducible output<a href="#reproducible-output" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>generatedAt</code> is the real clock by default. Set <code>SOURCE_DATE_EPOCH</code> (the <a href="https://reproducible-builds.org/specs/source-date-epoch/">reproducible-builds.org</a> standard, epoch seconds) to pin it for deterministic CI diffs:</p>
+   <p>Set <code>SOURCE_DATE_EPOCH</code> (the <a href="https://reproducible-builds.org/specs/source-date-epoch/">reproducible-builds.org</a> standard, epoch seconds) to pin it for deterministic CI diffs:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">SOURCE_DATE_EPOCH=1700000000 codeps report-packages --input deps.json
 </code></pre>
    <h2 id="include--exclude-patterns">Include / exclude patterns<a href="#include--exclude-patterns" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to each node's <strong>root package</strong> — the topmost package ancestor found by walking <code>parentId</code> chains (for a package node, that is the package itself). A node is kept when it has no include patterns or its root package matches one, and its root package matches no exclude pattern (excludes win). An edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped). With no <code>--include</code>, all nodes are kept. A nonexistent <code>--include</code> leaves no nodes and is a hard exit-1 error (<code>no nodes remain after filtering</code>), so make pipeline users handle it rather than treating an empty stdout as a successful report.</p>
+   <p>A pattern matches a package if the package equals the pattern or starts with <code>pattern + "."</code>. Include/exclude applies to each package node's id and each file node's <code>packageId</code>. A node is kept when it has no include patterns or its package matches one, and its package matches no exclude pattern (excludes win). An edge is kept only when <strong>both</strong> its endpoints are in the resulting universe (self-edges are dropped). With no <code>--include</code>, all nodes are kept. A nonexistent <code>--include</code> leaves no nodes and is a hard exit-1 error (<code>no nodes remain after filtering</code>), so make pipeline users handle it rather than treating an empty stdout as a successful report.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes"><span class="hljs-meta prompt_"># </span><span class="language-bash">only com.example packages, minus internal helpers</span>
 codeps report-packages --include com.example -e com.example.internal --input deps.json
 <span class="hljs-meta prompt_">
@@ -249,7 +340,7 @@ codeps report-packages --include com.example -e com.example.internal --input dep
 codeps report-files --include com.example.modules.module1 --input deps.json
 </code></pre>
    <h2 id="skip-tests">Skip tests<a href="#skip-tests" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>--skip-tests</code> (on either report command) excludes nodes defined in test files: <code>file</code> nodes whose id matches a pattern, and <code>type</code>/<code>member</code> nodes whose <code>file</code> attribute matches. Package nodes and file-less nodes (all of jdeps data) never match, so on jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and packages left without children are pruned.</p>
+   <p><code>--skip-tests</code> (on either report command) excludes file nodes whose id matches a pattern. For package reports with source-file data, codeps derives that report from the file graph when this flag is set so the test-file surface is excluded before package summaries are made. matches. Package nodes and file-less nodes (all of jdeps data) never match, so on jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and packages left without children are pruned.</p>
    <p>In package scope, <code>--skip-tests</code> can leave the reported node count unchanged: main and test sources often aggregate into the same package nodes. Inspect edges and the file-level view when you need to see the removed test sources directly.</p>
    <p>Built-in patterns:</p>
    <table>
@@ -326,6 +417,6 @@ deder exec -t run -m cli report-packages -i deps.json
     <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/report.html">Metrics report ➡️</a>
    </div>
   </main>
-  <footer class="pico container">codeps | Code package dependency analyzer</footer>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
  </body>
 </html>

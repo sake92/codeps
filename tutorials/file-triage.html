@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Find the files behind a package-level dependency problem">
+  <title> Drill into files | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details>
+      <summary>Table of Contents</summary>
+      <div>
+       <ul>
+        <li><a href="#drill-into-files">Drill into files</a>
+         <ul>
+          <li><a href="#1-select-exactly-one-package-area">1. Select exactly one package area</a></li>
+          <li><a href="#2-inspect-the-concrete-file">2. Inspect the concrete file</a></li>
+          <li><a href="#3-re-measure-the-change">3. Re-measure the change</a></li>
+         </ul></li>
+       </ul>
+      </div>
+     </details>
+     <hr>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="drill-into-files">Drill into files<a href="#drill-into-files" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>Use file analysis after package triage has named a package worth changing. This is the level that helps with incremental-compilation pain: a file cycle or hub can force changes through more of the build than intended.</p>
+   <h2 id="1-select-exactly-one-package-area">1. Select exactly one package area<a href="#1-select-exactly-one-package-area" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>report-files</code> requires <code>--include</code>; it analyzes the files belonging to the selected package and its children.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-files --include com.example.orders
+</code></pre>
+   <p>The output uses the same sections as the package report, but ids are source-file paths. Start with cycles, then change propagators, then surface risks.</p>
+   <h2 id="2-inspect-the-concrete-file">2. Inspect the concrete file<a href="#2-inspect-the-concrete-file" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Save or use the cached report, then inspect an id from the output:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-node --scope files --id src/com/example/orders/OrderService.scala
+</code></pre>
+   <p>For a file-level cycle, enable bounded cut analysis and inspect the SCC:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-files --include com.example.orders --analyze-cuts
+codeps inspect-cycle --scope files --id scc:src/com/example/orders/OrderService.scala
+</code></pre>
+   <p>Use the witness cycle to follow the actual dependency path in the source. A cut candidate is not an instruction to delete an import; common fixes are moving an abstraction to the owning package, inverting a dependency, or narrowing a file's public surface.</p>
+   <h2 id="3-re-measure-the-change">3. Re-measure the change<a href="#3-re-measure-the-change" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>After the refactor, rebuild compiler output and run the same scoped report. Compare the targeted cycle, fan-in/out, and exposed surface—not just the overall health status.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb
+codeps report-files --include com.example.orders
+codeps health-snapshot --format markdown
+</code></pre>
+   <p>File reports need SemanticDB input. jdeps exports package information only, so use <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage</a> for a jdeps project.</p>
+   <div role="group">
+    <a role="button" href="https://sake92.github.io/codeps/tutorials/package-triage.html">⬅️ Find package pain points</a> <span></span> <span></span>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
+ </body>
+</html>
