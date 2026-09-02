@@ -85,18 +85,3 @@ class TestFilterSpec extends munit.FunSuite:
     )
     assertEquals(TestFilter.skipTests(pkgOnly, TestFilter.defaultPatterns), pkgOnly)
   }
-
-  test("skip-tests drops references sourced by removed test files") {
-    val withUses = graph.copy(
-      symbolReferences = Some(Seq(
-        SymbolReference("src/com/example/Foo.scala", "com.example.Foo#bar"),
-        SymbolReference("src/com/example/test/FooSpec.scala", "com.example.Foo#bar")
-      )),
-      declaredPublicSymbols = Some(Map("com.example.Foo#bar" -> "src/com/example/Foo.scala"))
-    )
-    val filtered = TestFilter.skipTests(withUses, Seq("**/*Spec.scala"))
-    assertEquals(filtered.symbolReferences, Some(Seq(
-      SymbolReference("src/com/example/Foo.scala", "com.example.Foo#bar")
-    )))
-    assertEquals(filtered.declaredPublicSymbols, Some(Map("com.example.Foo#bar" -> "src/com/example/Foo.scala")))
-  }

@@ -6,7 +6,7 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with five subcommands
+`codeps` is a single binary/entry point (`ba.sake.codeps.cli.Main`) with six subcommands
 that form a two-step pipeline:
 
 1. [`export`](#export) — the *producer*: parses raw input (`semanticdb` or `jdeps`) and
@@ -15,6 +15,7 @@ that form a two-step pipeline:
    flat [metrics report](/reference/report.html): SCC facts by default, with optional budgeted cut analysis, change
    propagators, per-node exposed-surface metrics and orphans.
 3. [`inspect-cycle`](#inspect-cycle) and [`inspect-node`](#inspect-node) — report-only detail views for one cycle or node.
+4. [`health-snapshot`](#health-snapshot) — records compact, overall repository-health history.
 
 Download the prebuilt jar (requires a JDK, 11+) and run it with `java -jar`:
 
@@ -31,28 +32,32 @@ for all subcommands.
 
 The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 
-The steps pipe together — `export` writes the graph to stdout, and either report command reads it from stdin (`-`):
+The normal workflow uses the default export path directly:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb
+codeps report-packages
 ```
+
+For a pipeline, pass `-o -` to `export` and `--input -` to the report command.
 
 ## export
 
 ```shell
-codeps export --from <semanticdb|jdeps> [--root <dir>] [-o out] --input <path>...
+codeps export [--from <semanticdb|jdeps>] [--root <dir>] [-o out] --input <path>...
 ```
 
-Pure producer: parses the raw input and emits the codeps export graph
-(`{"nodes": [...], "edges": [...]}`) to stdout, or to the `-o` file.
+Pure producer: parses the raw input and writes the codeps export graph
+(`{"packages": {"nodes": [...], "edges": [...]}, "files": {"nodes": [...], "edges": [...]}}`) to `.codeps/export.json` by default.
+Pass `-o -` to write to stdout, or another `-o` path to override it.
 There are no include/exclude/collapse flags here — filtering and aggregation are
 the analyzer's job.
 
 | Option | Description |
 |---|---|
-| `--from` (`-f`) | Input format: `semanticdb` or `jdeps`. Required. |
+| `--from` (`-f`) | Input format: `semanticdb` or `jdeps`. Defaults to `semanticdb`; use `--from jdeps` for jdeps text. |
 | `--root` | semanticdb only. Makes source URIs relative to this directory (default: the current working directory). |
-| `-o` / `--out` | Write the JSON to this file instead of stdout. |
+| `-o` / `--out` | Output path; defaults to `.codeps/export.json`. Use `-` for stdout. |
 | `-i` / `--input` | Input path, repeatable. Required (at least one). |
 
 `--input` values:
@@ -67,7 +72,7 @@ whole `out/` tree. The latter also walks mill's build-definition output and can 
 a phantom `build_` package to the report.
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb
 codeps export --from jdeps --input jdeps.txt
 ```
 
@@ -83,8 +88,8 @@ warning: failed to parse semanticdb: ...
 ## report-packages and report-files
 
 ```shell
-codeps report-packages [--format <table|json|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
-codeps report-files [--format <table|json|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] -i <file|->
+codeps report-packages [--format <table|json|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] [-i <file|->]
+codeps report-files [--format <table|json|markdown>] [--color <auto|always|never>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--all] [--columns <group>] [--analyze-cuts] [--cut-time-limit duration] [--cut-candidate-limit positive-int] [-o out] [-i <file|->]
 ```
 
 Pure analyzer: reads the codeps export graph (a file, or stdin via `-`) and runs the pipeline
@@ -96,27 +101,27 @@ packages selected with `--include` (jdeps data has no file-level info and errors
 
 | Option | Description |
 |---|---|
-| `-f` / `--format` | `table` (default), `markdown`, or `json`. Table and Markdown are bounded human-triage views; Markdown is deterministic GFM with headings and tables. JSON emits the schema-v2 report, preserves canonical ids and cut-analysis evidence, and caps only `findings`/`publicSymbols` at 10,000 rows (with `truncation` counts when needed). |
+| `-f` / `--format` | `table` (default), `markdown`, or `json`. Table and Markdown are bounded human-triage views; Markdown is deterministic GFM with headings and tables. JSON emits the schema-v2 report, preserves canonical ids and cut-analysis evidence, and caps `findings` at 10,000 rows (with `truncation` counts when needed). |
 | `--color` | Table styling mode: `auto` (default) styles only interactive stdout and leaves file output unstyled, `always` forces ANSI styling including file output, and `never` keeps the table plain. JSON and Markdown never contain ANSI styling. |
 | `--include` | Package pattern; keep only nodes whose root package matches it. Repeatable. A pattern `ba.sake` matches `ba.sake` and everything below it. |
 | `-e` / `--exclude` | Package pattern; drop nodes whose root package matches it. Excludes win over includes. Repeatable. |
 | `-c` / `--collapse` | Collapse rule, e.g. `com.example.**`, interpreted against IDs in the selected report. Repeatable. |
 | `--skip-tests` | Exclude nodes defined in test files (see [Skip tests](#skip-tests)). |
 | `--test-pattern` | Glob matching test files; repeatable. Requires `--skip-tests`; replaces the built-in patterns. |
-| `--all` | In table or Markdown format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is unaffected: graph-derived inventories are complete, while `findings`/`publicSymbols` retain the 10,000-row serialization cap and `truncation` metadata. |
+| `--all` | In table or Markdown format, show every finding, cycle, propagator, surface, and orphan row instead of the top 10 per section. JSON is unaffected: graph-derived inventories are complete, while `findings` retains the 10,000-row serialization cap and `truncation` metadata. |
 | `--columns` | Repeatable table/Markdown surface-column group: `core`, `visibility`, `mutability`, `coupling`, or `all`. With no flag, `core` is used. `visibility` covers declaration visibility; `mutability` covers mutable ports and declarations; `coupling` covers in/out flow, exposure, and structural use. Groups compose in canonical order and duplicate columns are shown once; `all` exposes the complete accounting view. JSON is unaffected. |
 | `--analyze-cuts` | Opt in to bounded greedy cut estimation and complete-solution search for each SCC. `cutAnalysis.status` distinguishes `completedExact` (the bounded candidate space was exhausted), `completedHeuristic` (greedy-only, including large SCCs), and `budgetExceeded`; without this flag it is `notRequested` and no candidates are simulated. |
-| `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration with `ms`, `s`, or `m` units (for example `250ms`, `1s`, or `0.5m`). Defaults to `1s` when `--analyze-cuts` is present. |
+| `--cut-time-limit` | Maximum time per SCC's cut analysis, using a positive duration with `ms`, `s`, `m`, or `d` units (for example `250ms`, `1s`, or `0.5m`). Defaults to `1s` when `--analyze-cuts` is present. |
 | `--cut-candidate-limit` | Maximum candidate simulations per SCC's cut analysis. Must be positive; defaults to `10000` when `--analyze-cuts` is present. |
 | `-o` / `--out` | Write the report to this file instead of stdout. |
-| `-i` / `--input` | The JSON graph to analyze — a file, or `-` for stdin, so `export` output can be piped straight in. Required. |
+| `-i` / `--input` | The JSON graph to analyze. Defaults to `.codeps/export.json`; use `-` for stdin. |
 
 ```shell
 codeps report-packages --input deps.json -o report.json
 # Optional cut investigation (bounded; status is explicit in JSON/table output)
 codeps report-packages --analyze-cuts --cut-time-limit 1s --cut-candidate-limit 10000 --input deps.json -o report-with-cuts.json
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-files --include com.example --input - > files.json
-codeps export --from jdeps --input jdeps.txt | codeps report-packages --format table --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o - | codeps report-files --include com.example --input - > files.json
+codeps export --from jdeps --input jdeps.txt -o - | codeps report-packages --format table --input -
 codeps report-packages --format markdown --input deps.json -o report.md
 ```
 
@@ -217,6 +222,53 @@ Unknown `--columns` groups are parser errors and must be one of `core`, `visibil
 Cut controls also reject non-positive limits and reject `--cut-time-limit` or
 `--cut-candidate-limit` unless `--analyze-cuts` is present.
 
+## health-snapshot
+
+```shell
+codeps health-snapshot [--format <table|markdown|json>] [--color <auto|always|never>] [--input <file>] [--history <file>] [--significance <decimal>] [--max-snapshot-age <duration|off>] [--include inc] [-e exc] [-c collapse] [--skip-tests] [--test-pattern glob] [--commit sha] [--generatedAt instant] [-o out]
+```
+
+Records compact overall repository-health facts as newline-delimited JSON. It
+analyzes `.codeps/export.json` and appends to `.codeps/health.ndjson` by
+default. It prints the current snapshot as a compact CLI report by default;
+use `--format markdown` for a review-friendly report or `--format json` for CI
+and scripts. The ordinary CI step is simply:
+
+```shell
+codeps export --from semanticdb --input classes/META-INF/semanticdb
+codeps health-snapshot
+```
+
+The first invocation records a snapshot. Later invocations compare the current
+overall metrics with the **last NDJSON entry**. A snapshot is appended if any
+tracked metric changes by more than `--significance` (default `0.01`, or 1%),
+or crosses between zero and non-zero. If no significant metric changes, it
+still appends a checkpoint once the last snapshot is at least
+`--max-snapshot-age` old (default `7d`; `off` disables checkpoints). This is
+commit/CI driven: no commits means no command runs and therefore a longer gap.
+
+Each line contains a schema version, UTC timestamp, commit, severity-derived
+status, and compact `structure`, `cycles`, `surface`, and `findings` sections.
+It does not store full graphs or reports. `status` is the highest finding
+severity, or `healthy` when there are no findings.
+
+| Option | Description |
+|---|---|
+| `-i` / `--input` | Export graph; defaults to `.codeps/export.json`. |
+| `--history` | NDJSON output; defaults to `.codeps/health.ndjson`. |
+| `-f` / `--format` | Printed current snapshot: `table` (default), `markdown`, or `json`. |
+| `--color` | Table color mode: `auto` (default), `always`, or `never`. JSON and Markdown are never colored. |
+| `-o` / `--out` | Write the printed report to a file; stdout by default. Use `-` for stdout. |
+| `--significance` | Relative change threshold; defaults to `0.01`. Must be finite and non-negative. |
+| `--max-snapshot-age` | Checkpoint interval such as `7d`, or `off`. Defaults to `7d`. |
+| `--include`, `--exclude`, `--collapse`, `--skip-tests`, `--test-pattern` | Apply the same selection rules as package reports. |
+| `--commit` | Snapshot commit value; defaults to `git rev-parse HEAD`. |
+| `--generatedAt` | UTC ISO-8601 instant, useful for deterministic CI/tests; defaults to the current clock. |
+
+Committing `.codeps/health.ndjson` is recommended when a repository wants its
+history available to GitHub Pages or ordinary Git history, but codeps does not
+require or perform that commit.
+
 ## inspect-cycle
 
 ```shell
@@ -261,10 +313,9 @@ SOURCE_DATE_EPOCH=1700000000 codeps report-packages --input deps.json
 ## Include / exclude patterns
 
 A pattern matches a package if the package equals the pattern or starts with
-`pattern + "."`. Include/exclude applies to each node's **root package** — the
-topmost package ancestor found by walking `parentId` chains (for a package node,
-that is the package itself). A node is kept when it has no include patterns or
-its root package matches one, and its root package matches no exclude pattern
+`pattern + "."`. Include/exclude applies to each package node's id and each file
+node's `packageId`. A node is kept when it has no include patterns or
+its package matches one, and its package matches no exclude pattern
 (excludes win). An edge is kept only when **both** its endpoints are in the
 resulting universe (self-edges are dropped). With no `--include`, all nodes are kept.
 A nonexistent `--include` leaves no nodes and is a hard exit-1 error
@@ -281,8 +332,9 @@ codeps report-files --include com.example.modules.module1 --input deps.json
 
 ## Skip tests
 
-`--skip-tests` (on either report command) excludes nodes defined in test files: `file`
-nodes whose id matches a pattern, and `type`/`member` nodes whose `file` attribute
+`--skip-tests` (on either report command) excludes file nodes whose id matches a pattern.
+For package reports with source-file data, codeps derives that report from the file graph
+when this flag is set so the test-file surface is excluded before package summaries are made.
 matches. Package nodes and file-less nodes (all of jdeps data) never match, so on
 jdeps data the flag is a no-op. Edges with an excluded endpoint are dropped, and
 packages left without children are pruned.

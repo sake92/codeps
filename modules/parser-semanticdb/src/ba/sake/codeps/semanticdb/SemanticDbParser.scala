@@ -1,6 +1,6 @@
 package ba.sake.codeps.semanticdb
 
-import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind, SymbolReference}
+import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind}
 import scala.meta.internal.semanticdb.*
 
 object SemanticDbParser:
@@ -17,32 +17,10 @@ object SemanticDbParser:
       val docs = TextDocuments.parseFrom(bytes)
       var nodes = Set.empty[Node]
       var edges = Set.empty[Edge]
-      var symbolReferences = Vector.empty[SymbolReference]
       for doc <- docs.documents do
         nodes ++= documentNodes(doc, root)
         edges ++= documentEdges(doc, root)
-        symbolReferences ++= documentSymbolReferences(doc, root)
-      // SemanticDB also lists compiler-generated members (for example case-class
-      // `copy`/`apply`, Product's `_1`, and synthetic type-lambda symbols) in
-      // `symbols`. They are useful for dependency edges but are not source
-      // declarations and must not become unused-public-API findings. A
-      // definition occurrence is the source-level declaration boundary; the
-      // synthetic property covers producers that mark generated symbols
-      // explicitly. Keep the map keyed by stable node ids so it survives the
-      // package/file aggregation performed by the CLI.
-      val declaredPublicSymbols = docs.documents.iterator
-        .flatMap { doc =>
-          val definitionSymbols = doc.occurrences.iterator
-            .filter(_.role.isDefinition)
-            .map(_.symbol)
-            .toSet
-          val file = fileId(doc.uri, root)
-          doc.symbols.iterator
-            .filter(s => isPublicDeclaration(s, definitionSymbols))
-            .flatMap(s => declarationId(s).map(_ -> file))
-        }
-        .toMap
-      Right(DepsGraph(nodes, edges, Some(symbolReferences), Some(declaredPublicSymbols)))
+      Right(DepsGraph(nodes, edges))
     catch
       case e: Exception => Left(s"failed to parse semanticdb: ${e.getMessage}")
 
@@ -197,21 +175,6 @@ object SemanticDbParser:
   private def isMemberKind(k: SymbolInformation.Kind): Boolean =
     k.isField || k.isMethod || k.isMacro
 
-  /** A declaration that can be meaningfully reported as public API. SemanticDB
-    * contains compiler-generated public members alongside source declarations;
-    * those generally have no definition occurrence. Checking the explicit
-    * synthetic property as well handles producers that do mark them. */
-  private def isPublicDeclaration(s: SymbolInformation, definitionSymbols: Set[String]): Boolean =
-    (isTypeKind(s.kind) || isMemberKind(s.kind)) &&
-      isExposed(s) &&
-      definitionSymbols.contains(s.symbol) &&
-      (s.properties & SymbolInformation.Property.SYNTHETIC.value) == 0
-
-  private def declarationId(s: SymbolInformation): Option[String] =
-    if isTypeKind(s.kind) then Some(typeId(s.symbol))
-    else if isMemberKind(s.kind) then Some(memberId(s.symbol))
-    else None
-
   /** `<init>` constructors are not nodes; references to them resolve to the parent type.
     * Scala 3 emits them backticked: ``Foo#`<init>`().`` */
   private def isConstructor(sym: String): Boolean =
@@ -290,17 +253,6 @@ object SemanticDbParser:
         }
     edges
 
-  /** Keeps every reference occurrence in source-file form. The target remains
-    * a stable declaration id; visibility and declaration membership are checked
-    * after all SemanticDB documents are merged by `withoutDanglingEdges`. */
-  private def documentSymbolReferences(doc: TextDocument, root: java.nio.file.Path): Seq[SymbolReference] =
-    val accessOf = doc.symbols.iterator.map(s => s.symbol -> s.access).toMap
-    val sourceFile = fileId(doc.uri, root)
-    doc.occurrences.iterator
-      .filter(_.role.isReference)
-      .flatMap(occ => referenceTargetId(occ.symbol, accessOf).map(SymbolReference(sourceFile, _)))
-      .toSeq
-
   /** Node id the occurrence points at; None for locals, package decls (already nodes), unresolvable
     * symbols, and references to class-private symbols that collapse into a package (dropped: they
     * are file-scoped, so the edge carries no cross-file information).
@@ -310,16 +262,6 @@ object SemanticDbParser:
     else if isConstructor(sym) then parentOf(sym) // dependency on `new Foo` == dependency on Foo
     else if isClassPrivate(accessOf.getOrElse(sym, Access.Empty)) then
       collapseUp(sym, accessOf).filter(!_.endsWith("/")).map(dotFormId)
-    else Some(targetIdPlain(sym))
-
-  /** Public-symbol references must retain the exact target, not the dependency
-    * edge's class-private ancestor collapse. Private targets are removed here;
-    * protected/package-restricted targets survive until merged public-node
-    * filtering, where their `isExposed = false` metadata removes them. */
-  private def referenceTargetId(sym: String, accessOf: Map[String, Access]): Option[String] =
-    if sym.isEmpty || sym.endsWith("/") || isLocalSymbol(sym) then None
-    else if isConstructor(sym) then parentOf(sym).map(dotFormId)
-    else if accessOf.get(sym).exists(isClassPrivate) then None
     else Some(targetIdPlain(sym))
 
   private def targetIdPlain(sym: String): String =

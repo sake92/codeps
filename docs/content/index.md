@@ -1,24 +1,44 @@
 ---
 title: codeps
-description: Code package dependency analyzer
+description: Code deps health tracker
 pagination:
   enabled: false
 ---
 
 # codeps
 
-codeps is a **code dependency analyzer** for JVM projects (Java and Scala).
-It works in two steps:
+codeps is a **code deps health tracker** for JVM projects (Java and Scala).
+Start by recording one compact overall dependency-health
+snapshot per meaningful change, then use detailed reports when you want to
+refactor a cycle, reduce coupling, or improve encapsulation.
+
+The normal workflow is:
 
 1. **`codeps export`** parses output your compiler already produced —
    [SemanticDB](/howtos/semdb.html) (`.semanticdb` files from Scala) or
    [jdeps](/howtos/jdeps.html) (the JDK's own analyzer) — and spits out a
    dependency graph as JSON: the [codeps export format](/reference/json-input.html).
-2. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
-   via `-`) and spits out the [metrics report](/reference/report.html): a table by
+2. **`codeps health-snapshot`** derives compact overall `structure`, `cycles`,
+   `surface`, and `findings` sections and appends a point to
+   `.codeps/health.ndjson` only when health changes significantly (or the
+   periodic checkpoint is due).
+3. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
+   via `-`) and provides the detailed [metrics report](/reference/report.html): a table by
    default (ANSI styling on interactive stdout with `--color auto`), GitHub-Flavored Markdown
    with `--format markdown`, or JSON with `--format json` —
    handy for agents, other tools and CI.
+
+The first two commands use `.codeps/export.json` and `.codeps/health.ndjson` by
+default, so a CI job can begin with:
+
+```shell
+codeps export --input classes/META-INF/semanticdb
+codeps health-snapshot
+```
+
+The history file is ordinary NDJSON and committing it to the measured
+repository is recommended when you want trends in Git history or on GitHub
+Pages. The CLI does not commit it for you.
 
 It works on two levels:
 
@@ -32,69 +52,44 @@ It works on two levels:
 Cycles are bad in both: at package level they make modules inseparable; at file
 level they degrade incremental compilation.
 
-## Example
+## Example health history
+
+`health-snapshot` stores compact NDJSON records. Its default CLI output is
+compact; pass `--format markdown` when you want a review-friendly summary:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-codeps report-packages --color never --input deps.json
-# The sample below is reproduced with: codeps report-packages --color never --input testFixtures/cyclic.json
+codeps health-snapshot --format markdown
 ```
 
-Abbreviated table output of `codeps report-packages` on the repo's
-[cyclic test fixture](https://github.com/sake92/codeps/blob/main/testFixtures/cyclic.json)
-(`module1` ↔ `module2`):
+```markdown
+# Overall dependency health
 
-```text
-scope: packages    generatedAt: <timestamp>
+**Status:** critical<br>
+**Commit:** `abc123`<br>
+**Recorded:** 2026-09-02 12:00 UTC
 
-Summary
-  nodes: 4    edges: 4    nodesInCycles: 2    orphans: 0    criticalPathLength: 2
+| Section | Metric | Current | Change |
+|---|---|---:|---:|
+| Structure | Nodes | 351 | +2.0% |
+| Structure | Edges | 2,408 | +1.4% |
+| Cycles | Nodes in cycles | 336 | +12.0% |
+| Cycles | Largest SCC | 336 | +12.0% |
+| Surface | Public surface | 12,345 | +0.8% |
+| Surface | Encapsulation ratio | 18.1% | −0.4% |
+| Findings | Critical | 1 | +1 |
+| Findings | High | 8 | −2 |
 
---------------------------------------------------------------------------------
-Findings (top 6 of 6)
-kind           severity  subject                          evidence                                        confidence       nextAction
-cycle          high      scc:com.example.modules.module1  size=2, extFanIn=1, greedyCutEstimate=none      high             inspect-cycle scc:com.example.modules.module1
-propagator     medium    com.example.modules.module1      fanIn=2, fanOut=1, score=1.5000                 high             inspect-node com.example.modules.module1
-propagator     medium    com.example.modules.module2      fanIn=1, fanOut=2, score=1.5000                 high             inspect-node com.example.modules.module2
-structuralUse  low       com.example.modules.module2      fanIn=1, ports=4, dependentsPerPublicPort=0.25  structuralProxy  inspect-node com.example.modules.module2
-structuralUse  low       org.thirdparty                   fanIn=1, ports=4, dependentsPerPublicPort=0.25  structuralProxy  inspect-node org.thirdparty
-structuralUse  low       com.example.modules.module1      fanIn=2, ports=4, dependentsPerPublicPort=0.5   structuralProxy  inspect-node com.example.modules.module1
-
---------------------------------------------------------------------------------
-Cycles (top 1 of 1)
-(size desc, extFanIn desc)
-id                               size  extFanIn  greedyCutEstimate  status
-scc:com.example.modules.module1  2     1         —                  notRequested
-
-  Cycle scc:com.example.modules.module1
-    cut analysis: notRequested (pass --analyze-cuts)
-
---------------------------------------------------------------------------------
-Change propagators (top 2 of 2) (score = (fanIn/avgFanIn + fanOut/avgFanOut)/2; score > 1)
-node                         fanIn  fanOut  score
-com.example.modules.module1  2      1       1.50
-com.example.modules.module2  1      2       1.50
-
---------------------------------------------------------------------------------
-Surface risks (dependentsPerPublicPort asc; — = no fan-in)
-node                         in  out  ports  mut  encap%  use
-com.example.modules.module2  1   2    4      0    —       0.25
-org.thirdparty               1   0    4      0    —       0.25
-com.example.modules.module1  2   1    4      0    —       0.50
-com.example.app              0   1    4      0    —       —
-
---------------------------------------------------------------------------------
-Public surface (top 0 of 0)
-  (none)
-
---------------------------------------------------------------------------------
-Public mutability (top 0 of 0)
-  (none)
-
---------------------------------------------------------------------------------
-Public exposure ratio (top 0 of 0)
-  (none)
+_Snapshot recorded: cycle size changed by more than the 1% threshold._
 ```
+
+The underlying `.codeps/health.ndjson` is JSON on every line, which makes it
+particularly useful in CI: jobs can inspect the latest status, compare metrics,
+or feed the history into a dashboard without parsing human-oriented report
+text. The Markdown view is only the convenient presentation layer.
+
+For the full dependency graph, cycle members, cut candidates, propagators, and
+per-node surface details, continue to the [metrics report reference](/reference/report.html)
+and the [CLI reference](/reference/cli.html).
 
 ## Features
 
@@ -110,8 +105,8 @@ Public exposure ratio (top 0 of 0)
   GFM for reviews), and `json` (machine-readable)
 - **Report controls** — table/Markdown views show the top 10 rows per section by default; `--all`
   expands them, `--color auto|always|never` controls ANSI table styling, and `--analyze-cuts`
-  enables bounded SCC cut analysis. JSON is schema v2; its `findings` and optional `publicSymbols`
-  arrays cap at 10,000 rows and report omissions in `truncation`.
+  enables bounded SCC cut analysis. JSON is schema v2; its `findings` array caps at 10,000 rows
+  and reports omissions in `truncation`.
 
 No build-system integration needed: your local build tools already produce the inputs,
 codeps just reads them.

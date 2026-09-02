@@ -32,7 +32,7 @@ scala-cli compile --server=false --semanticdb -d classes src/
 Then export the graph to the codeps export format:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb
 ```
 
 If your build tool already enables SemanticDB (sbt/Maven with the `semanticdb` compiler plugin),
@@ -42,7 +42,7 @@ the `.semanticdb` files are already on disk — just point `export --input` at t
 
 ```shell
 jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
-codeps export --from jdeps --input jdeps.txt -o deps.json
+codeps export --from jdeps --input jdeps.txt
 ```
 
 See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with jdeps](/howtos/jdeps.html) for details.
@@ -58,7 +58,7 @@ codeps report-packages --input deps.json
 or pipe export straight into `report-packages`:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o - | codeps report-packages --input -
 ```
 
 For a file-level view of one package, use `report-files` with an include pattern:
@@ -74,8 +74,8 @@ and encapsulation ratios) and orphans — see the
 as a table by default. `--format markdown` emits deterministic GitHub-Flavored Markdown;
 `--format json` emits the schema-v2 report with canonical ids and cut evidence. Table and
 Markdown sections show at most 10 rows by default; add `--all` for every human-view row. The
-`findings` and optional `publicSymbols` arrays are capped at 10,000 rows in JSON, with omitted
-counts recorded in `truncation`.
+the `findings` array is capped at 10,000 rows in JSON, with omitted counts recorded in
+`truncation`.
 Use `--color auto|always|never` for table ANSI styling and add `--analyze-cuts` (with optional
 `--cut-time-limit` / `--cut-candidate-limit`) when you want bounded cut analysis.
 

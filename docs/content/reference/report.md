@@ -66,9 +66,6 @@ and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoc
       "encapsulationRatio": 0.3, "publicMutableRatio": 0.33
     }
   ],
-  "publicSymbols": [
-    { "symbol": "com.example.cache.Cache", "consumerCount": 2, "referenceCount": 3, "usageConfidence": "semanticdbComplete" }
-  ],
   "orphans": ["DeadUtil.scala"],
   "findings": [
     {
@@ -100,17 +97,16 @@ and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoc
 ## Findings
 
 `findings` is a deterministic index of actionable diagnostics. Each finding has a stable
-`id`, a `kind` (`cycle`, `propagator`, `mutableSurface`, `structuralUse`, or `unusedPublicSymbol`), `severity`, and
+`id`, a `kind` (`cycle`, `propagator`, `mutableSurface`, or `structuralUse`), `severity`, and
 `subject`, plus human-readable `evidence`, `confidence`, and a `nextAction`. Findings are ranked by
 severity, then metric score, then id. They cover every reported SCC, every above-average propagator,
 every node with exposed mutable ports, and every node whose structural-use proxy is below `1.0`.
-The structural-use kind is only a graph proxy, not proof that a public symbol is unused. An
-`unusedPublicSymbol` finding is emitted only when the optional `publicSymbols` index is present.
-JSON serialization bounds both `findings` and `publicSymbols` at 10,000 rows each so large
-projects remain agent-usable. When rows are omitted, `truncation` is present with
-`findingsOmitted` and `publicSymbolsOmitted` counts. Cycles, propagators, surface rows, and
-orphans are not subject to this JSON inventory bound. The in-memory report and `--all` table or
-Markdown view retain the complete inventories; `--all` does not raise the JSON cap.
+The structural-use kind is a graph proxy based on file/package edges; it does not identify
+individual declarations. JSON serialization bounds `findings` at 10,000 rows so large projects
+remain agent-usable. When rows are omitted, `truncation.findingsOmitted` records the count.
+Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound. The
+in-memory report and `--all` table or Markdown view retain the complete findings; `--all` does not
+raise the JSON cap.
 
 ## Cycles
 
@@ -190,8 +186,8 @@ continues to use its camelCase field names. With no `--columns`, the `core` grou
   channel on top of being exposed at all. Always look at the `ports`/`mutPorts` breakdown, never
   `exposure` alone.
 - `dependentsPerPublicPort` — `fanIn / ports` when `fanIn > 0` and `ports > 0`, else `null`.
-  This is a structural proxy: file/package edges do not prove that a particular public symbol
-  is used. A `null` value is meaningful (no consumers or no weighted public ports), not a 0.
+  This is a structural proxy: file/package edges do not identify which public declarations are
+  used. A `null` value is meaningful (no consumers or no weighted public ports), not a 0.
 - `cycleId` — the nullable stable SCC id (`scc:` plus the lexicographically smallest member) for
   nodes in a reported cycle; `null` for nodes outside all cycles.
 
@@ -213,22 +209,6 @@ Each row also carries raw declaration counts, aggregated from the adapter-neutra
   otherwise `null`. Lower means more of the declaration surface is encapsulated.
 - `publicMutableRatio` — `publicMutableSurface / publicSurface` when public declarations exist;
   otherwise `null`.
-
-### Public-symbol use
-
-`publicSymbols` is omitted when the input graph has no complete symbol-reference index. When
-present, each row identifies a declared public symbol and reports `consumerCount` (distinct
-source files), `referenceCount` (reference occurrences), and `usageConfidence`. SemanticDB
-exports use `semanticdbComplete`; only these complete rows can produce an `unusedPublicSymbol`
-finding. Include/exclude and test filters apply to both declaration targets and source-file
-references, so consumers outside the selected report surface are not counted. If any SemanticDB
-document fails to parse during `export`, the optional indexes are omitted because the remaining
-records are partial. An `unusedPublicSymbol` finding's `nextAction` is `inspect-node <scope-id>`,
-where `<scope-id>` is the declaring package or file and is valid for the report's detail workflow;
-the symbol id itself is not a surface node. Absence of the field never implies that public API is
-unused. Compiler-generated SemanticDB symbols without a source definition (such as case-class
-`copy`/`apply` methods and Product `_1` accessors), as well as symbols marked `SYNTHETIC`, are
-excluded; a source-defined identifier with the same spelling remains eligible.
 
 ## Exposed surface
 
@@ -257,5 +237,5 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
 The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks,
 and orphans each include a shown/total label and display at most 10 rows by default. `--all` is accepted
 by `report-packages` and `report-files` only and requests every human-view row. JSON remains complete
-for graph-derived inventories; its `findings` and optional `publicSymbols` arrays are capped at 10,000
-rows and describe any omissions in `truncation`.
+for graph-derived inventories; its `findings` array is capped at 10,000 rows and describes any
+omissions in `truncation`.

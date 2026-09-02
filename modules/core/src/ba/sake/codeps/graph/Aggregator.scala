@@ -2,15 +2,48 @@ package ba.sake.codeps.graph
 
 import ba.sake.codeps.model.*
 
-/** Collapses a granular graph (package/file/type/member) into the exported
-  * shape — package and file nodes only (codeps operates at exactly these two
-  * granularities). Each node's `ports`/`mutPorts` contribution lands in exactly
-  * one surviving node, and edges are re-wired with summed weights.
+/** Collapses a granular graph (package/file/type/member) into the internal
+  * package-and-file projection. Each node's `ports`/`mutPorts` contribution
+  * lands in exactly one surviving node, and edges are re-wired with summed weights.
   * Type/member nodes collapse into their `file` node; file-less nodes (jdeps
   * types) collapse into their root package. File nodes get `parentId` = their
   * root package (lexicographically smallest when a file hosts several packages)
   * so `report --scope packages` aggregation keeps working. */
 object Aggregator:
+
+  /** Builds the public export from one collapsed projection. The two scopes are
+    * intentionally derived together so their node summaries and edge weights do
+    * not drift apart. */
+  def toExport(graph: DepsGraph): ExportGraph =
+    val combined = fileLevel(graph)
+    val files = combined.nodes.collect {
+      case n if n.kind == NodeKind.file =>
+        FileNode(n.id, n.parentId, n.ports, n.mutPorts, n.declarationSurface)
+    }
+    val packagesById = combined.nodes.collect {
+      case n if n.kind == NodeKind.`package` => n.id -> n
+    }.toMap
+    val fileSummariesByPackage = files.toSeq.flatMap { file =>
+      file.packageId.map(_ -> file)
+    }.groupMap(_._1)(_._2)
+    val packageIds = packagesById.keySet ++ fileSummariesByPackage.keySet
+    val packages = packageIds.map { id =>
+      val direct = packagesById.getOrElse(id, Node(id, NodeKind.`package`))
+      val fileSummaries = fileSummariesByPackage.getOrElse(id, Nil)
+      PackageNode(
+        id,
+        direct.ports + fileSummaries.map(_.ports).sum,
+        direct.mutPorts + fileSummaries.map(_.mutPorts).sum,
+        fileSummaries.foldLeft(direct.declarationSurface)(_ + _.declarationSurface)
+      )
+    }
+
+    val packageIdByNodeId =
+      packagesById.keys.map(id => id -> id).toMap ++ files.flatMap(f => f.packageId.map(f.id -> _))
+    val packageEdges = aggregateEdges(combined.edges) { id => packageIdByNodeId.get(id) }
+    val fileIds = files.map(_.id)
+    val fileEdges = combined.edges.filter(e => fileIds.contains(e.source) && fileIds.contains(e.target))
+    ExportGraph(PackageGraph(packages, packageEdges), FileGraph(files, fileEdges))
 
   def fileLevel(graph: DepsGraph): DepsGraph =
     val nodesById = graph.nodes.map(n => n.id -> n).toMap
@@ -20,10 +53,6 @@ object Aggregator:
     def aggId(n: Node): Option[String] = n.kind match
       case NodeKind.`package` | NodeKind.file => Some(n.id)
       case _                                   => n.file.orElse(n.rootPackageId(nodesById))
-
-    // Declaration metadata stores source-file ids. Resolve those ids once so
-    // the public-symbol projection does not scan every node for every symbol.
-    val aggregateIdsByNodeId = graph.nodes.iterator.map(n => n.id -> aggId(n)).toMap
 
     val ports = graph.nodes.toSeq
       .flatMap(n => aggId(n).map(id => id -> n.ports))
@@ -73,20 +102,17 @@ object Aggregator:
           declarationSurface = declarationSurface.getOrElse(p.id, DeclarationSurface())
         )
     }
-    // Symbol references keep their stable declaration targets; they are
-    // intentionally not rewritten to file ids because the report's public-use
-    // index is symbol-level. `declaredPublicSymbols` carries the declaration ids
-    // across this package/file-only projection for report consumers.
-    val fileIds = (fileNodes ++ pkgNodes).map(_.id)
-    val sourceDeclarations = graph.declaredPublicSymbols.getOrElse(
-      graph.nodes.iterator
-        .filter(n => (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed)
-        .flatMap(n => n.file.map(file => n.id -> file))
-        .toMap
-    )
-    val declaredPublicSymbols =
-      if graph.symbolReferences.nonEmpty then Some(sourceDeclarations.flatMap { case (symbol, file) =>
-        aggregateIdsByNodeId.getOrElse(file, Some(file)).map(id => symbol -> id)
-      }.filter((_, file) => fileIds.contains(file)))
-      else graph.declaredPublicSymbols
-    DepsGraph(fileNodes ++ pkgNodes, edges, graph.symbolReferences, declaredPublicSymbols)
+    DepsGraph(fileNodes ++ pkgNodes, edges)
+
+  private def aggregateEdges(edges: Set[Edge])(id: String => Option[String]): Set[Edge] =
+    edges.toSeq
+      .flatMap { edge =>
+        for
+          source <- id(edge.source)
+          target <- id(edge.target)
+          if source != target
+        yield ((source, target), edge.weight)
+      }
+      .groupMapReduce(_._1)(_._2)(_ + _)
+      .map { case ((source, target), weight) => Edge(source, target, weight) }
+      .toSet

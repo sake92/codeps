@@ -24,8 +24,7 @@ object TestFilter:
   /** Drops nodes defined in test files: `file` nodes whose id matches a pattern, and
     * `type`/`member` nodes whose `file` attribute matches. Package nodes and file-less
     * nodes (all of jdeps) never match. Edges are kept only when both endpoints survive
-    * (self-edges dropped); childless package nodes are pruned afterwards. Symbol references
-    * and declarations sourced by removed test files are removed as well. */
+    * (self-edges dropped); childless package nodes are pruned afterwards. */
   def skipTests(graph: DepsGraph, patterns: Seq[String]): DepsGraph =
     val matchers = patterns.map(Glob.matches)
     def isTest(n: Node): Boolean =
@@ -35,5 +34,4 @@ object TestFilter:
     val kept = graph.nodes.filterNot(isTest)
     val keptIds = kept.map(_.id)
     val keptEdges = graph.edges.filter(e => keptIds.contains(e.source) && keptIds.contains(e.target) && e.source != e.target)
-    val retained = Prune.emptyPackages(DepsGraph(kept, keptEdges, graph.symbolReferences, graph.declaredPublicSymbols))
-    SymbolMetadataFilter(retained, retained.nodes, restrictSources = true)
+    Prune.emptyPackages(DepsGraph(kept, keptEdges))

@@ -1,6 +1,8 @@
 package ba.sake.codeps.cli
 
 import ba.sake.codeps.testing.FixtureCompiler
+import ba.sake.codeps.model.ExportGraph
+import ba.sake.tupson.{*, given}
 
 class MainSpec extends munit.FunSuite:
 
@@ -9,10 +11,13 @@ class MainSpec extends munit.FunSuite:
   val semdbDir = FixtureCompiler.classesDir / "META-INF" / "semanticdb"
 
   private def runCli(args: String*): os.CommandResult =
+    runCliIn(os.pwd, args*)
+
+  private def runCliIn(cwd: os.Path, args: String*): os.CommandResult =
     val cmd: Seq[os.Shellable] =
       Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++
         args.map(s => s: os.Shellable)
-    os.proc(cmd).call(cwd = os.pwd, check = false, stderr = os.Pipe)
+    os.proc(cmd).call(cwd = cwd, check = false, stderr = os.Pipe)
 
   private def runCliEnv(env: Map[String, String], args: String*): os.CommandResult =
     val cmd: Seq[os.Shellable] =
@@ -36,31 +41,34 @@ class MainSpec extends munit.FunSuite:
     assertEquals(res.exitCode, 0)
     out
 
-  test("export --from semanticdb emits package and file nodes only") {
+  test("export --from semanticdb emits separate package and file summaries") {
     val content = os.read(exportJson("deps.json"))
-    assert(content.contains("\"kind\": \"package\""))
-    assert(content.contains("\"kind\": \"file\""))
-    assert(!content.contains("\"kind\": \"type\""))
-    assert(!content.contains("\"kind\": \"member\""))
-    // Public symbol metadata and references may mention type ids, but the
-    // exported dependency node set remains package/file-only.
-    assert(content.contains("com.example.modules.module1")) // packages remain
-    assert(content.contains("src/com/example/util/Helper.scala")) // files remain
-    assert(content.contains("\"parentId\": \"com.example.util\"")) // file -> package link
+    val exported = content.parseJson[ExportGraph]
+    assert(exported.packages.nodes.exists(_.id == "com.example.modules.module1"))
+    assert(exported.files.nodes.exists(_.id == "src/com/example/util/Helper.scala"))
+    assert(exported.packages.nodes.exists(_.declarationSurface.public > 0))
+    assert(exported.files.nodes.exists(_.declarationSurface.public > 0))
+    assert(exported.files.nodes.find(_.id == "src/com/example/util/Helper.scala").flatMap(_.packageId).contains("com.example.util"))
+    assert(exported.packages.edges.nonEmpty)
+    assert(exported.files.edges.nonEmpty)
+    assert(!content.contains("\"kind\""))
+    assert(!content.contains("\"parentId\""))
+    assert(!content.contains("symbolReferences"))
+    assert(!content.contains("declaredPublicSymbols"))
   }
 
-  test("export --from jdeps emits package-level json") {
+  test("export --from jdeps emits package summaries and an empty file graph") {
     val out = os.pwd / "tmp" / "cli-test" / "deps-jdeps.json"
     os.makeDir.all(out / os.up)
     os.remove.all(out)
     val res = runCli("export", "--from", "jdeps", "-o", out.toString, "--input", FixtureCompiler.jdepsFile.toString)
     assertEquals(res.exitCode, 0)
     val content = os.read(out)
-    assert(content.contains("\"com.example.modules.module2\""))
-    assert(content.contains("\"kind\": \"package\""))
-    assert(!content.contains("\"kind\": \"type\""))
-    assert(!content.contains("\"kind\": \"member\""))
-    assert(!content.contains("\"kind\": \"file\""))
+    val exported = content.parseJson[ExportGraph]
+    assert(exported.packages.nodes.exists(_.id == "com.example.modules.module2"))
+    assert(exported.files.nodes.isEmpty)
+    assert(exported.files.edges.isEmpty)
+    assert(!content.contains("\"kind\""))
   }
 
   test("nonexistent input exits 1") {
@@ -133,6 +141,15 @@ class MainSpec extends munit.FunSuite:
       "--input", exportJdepsJson("deps-jdeps-report.json").toString)
     assertEquals(res.exitCode, 0)
     assert(res.out.text().contains("com.example.modules.module2"))
+  }
+
+  test("reports reject the former flat graph schema") {
+    val input = os.pwd / "tmp" / "cli-test" / "flat-deps.json"
+    os.makeDir.all(input / os.up)
+    os.write.over(input, """{"nodes": [], "edges": []}""")
+    val res = runCli("report-packages", "--input", input.toString)
+    assertEquals(res.exitCode, 1)
+    assert(res.err.text().contains("failed to parse json"))
   }
 
   test("report-packages table renders the same data as text") {
@@ -217,6 +234,85 @@ class MainSpec extends munit.FunSuite:
     assert(res.out.text().startsWith("scope: packages"))
     assert(res.out.text().contains("Summary"))
     assert(res.out.text().contains("Cycles"))
+  }
+
+  test("health-snapshot appends an overall snapshot only when it is significant") {
+    val history = os.pwd / "tmp" / "cli-test" / "health.ndjson"
+    os.makeDir.all(history / os.up)
+    os.remove.all(history)
+    val input = exportJson("health-deps.json")
+
+    val first = runCli("health-snapshot", "--input", input.toString, "--history", history.toString,
+      "--commit", "first", "--generatedAt", "2026-09-02T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(first.exitCode, 0)
+    assert(first.out.text().contains("recorded (initial)"))
+    val firstLine = os.read.lines(history)
+    assertEquals(firstLine.size, 1)
+    assert(firstLine.head.contains("\"structure\""))
+    assert(firstLine.head.contains("\"cycles\""))
+    assert(firstLine.head.contains("\"surface\""))
+
+    val unchanged = runCli("health-snapshot", "--input", input.toString, "--history", history.toString,
+      "--commit", "second", "--generatedAt", "2026-09-03T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(unchanged.exitCode, 0)
+    assert(unchanged.out.text().contains("not significantly different from the last one; skipping recording"))
+    assertEquals(os.read.lines(history).size, 1)
+  }
+
+  test("health-snapshot renders CLI, Markdown, and JSON formats") {
+    val history = os.pwd / "tmp" / "cli-test" / "health-formats.ndjson"
+    os.makeDir.all(history / os.up)
+    os.remove.all(history)
+    val input = exportJson("health-formats-deps.json")
+
+    val markdown = runCli("health-snapshot", "--format", "markdown", "--input", input.toString,
+      "--history", history.toString, "--commit", "abc123", "--generatedAt", "2026-09-02T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(markdown.exitCode, 0)
+    assert(markdown.out.text().startsWith("# Overall dependency health\n"))
+    assert(markdown.out.text().contains("## Structure"))
+    assert(markdown.out.text().contains("## Findings"))
+
+    val json = runCli("health-snapshot", "--format", "json", "--input", input.toString,
+      "--history", history.toString, "--commit", "abc123", "--generatedAt", "2026-09-03T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(json.exitCode, 0)
+    assert(json.out.text().contains("\"schemaVersion\": 1"))
+    assert(json.out.text().contains("\"structure\""))
+    assertEquals(os.read.lines(history).size, 1)
+  }
+
+  test("health-snapshot colors table output and uses --generatedAt") {
+    val history = os.pwd / "tmp" / "cli-test" / "health-colors.ndjson"
+    os.makeDir.all(history / os.up)
+    os.remove.all(history)
+    val input = exportJson("health-colors-deps.json")
+    val colored = runCli("health-snapshot", "--color", "always", "--input", input.toString,
+      "--history", history.toString, "--commit", "abc123", "--generatedAt", "2026-09-02T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(colored.exitCode, 0)
+    assert(colored.out.text().contains("\u001b["))
+
+    val json = runCli("health-snapshot", "--format", "json", "--color", "always", "--input", input.toString,
+      "--history", history.toString, "--commit", "abc123", "--generatedAt", "2026-09-03T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(json.exitCode, 0)
+    assert(!json.out.text().contains("\u001b["))
+
+    val oldFlag = runCli("health-snapshot", "--at", "2026-09-03T12:00:00Z", "--input", input.toString)
+    assertEquals(oldFlag.exitCode, 1)
+    assert(oldFlag.err.text().contains("Unknown argument"))
+  }
+
+  test("export, reports, and health-snapshot use .codeps defaults") {
+    val workspace = os.temp.dir(prefix = "codeps-defaults-")
+    val exported = runCliIn(workspace, "export", "--input", semdbDir.toString)
+    assertEquals(exported.exitCode, 0)
+    assert(os.exists(workspace / ".codeps" / "export.json"))
+
+    val report = runCliIn(workspace, "report-packages")
+    assertEquals(report.exitCode, 0)
+    assert(report.out.text().startsWith("scope: packages"))
+
+    val health = runCliIn(workspace, "health-snapshot", "--commit", "abc123", "--generatedAt", "2026-09-02T12:00:00Z", "--max-snapshot-age", "off")
+    assertEquals(health.exitCode, 0)
+    assert(os.exists(workspace / ".codeps" / "health.ndjson"))
   }
 
   test("report-packages --all selects the complete table inventory") {

@@ -1,8 +1,8 @@
 package ba.sake.codeps.cli
 
 import ba.sake.codeps.graph.{Aggregator, Collapser, TestFilter}
-import ba.sake.codeps.model.{CollapseRule, DepsGraph}
-import ba.sake.codeps.report.{CutAnalysisBudget, MetricsCalculator, ReportInspector, ReportMarkdown, ReportTable}
+import ba.sake.codeps.model.{CollapseRule, DepsGraph, ExportGraph}
+import ba.sake.codeps.report.{CutAnalysisBudget, HealthHistory, HealthRecordingDecision, HealthSnapshot, MetricsCalculator, ReportInspector, ReportMarkdown, ReportTable}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
@@ -10,8 +10,12 @@ import mainargs.{arg, main, ParserForMethods, TokensReader}
 
 import scala.concurrent.duration.{FiniteDuration, NANOSECONDS}
 import java.util.Locale
+import java.time.{Duration, Instant}
 
 object Main:
+
+  private val defaultExportPath = ".codeps/export.json"
+  private val defaultHealthHistoryPath = ".codeps/health.ndjson"
 
   def main(args: Array[String]): Unit = sys.exit(run(args))
 
@@ -87,9 +91,9 @@ object Main:
 
   @main
   def `export`(
-      @arg(short = 'f', name = "from") from: InputFormat,
+      @arg(short = 'f', name = "from") from: InputFormat = InputFormat.Semanticdb,
       @arg(name = "root") root: Option[String],
-      @arg(short = 'o') out: Option[String],
+      @arg(short = 'o') out: String = defaultExportPath,
       @arg(short = 'i', name = "input") inputs: Seq[String]
   ): Int =
     if inputs.isEmpty then
@@ -110,7 +114,6 @@ object Main:
                   1
                 case None =>
                   var deps = DepsGraph.empty
-                  var parseFailed = false
                   val workspaceRoot = root.map(r => os.Path(r, os.pwd)).getOrElse(os.pwd)
                   val files = paths.flatMap(d => os.walk(d).filter(_.ext == "semanticdb").toSeq)
                   if files.isEmpty then
@@ -120,16 +123,8 @@ object Main:
                     for f <- files do
                       SemanticDbParser.parse(os.read.bytes(f), workspaceRoot.toNIO) match
                         case Right(d)  => deps = deps.merge(d)
-                        case Left(err) =>
-                          parseFailed = true
-                          System.err.println(s"warning: $err")
-                    // A partial SemanticDB export cannot support complete
-                    // public-symbol use or unused-public-symbol claims. Drop
-                    // both optional indexes so downstream reports omit them.
-                    val exportGraph =
-                      if parseFailed then deps.copy(symbolReferences = None, declaredPublicSymbols = None)
-                      else deps
-                    writeOutput(Aggregator.fileLevel(exportGraph.withoutDanglingEdges).toJson(spaces = 2, sort = true), out)
+                        case Left(err) => System.err.println(s"warning: $err")
+                    writeOutput(Aggregator.toExport(deps.withoutDanglingEdges).toJson(spaces = 2, sort = true), Some(out))
                     0
             case InputFormat.Jdeps =>
               paths.find(!os.isFile(_)) match
@@ -140,7 +135,7 @@ object Main:
                   var deps = DepsGraph.empty
                   for f <- paths do
                     deps = deps.merge(JdepsParser.parse(os.read(f)))
-                  writeOutput(Aggregator.fileLevel(deps).toJson(spaces = 2, sort = true), out)
+                  writeOutput(Aggregator.toExport(deps).toJson(spaces = 2, sort = true), Some(out))
                   0
 
   private case class ReportOptions(
@@ -178,7 +173,7 @@ object Main:
       @arg(name = "cut-time-limit") cutTimeLimit: Option[String],
       @arg(name = "cut-candidate-limit") cutCandidateLimit: Option[Int],
       @arg(short = 'o') out: Option[String],
-      @arg(short = 'i', name = "input") input: String
+      @arg(short = 'i', name = "input") input: String = defaultExportPath
   ): Int = runReport(MetricsCalculator.Scope.Packages, ReportOptions(format, include, exclude, collapse,
     skipTests.value, testPattern, all.value, columns, color, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
 
@@ -197,9 +192,27 @@ object Main:
       @arg(name = "cut-time-limit") cutTimeLimit: Option[String],
       @arg(name = "cut-candidate-limit") cutCandidateLimit: Option[Int],
       @arg(short = 'o') out: Option[String],
-      @arg(short = 'i', name = "input") input: String
+      @arg(short = 'i', name = "input") input: String = defaultExportPath
   ): Int = runReport(MetricsCalculator.Scope.Files, ReportOptions(format, include, exclude, collapse,
     skipTests.value, testPattern, all.value, columns, color, analyzeCuts.value, cutTimeLimit, cutCandidateLimit, out, input))
+
+  @main
+  def healthSnapshot(
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table,
+      @arg(name = "color") color: ColorMode = ColorMode.Auto,
+      @arg(name = "include") include: Seq[String],
+      @arg(short = 'e') exclude: Seq[String],
+      @arg(short = 'c') collapse: Seq[String],
+      @arg(name = "skip-tests") skipTests: mainargs.Flag,
+      @arg(name = "test-pattern") testPattern: Seq[String] = Nil,
+      @arg(name = "significance") significance: Double = 0.01,
+      @arg(name = "max-snapshot-age") maxSnapshotAge: String = "7d",
+      @arg(name = "commit") commit: Option[String],
+      @arg(name = "generatedAt") generatedAt: Option[String],
+      @arg(short = 'i', name = "input") input: String = defaultExportPath,
+      @arg(name = "history") history: String = defaultHealthHistoryPath,
+      @arg(short = 'o') out: Option[String]
+  ): Int = runHealthSnapshot(format, color, include, exclude, collapse, skipTests.value, testPattern, significance, maxSnapshotAge, commit, generatedAt, input, history, out)
 
   @main
   def inspectCycle(
@@ -252,10 +265,10 @@ object Main:
               case Left(err) =>
                 System.err.println(s"error: $err")
                 1
-              case Right(graph) =>
+              case Right(exportGraph) =>
                 parseRules(options.collapse).flatMap { rules =>
                   MetricsCalculator.run(
-                    graph,
+                    graphFor(scope, exportGraph, options.skipTests),
                     scope,
                     options.include,
                     options.exclude,
@@ -287,6 +300,100 @@ object Main:
                     writeOutput(content, options.out)
                     0
 
+  private def runHealthSnapshot(
+      format: ReportFormat,
+      color: ColorMode,
+      include: Seq[String],
+      exclude: Seq[String],
+      collapse: Seq[String],
+      skipTests: Boolean,
+      testPattern: Seq[String],
+      significance: Double,
+      rawMaxSnapshotAge: String,
+      commit: Option[String],
+      generatedAt: Option[String],
+      input: String,
+      history: String,
+      out: Option[String]
+  ): Int =
+    if significance < 0.0 || significance.isNaN || significance.isInfinite then
+      System.err.println("error: --significance must be a non-negative finite decimal")
+      1
+    else
+      parseMaxSnapshotAge(rawMaxSnapshotAge).flatMap { maxSnapshotAge =>
+        testPatternsOrError(skipTests, testPattern).flatMap { patterns =>
+          readGraphInput(input).flatMap { exportGraph =>
+            parseRules(collapse).flatMap { rules =>
+              MetricsCalculator.run(
+                graphFor(MetricsCalculator.Scope.Packages, exportGraph, skipTests),
+                MetricsCalculator.Scope.Packages,
+                include,
+                exclude,
+                rules,
+                patterns
+              ).flatMap { report =>
+                val datedReport = generatedAt match
+                  case None => Right(report)
+                  case Some(value) =>
+                    try Right(report.copy(generatedAt = Instant.parse(value).toString))
+                    catch case _: Exception => Left(s"invalid --generatedAt: $value (expected ISO-8601 UTC instant)")
+                datedReport.flatMap { currentReport =>
+                  resolvedCommit(commit).flatMap { currentCommit =>
+                    readHistory(history).flatMap { case (historyPath, rawHistory, snapshots) =>
+                      val current = HealthSnapshot.fromReport(currentReport, currentCommit)
+                      checkpointDue(snapshots.lastOption, current.at, maxSnapshotAge).map { due =>
+                        val decision = HealthHistory.decision(snapshots.lastOption, current, significance, due)
+                        decision match
+                          case HealthRecordingDecision.NotSignificant => ()
+                          case _ =>
+                            os.makeDir.all(historyPath / os.up)
+                            os.write.over(historyPath, rawHistory + current.toJson(spaces = 0, sort = true) + "\n")
+                        val content = format match
+                          case ReportFormat.Json => current.toJson(spaces = 2, sort = true)
+                          case ReportFormat.Table => HealthHistory.renderTable(current, decision, shouldColor(format, color, out))
+                          case ReportFormat.Markdown => HealthHistory.renderMarkdown(current, decision)
+                        writeOutput(content, out)
+                        0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } match
+        case Left(err) =>
+          System.err.println(s"error: $err")
+          1
+        case Right(code) => code
+
+  private def parseMaxSnapshotAge(raw: String): Either[String, Option[FiniteDuration]] =
+    if raw == "off" then Right(None)
+    else parseDuration(raw).map(Some(_)).left.map(_.replace("--cut-time-limit", "--max-snapshot-age"))
+
+  private def resolvedCommit(explicit: Option[String]): Either[String, String] = explicit match
+    case Some(value) if value.nonEmpty => Right(value)
+    case Some(_) => Left("--commit must not be empty")
+    case None =>
+      val result = os.proc("git", "rev-parse", "HEAD").call(cwd = os.pwd, check = false, stderr = os.Pipe)
+      if result.exitCode == 0 then Right(result.out.text().trim)
+      else Left("unable to resolve git HEAD; pass --commit explicitly")
+
+  private def readHistory(history: String): Either[String, (os.Path, String, Seq[HealthSnapshot])] =
+    val path = os.Path(history, os.pwd)
+    if os.exists(path) && !os.isFile(path) then Left(s"history path is not a file: $path")
+    else
+      val raw = if os.exists(path) then os.read(path) else ""
+      HealthHistory.parseNdjson(raw).map(snapshots => (path, raw, snapshots))
+
+  private def checkpointDue(last: Option[HealthSnapshot], currentAt: String, maxAge: Option[FiniteDuration]): Either[String, Boolean] =
+    (last, maxAge) match
+      case (_, None) | (None, _) => Right(false)
+      case (Some(previous), Some(age)) =>
+        try Right(Duration.between(Instant.parse(previous.at), Instant.parse(currentAt)).toMillis >= age.toMillis)
+        catch case _: Exception => Left("history timestamp is invalid")
+
   private def parseCutBudget(
       analyzeCuts: Boolean,
       rawTimeLimit: Option[String],
@@ -305,7 +412,7 @@ object Main:
       yield Some(CutAnalysisBudget(timeLimit, candidateLimit))
 
   private def parseDuration(raw: String): Either[String, FiniteDuration] =
-    val pattern = "^([0-9]+(?:\\.[0-9]+)?)(ms|s|m)$".r
+    val pattern = "^([0-9]+(?:\\.[0-9]+)?)(ms|s|m|d)$".r
     raw match
       case pattern(amount, unit) =>
         val nanos =
@@ -314,13 +421,14 @@ object Main:
               case "ms" => BigDecimal(1000000)
               case "s"  => BigDecimal(1000000000)
               case "m"  => BigDecimal(60000000000L)
+              case "d"  => BigDecimal(86400000000000L)
             (BigDecimal(amount) * factor).toLongExact
           catch case _: ArithmeticException => -1L
         if nanos > 0 then Right(FiniteDuration(nanos, NANOSECONDS))
         else Left(s"--cut-time-limit must be a positive duration (received: $raw)")
-      case _ => Left(s"invalid --cut-time-limit: $raw (expected a positive duration such as 1s or 250ms)")
+      case _ => Left(s"invalid --cut-time-limit: $raw (expected a positive duration such as 1s, 7d, or 250ms)")
 
-  private def readGraphInput(input: String): Either[String, DepsGraph] =
+  private def readGraphInput(input: String): Either[String, ExportGraph] =
     val text =
       if input == "-" then new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
       else
@@ -328,9 +436,21 @@ object Main:
         if !os.exists(path) then return Left(s"input path does not exist: $path")
         if !os.isFile(path) then return Left(s"not a file: $path")
         os.read(path)
-    try Right(text.parseJson[DepsGraph])
+    try Right(text.parseJson[ExportGraph])
     catch
-      case e: ba.sake.tupson.TupsonException => Left(s"failed to parse json: ${e.getMessage}")
+      case error: ba.sake.tupson.TupsonException => Left(s"failed to parse json: ${error.getMessage}")
+
+  /** Test filtering needs file identities. Normal package reports use their
+    * materialized package view; only --skip-tests re-aggregates the file view. */
+  private def graphFor(
+      scope: MetricsCalculator.Scope,
+      exportGraph: ExportGraph,
+      skipTests: Boolean
+  ): DepsGraph =
+    scope match
+      case MetricsCalculator.Scope.Packages if skipTests && exportGraph.files.nodes.nonEmpty => exportGraph.fileDeps
+      case MetricsCalculator.Scope.Packages => exportGraph.packageDeps
+      case MetricsCalculator.Scope.Files    => exportGraph.fileDeps
 
   private def readReportInput(input: String): Either[String, ba.sake.codeps.report.MetricsReport] =
     val text =
@@ -357,7 +477,11 @@ object Main:
 
   private def writeOutput(content: String, out: Option[String]): Unit =
     out match
-      case Some(path) => os.write.over(os.Path(path, os.pwd), content)
+      case Some("-") => print(content)
+      case Some(path) =>
+        val output = os.Path(path, os.pwd)
+        os.makeDir.all(output / os.up)
+        os.write.over(output, content)
       case None       => print(content)
 
   private def shouldColor(format: ReportFormat, mode: ColorMode, out: Option[String]): Boolean =

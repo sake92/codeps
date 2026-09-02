@@ -54,32 +54,20 @@ class AggregatorSpec extends munit.FunSuite:
     assertEquals(agg.edges.find(e => e.source == "src/A.scala" && e.target == "src/B.scala").get.weight, 2)
   }
 
-  test("aggregating retains public symbol metadata and reference occurrences") {
-    val graph = granular.copy(
-      symbolReferences = Some(Seq(SymbolReference("src/B.scala", "com.a.A#m"))),
-      declaredPublicSymbols = Some(Map("com.a.A#m" -> "src/A.scala"))
+  test("export materializes independent package and file graphs with summaries") {
+    val exported = Aggregator.toExport(granular)
+
+    assertEquals(
+      exported.files.nodes.find(_.id == "src/A.scala").get,
+      FileNode("src/A.scala", Some("com.a"), 4.0, 1.0,
+        DeclarationSurface(public = 1, publicMutable = 1))
     )
-    val agg = Aggregator.fileLevel(graph)
-    assertEquals(agg.symbolReferences, graph.symbolReferences)
-    assertEquals(agg.declaredPublicSymbols, Some(Map("com.a.A#m" -> "src/A.scala")))
-  }
+    assertEquals(exported.files.edges, Set(Edge("src/A.scala", "src/B.scala"), Edge("src/B.scala", "src/A.scala")))
 
-  test("aggregates many public declarations without changing their source-file targets") {
-    val declarationCount = 2_000
-    val declarations = (1 to declarationCount).map { i =>
-      val symbol = s"com.a.Api#$i"
-      symbol -> "src/A.scala"
-    }.toMap
-    val graph = granular.copy(
-      nodes = granular.nodes ++ (1 to declarationCount).map { i =>
-        Node(s"com.unrelated.Unused$i", NodeKind.`type`, Some("com.b"), Some("src/B.scala"))
-      },
-      symbolReferences = Some(Seq(SymbolReference("src/B.scala", "com.a.A#m"))),
-      declaredPublicSymbols = Some(declarations + ("com.a.A#m" -> "src/A.scala"))
+    assertEquals(
+      exported.packages.nodes.find(_.id == "com.a").get,
+      PackageNode("com.a", 4.0, 1.0, DeclarationSurface(public = 1, publicMutable = 1))
     )
-
-    val agg = Aggregator.fileLevel(graph)
-
-    assertEquals(agg.declaredPublicSymbols.map(_.size), Some(declarationCount + 1))
-    assert(agg.declaredPublicSymbols.toSeq.flatMap(_.values).forall(_ == "src/A.scala"))
+    assertEquals(exported.packages.nodes.find(_.id == "com.b").get.ports, 0.5)
+    assertEquals(exported.packages.edges, Set(Edge("com.a", "com.b"), Edge("com.b", "com.a")))
   }

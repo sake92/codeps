@@ -1,18 +1,20 @@
 {
-  "nodes": [
-    { "id": "com.example.app", "kind": "package" },
-    { "id": "com.example.modules.module1", "kind": "package" },
-    { "id": "com.example.modules.module2", "kind": "package" },
-    { "id": "org.thirdparty", "kind": "package" },
-    { "id": "com.example.app.Main", "kind": "type", "parentId": "com.example.app", "ports": 4 },
-    { "id": "com.example.modules.module1.Service1", "kind": "type", "parentId": "com.example.modules.module1", "ports": 4 },
-    { "id": "com.example.modules.module2.Service2", "kind": "type", "parentId": "com.example.modules.module2", "ports": 4 },
-    { "id": "org.thirdparty.Ext", "kind": "type", "parentId": "org.thirdparty", "ports": 4 }
-  ],
-  "edges": [
-    { "source": "com.example.app.Main", "target": "com.example.modules.module1.Service1" },
-    { "source": "com.example.modules.module1.Service1", "target": "com.example.modules.module2.Service2" },
-    { "source": "com.example.modules.module2.Service2", "target": "com.example.modules.module1.Service1" },
-    { "source": "com.example.modules.module2.Service2", "target": "org.thirdparty.Ext" }
-  ]
+  "packages": {
+    "nodes": [
+      { "id": "com.example.app", "ports": 4, "mutPorts": 0, "declarationSurface": {} },
+      { "id": "com.example.modules.module1", "ports": 4, "mutPorts": 0, "declarationSurface": {} },
+      { "id": "com.example.modules.module2", "ports": 4, "mutPorts": 0, "declarationSurface": {} },
+      { "id": "org.thirdparty", "ports": 4, "mutPorts": 0, "declarationSurface": {} }
+    ],
+    "edges": [
+      { "source": "com.example.app", "target": "com.example.modules.module1" },
+      { "source": "com.example.modules.module1", "target": "com.example.modules.module2" },
+      { "source": "com.example.modules.module2", "target": "com.example.modules.module1" },
+      { "source": "com.example.modules.module2", "target": "org.thirdparty" }
+    ]
+  },
+  "files": {
+    "nodes": [],
+    "edges": []
+  }
 }

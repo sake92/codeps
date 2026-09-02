@@ -192,7 +192,6 @@ object ReportMarkdown:
         source.append(s"${code("--all")} to include every triage row.\n")
       case Some(truncation) =>
         source.append(s"- Findings omitted from the JSON inventory: ${code(truncation.findingsOmitted.toString)}\n")
-        source.append(s"- Public symbols omitted from the JSON inventory: ${code(truncation.publicSymbolsOmitted.toString)}\n")
         source.append(s"- The Markdown view remains bounded per section; pass ${code("--all")} to include every triage row.\n")
 
     val rendered = formatter.render(parser.parse(source.result())).trim

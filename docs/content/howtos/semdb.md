@@ -10,9 +10,8 @@ SemanticDB is a data format describing the semantic information of Scala (and Ja
 produced by the Scala compiler (`-Xsemanticdb` flag) or tools like scala-cli.
 
 Scala data is the richest codeps input: it carries package/file/type/member symbols, and
-`export` collapses them into `package` and `file` nodes with file-level edges
-(ports/mutPorts resolved at export time), so the analyzer can produce metrics at both
-scopes — the package graph and the file graph of a selected package. It also carries
+`export` materializes package and file graphs (ports/mutPorts resolved at export time),
+so the analyzer can produce metrics at both scopes. It also carries
 per-symbol access/kind information, which the exporter turns into the
 [exposed-surface metrics](/reference/report.html#exposed-surface)
 (`ports`/`mutPorts`: sealed hierarchies, givens, vars and mutable collections are all
@@ -41,21 +40,21 @@ Other ways to get SemanticDB output:
 ## Exporting the graph
 
 `codeps export` walks the directory, reads every `*.semanticdb` file and emits the
-[codeps export format](/reference/json-input.html) (`nodes` + `edges`):
+[codeps export format](/reference/json-input.html) (`packages` + `files`, each with nodes and edges):
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb
 ```
 
 - `--from semanticdb` selects the SemanticDB producer (required)
 - `--input` takes a **directory** — the whole tree is walked for `*.semanticdb` files (repeatable)
-- `-o deps.json` writes the graph to a file; without `-o` it goes to stdout
+- Without `-o`, codeps writes `.codeps/export.json`; use `-o -` for stdout
 
 Source file ids are made relative to the current working directory; pass `--root <dir>`
 to make them relative to `<dir>` instead (e.g. the project root):
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb --root . -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb --root .
 ```
 
 ## Analyzing
@@ -64,7 +63,7 @@ codeps export --from semanticdb --input classes/META-INF/semanticdb --root . -o 
 package graph:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
+codeps export --from semanticdb --input classes/META-INF/semanticdb
 codeps report-packages --input deps.json
 ```
 
@@ -85,14 +84,14 @@ codeps report-packages --input deps.json
   ANSI styling for table output
 - `--analyze-cuts` enables bounded SCC cut analysis; `--cut-time-limit` and
   `--cut-candidate-limit` set per-SCC budgets. Without it, `cutAnalysis.status` is `notRequested`.
-  JSON findings and optional public-symbol rows are capped at 10,000 each and report omissions in
-  `truncation` when a very large project exceeds those limits.
+  JSON findings are capped at 10,000 rows and report omissions in `truncation` when a very large
+  project exceeds that limit.
 
 No intermediate file needed — pipe `export` straight into `report-packages` (the `-` tells
 it to read the JSON from stdin):
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --input -
+codeps export --from semanticdb --input classes/META-INF/semanticdb -o - | codeps report-packages --input -
 ```
 
 See the [Metrics report](/reference/report.html) for the full field reference, including

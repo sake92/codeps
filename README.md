@@ -1,6 +1,6 @@
 # codeps
 
-Code package dependency analyzer.
+Code deps health tracker.
 
 Parses [SemanticDB](https://scalameta.org/docs/semanticdb/specification.html) or `jdeps` output
 into the [codeps export format](https://sake92.github.io/codeps/reference/json-input.html),

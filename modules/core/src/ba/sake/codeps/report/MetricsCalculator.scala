@@ -20,9 +20,7 @@ object MetricsCalculator:
       edges: Set[Edge],
       ports: Map[String, Double],
       mutPorts: Map[String, Double],
-      declarationSurface: Map[String, DeclarationSurface] = Map.empty,
-      symbolReferences: Option[Seq[SymbolReference]] = None,
-      publicSymbols: Map[String, String] = Map.empty
+      declarationSurface: Map[String, DeclarationSurface] = Map.empty
   )
 
   def scopeGraph(graph: DepsGraph, scope: Scope): Either[String, ScopeGraph] =
@@ -41,34 +39,10 @@ object MetricsCalculator:
       )
     else
       val ids = mapped.map(_._2).toSet
-      val mappedByNode = mapped.iterator.map { case (node, scopeId) => node.id -> scopeId }.toMap
-      // SemanticDB references identify their source by file id. Keep a direct
-      // lookup so scope filtering cannot accidentally count consumers from an
-      // excluded package or test source (and so declaration mapping stays linear).
-      val sourceFileScope = mapped.iterator.flatMap { case (node, scopeId) =>
-        val fileIds = (if node.kind == NodeKind.file then Iterator.single(node.id) else Iterator.empty) ++ node.file.iterator
-        fileIds.map(_ -> scopeId)
-      }.toMap
       val ports = mapped.groupMapReduce(_._2)(_._1.ports)(_ + _)
       val mutPorts = mapped.groupMapReduce(_._2)(_._1.mutPorts)(_ + _)
       val declarationSurface = mapped
         .groupMapReduce(_._2)(_._1.declarationSurface)(_ + _)
-      val nodePublicSymbols = mapped.collect {
-        case (n, scopeId)
-            if (n.kind == NodeKind.`type` || n.kind == NodeKind.member) && n.isExposed =>
-          n.id -> scopeId
-      }.toMap
-      val publicSymbols = graph.declaredPublicSymbols match
-        case Some(declarations) => declarations.flatMap { case (symbol, sourceFile) =>
-            mappedByNode.get(symbol)
-              .orElse(sourceFileScope.get(sourceFile))
-              .map(scopeId => symbol -> scopeId)
-          }
-        case None => nodePublicSymbols
-      val symbolReferences = graph.symbolReferences.map(_.filter { reference =>
-        publicSymbols.contains(reference.targetSymbol) &&
-          sourceFileScope.get(reference.sourceFile).forall(ids.contains)
-      })
       val edges = graph.edges.toSeq
         .flatMap { e =>
           for
@@ -80,7 +54,7 @@ object MetricsCalculator:
         .groupMapReduce(_._1)(_._2)(_ + _)
         .map { case ((s, t), w) => Edge(s, t, w) }
         .toSet
-      Right(ScopeGraph(ids, edges, ports, mutPorts, declarationSurface, symbolReferences, publicSymbols))
+      Right(ScopeGraph(ids, edges, ports, mutPorts, declarationSurface))
 
   /** Applies collapse rules; port sums follow the same id mapping as the nodes. */
   def collapse(sg: ScopeGraph, rules: Seq[CollapseRule]): ScopeGraph =
@@ -93,9 +67,7 @@ object MetricsCalculator:
         edges,
         reSum(sg.ports, resolve),
         reSum(sg.mutPorts, resolve),
-        reSumSurface(sg.declarationSurface, resolve),
-        sg.symbolReferences,
-        sg.publicSymbols.view.mapValues(resolve).toMap
+        reSumSurface(sg.declarationSurface, resolve)
       )
 
   private def reSum(perId: Map[String, Double], resolve: String => String): Map[String, Double] =
@@ -208,32 +180,10 @@ object MetricsCalculator:
           // Keep the report index complete. ReportTable applies the human-facing
           // top-10 bound at the presentation edge (or shows all with --all).
 
-    val allPublicSymbols = sg.symbolReferences.map { refs =>
-      val consumerCounts = mutable.HashMap.empty[String, mutable.HashSet[String]]
-      val referenceCounts = mutable.HashMap.empty[String, Int]
-      // Build both counts in one bounded pass over references. The previous
-      // per-symbol scan made this public-use index O(publicSymbols * refs).
-      refs.foreach { reference =>
-        if sg.publicSymbols.contains(reference.targetSymbol) then
-          consumerCounts.getOrElseUpdate(reference.targetSymbol, mutable.HashSet.empty) += reference.sourceFile
-          referenceCounts.update(reference.targetSymbol, referenceCounts.getOrElse(reference.targetSymbol, 0) + 1)
-      }
-      sg.publicSymbols.keys.toSeq.sorted.map { symbol =>
-        PublicSymbolRow(
-          symbol,
-          consumerCounts.get(symbol).fold(0)(_.size),
-          referenceCounts.getOrElse(symbol, 0),
-          "semanticdbComplete"
-        )
-      }
-    }
-
-    val findings = buildFindings(cycles, propagators, surface, allPublicSymbols, sg.publicSymbols)
+    val findings = buildFindings(cycles, propagators, surface)
     val omittedFindings = math.max(0, findings.size - MetricsReport.maxJsonFindings)
-    val omittedPublicSymbols = allPublicSymbols.fold(0)(rows => math.max(0, rows.size - MetricsReport.maxJsonPublicSymbols))
     val truncation =
-      if omittedFindings > 0 || omittedPublicSymbols > 0 then
-        Some(ReportTruncation(omittedFindings, omittedPublicSymbols))
+      if omittedFindings > 0 then Some(ReportTruncation(omittedFindings))
       else None
 
     MetricsReport(
@@ -253,7 +203,6 @@ object MetricsCalculator:
       surface = surface,
       orphans = orphans,
       findings = findings,
-      publicSymbols = allPublicSymbols,
       truncation = truncation
     )
 
@@ -265,9 +214,7 @@ object MetricsCalculator:
   private def buildFindings(
       cycles: Seq[Cycle],
       propagators: Seq[PropagatorRow],
-      surface: Seq[SurfaceRow],
-      publicSymbols: Option[Seq[PublicSymbolRow]],
-      publicSymbolScopes: Map[String, String]
+      surface: Seq[SurfaceRow]
   ): Seq[Finding] =
     val cycleFindings = cycles.map { cycle =>
       RankedFinding(
@@ -327,24 +274,7 @@ object MetricsCalculator:
         )
       }
     }
-    val unusedPublicSymbolFindings = publicSymbols.toSeq.flatten.filter(_.referenceCount == 0).map { row =>
-      RankedFinding(
-        Finding(
-          id = s"unusedPublicSymbol:${row.symbol}",
-          kind = "unusedPublicSymbol",
-          severity = "low",
-          subject = row.symbol,
-          evidence = "consumerCount=0, referenceCount=0",
-          confidence = row.usageConfidence,
-          // Public symbols are not scope nodes. Point the finding at the
-          // declaring package/file detail workflow, whose id remains valid
-          // after report collapse.
-          nextAction = s"inspect-node ${publicSymbolScopes(row.symbol)}"
-        ),
-        1.0
-      )
-    }
-    (cycleFindings ++ propagatorFindings ++ mutableSurfaceFindings ++ structuralUseFindings ++ unusedPublicSymbolFindings)
+    (cycleFindings ++ propagatorFindings ++ mutableSurfaceFindings ++ structuralUseFindings)
       .sortBy(r => (severityRank(r.finding.severity), -r.score, r.finding.id))
       .map(_.finding)
 

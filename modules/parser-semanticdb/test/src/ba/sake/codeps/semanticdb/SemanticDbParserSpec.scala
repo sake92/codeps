@@ -1,9 +1,7 @@
 package ba.sake.codeps.semanticdb
 
 import ba.sake.codeps.testing.FixtureCompiler
-import ba.sake.codeps.graph.Aggregator
-import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind, SymbolReference}
-import ba.sake.codeps.report.MetricsCalculator
+import ba.sake.codeps.model.{DeclarationSurface, DepsGraph, Edge, Node, NodeKind}
 import scala.meta.internal.semanticdb.{Access, ByNameType, ClassSignature, PrivateAccess, PrivateThisAccess, PrivateWithinAccess, ProtectedAccess, PublicAccess, Range, Signature, SymbolInformation, SymbolOccurrence, TextDocument, TextDocuments, Type, TypeRef, ValueSignature}
 
 class SemanticDbParserSpec extends munit.FunSuite:
@@ -239,102 +237,4 @@ class SemanticDbParserSpec extends munit.FunSuite:
     assertEquals(nodes("com.example.util.Exposure#intOrdering").ports, 1.0) // given: flat +1
     assertEquals(nodes("com.example.util.Exposure#intOrdering").mutPorts, 0.0) // givens are not mutable state
     assertEquals(nodes("com.example.util.Exposure#stringConv").ports, 1.0) // implicit def
-  }
-
-  test("public symbol references retain stable targets and duplicate occurrences") {
-    val root = os.pwd.toNIO
-    val apiFile = "src/com/example/refs/Api.scala"
-    val consumerFile = "src/com/example/refs/Consumer.scala"
-    val api = TextDocument(
-      uri = apiFile,
-      symbols = Seq(
-        SymbolInformation(symbol = "com/example/refs/Api#", kind = SymbolInformation.Kind.CLASS, displayName = "Api"),
-        SymbolInformation(symbol = "com/example/refs/Api#used().", kind = SymbolInformation.Kind.METHOD, displayName = "used"),
-        SymbolInformation(symbol = "com/example/refs/Api#unused().", kind = SymbolInformation.Kind.METHOD, displayName = "unused")
-      ),
-      occurrences = Seq(
-        SymbolOccurrence(Some(Range(1, 0, 1, 3)), "com/example/refs/Api#", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(2, 0, 2, 4)), "com/example/refs/Api#used().", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(3, 0, 3, 6)), "com/example/refs/Api#unused().", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(4, 0, 4, 4)), "com/example/refs/Api#used().", SymbolOccurrence.Role.REFERENCE)
-      )
-    )
-    val consumer = TextDocument(
-      uri = consumerFile,
-      symbols = Seq(SymbolInformation(symbol = "com/example/refs/Consumer#", kind = SymbolInformation.Kind.CLASS, displayName = "Consumer")),
-      occurrences = Seq(
-        SymbolOccurrence(Some(Range(1, 0, 1, 8)), "com/example/refs/Consumer#", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(2, 0, 2, 4)), "com/example/refs/Api#used().", SymbolOccurrence.Role.REFERENCE)
-      )
-    )
-    val bytes = TextDocuments(Seq(api, consumer)).toByteArray
-    val deps = SemanticDbParser.parse(bytes, root).toOption.get.withoutDanglingEdges
-
-    assert(deps.nodes.exists(_.id == "com.example.refs.Api#used"))
-    assertEquals(
-      deps.symbolReferences.get.filter(_.targetSymbol == "com.example.refs.Api#used"),
-      Seq(SymbolReference(apiFile, "com.example.refs.Api#used"), SymbolReference(consumerFile, "com.example.refs.Api#used"))
-    )
-    assertEquals(deps.symbolReferences.get.count(_.targetSymbol == "com.example.refs.Api#unused"), 0)
-  }
-
-  test("public declaration index excludes compiler-generated symbols but keeps source identifiers") {
-    val root = os.pwd.toNIO
-    val file = "src/com/example/synthetic/Api.scala"
-    val doc = TextDocument(
-      uri = file,
-      symbols = Seq(
-        SymbolInformation(symbol = "com/example/synthetic/Api#", kind = SymbolInformation.Kind.CLASS, displayName = "Api"),
-        // Scala 3 currently emits generated Product accessors without the
-        // SYNTHETIC property and without a definition occurrence.
-        SymbolInformation(symbol = "com/example/synthetic/Config#App#_1().", kind = SymbolInformation.Kind.METHOD, displayName = "_1"),
-        SymbolInformation(symbol = "[_].", kind = SymbolInformation.Kind.METHOD, displayName = "_"),
-        // A producer that marks a generated declaration explicitly must also be
-        // excluded even if it happens to carry a definition occurrence.
-        SymbolInformation(
-          symbol = "com/example/synthetic/Api#generated().",
-          kind = SymbolInformation.Kind.METHOD,
-          displayName = "generated",
-          properties = SymbolInformation.Property.SYNTHETIC.value
-        ),
-        // `_1` is a legal source identifier; a definition occurrence keeps it
-        // in the public API index.
-        SymbolInformation(symbol = "com/example/synthetic/Api#_1().", kind = SymbolInformation.Kind.METHOD, displayName = "_1"),
-        SymbolInformation(symbol = "com/example/synthetic/Api#user().", kind = SymbolInformation.Kind.METHOD, displayName = "user")
-      ),
-      occurrences = Seq(
-        SymbolOccurrence(Some(Range(0, 0, 0, 1)), "com/example/synthetic/", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(1, 0, 1, 3)), "com/example/synthetic/Api#", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(2, 0, 2, 8)), "com/example/synthetic/Api#generated().", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(3, 0, 3, 8)), "com/example/synthetic/Api#_1().", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(4, 0, 4, 4)), "com/example/synthetic/Api#user().", SymbolOccurrence.Role.DEFINITION),
-        SymbolOccurrence(Some(Range(5, 0, 5, 4)), "com/example/synthetic/Config#App#_1().", SymbolOccurrence.Role.REFERENCE),
-        SymbolOccurrence(Some(Range(6, 0, 6, 4)), "[_].", SymbolOccurrence.Role.REFERENCE),
-        SymbolOccurrence(Some(Range(7, 0, 7, 4)), "com/example/synthetic/Api#_1().", SymbolOccurrence.Role.REFERENCE)
-      )
-    )
-
-    val deps = SemanticDbParser.parse(TextDocuments(Seq(doc)).toByteArray, root).toOption.get.withoutDanglingEdges
-    val declarations = deps.declaredPublicSymbols.get
-    assertEquals(
-      declarations,
-      Map(
-        "com.example.synthetic.Api" -> file,
-        "com.example.synthetic.Api#_1" -> file,
-        "com.example.synthetic.Api#user" -> file
-      )
-    )
-    assert(!declarations.contains("com.example.synthetic.Config#App#_1"))
-    assert(!declarations.contains("[_]"))
-    assert(!declarations.contains("com.example.synthetic.Api#generated"))
-    assertEquals(
-      deps.symbolReferences.get,
-      Seq(SymbolReference(file, "com.example.synthetic.Api#_1"))
-    )
-
-    val report = MetricsCalculator.run(Aggregator.fileLevel(deps), MetricsCalculator.Scope.Packages).toOption.get
-    assert(report.publicSymbols.get.exists(_.symbol == "com.example.synthetic.Api#_1"))
-    assert(report.findings.exists(_.id == "unusedPublicSymbol:com.example.synthetic.Api#user"))
-    assert(!report.findings.exists(_.id.contains("Config#App#_1")))
-    assert(!report.findings.exists(_.id == "unusedPublicSymbol:[_]"))
   }

@@ -142,7 +142,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(error.getMessage.contains("incompatible schema version"))
   }
 
-  test("surface and public-symbol use fields serialize with camelCase names") {
+  test("surface fields serialize with camelCase names") {
     val row = SurfaceRow(
       "p",
       2,
@@ -161,16 +161,12 @@ class MetricsReportSpec extends munit.FunSuite:
       publicMutableRatio = Some(1.0 / 3.0)
     )
     val report = MetricsReport("packages", "x", Summary(1, 0, 0, 0, 0), Nil, Nil, Seq(row), Nil,
-      publicSymbols = Some(Seq(PublicSymbolRow("p.Api", 2, 3, "semanticdbComplete"))),
-      truncation = Some(ReportTruncation(findingsOmitted = 3, publicSymbolsOmitted = 4)))
+      truncation = Some(ReportTruncation(findingsOmitted = 3)))
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"dependentsPerPublicPort\":"))
     assert(json.contains("\"publicSurface\":3"))
     assert(json.contains("\"totalDeclaredSurface\":10"))
-    assert(json.contains("\"publicSymbols\":[{"))
-    assert(json.contains("\"consumerCount\":2"))
-    assert(json.contains("\"usageConfidence\":\"semanticdbComplete\""))
     assert(json.contains("\"findingsOmitted\":3"))
-    assert(json.contains("\"publicSymbolsOmitted\":4"))
+    assert(!json.contains("publicSymbols"))
     assertEquals(json.parseJson[MetricsReport], report)
   }

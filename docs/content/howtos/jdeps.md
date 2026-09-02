@@ -29,10 +29,10 @@ jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
 ## Exporting the graph
 
 `codeps export` parses the text file and emits the
-[codeps export format](/reference/json-input.html) (`nodes` + `edges`):
+[codeps export format](/reference/json-input.html) (a package graph and an empty file graph):
 
 ```shell
-codeps export --from jdeps --input jdeps.txt -o deps.json
+codeps export --from jdeps --input jdeps.txt
 ```
 
 Only the project's own classes appear — the exporter drops edges to external classes
@@ -50,7 +50,7 @@ codeps report-packages --input deps.json
 or in one pipe:
 
 ```shell
-codeps export --from jdeps --input jdeps.txt | codeps report-packages --input -
+codeps export --from jdeps --input jdeps.txt -o - | codeps report-packages --input -
 ```
 
 Cycles can include optional budgeted cut analysis, and the surface lists fanIn/fanOut
@@ -58,8 +58,8 @@ and orphans — see the [Metrics report](/reference/report.html). Use `--format 
 default), `--format markdown` for deterministic GitHub-Flavored Markdown, or `--format json`
 for the schema-v2 report. Table and Markdown sections show at most 10 rows by default; pass
 `--all` for every human-view row. `--analyze-cuts` enables bounded cut investigation, with
-`--cut-time-limit` and `--cut-candidate-limit` available as per-SCC controls. Since jdeps has
-no symbol-reference index, reports have no `publicSymbols` or unused-public-symbol findings.
+`--cut-time-limit` and `--cut-candidate-limit` available as per-SCC controls. jdeps exports package
+nodes and an empty file graph.
 
 ## Filtering JDK noise
 

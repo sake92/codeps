@@ -71,8 +71,8 @@ class ReportMarkdownSpec extends munit.FunSuite:
 
   test("renders JSON inventory truncation facts") {
     val text = ReportMarkdown.render(report.copy(
-      truncation = Some(ReportTruncation(findingsOmitted = 3, publicSymbolsOmitted = 4))
+      truncation = Some(ReportTruncation(findingsOmitted = 3))
     ))
     assert(text.contains("Findings omitted from the JSON inventory: `3`"))
-    assert(text.contains("Public symbols omitted from the JSON inventory: `4`"))
+    assert(!text.contains("Public symbols omitted from the JSON inventory"))
   }

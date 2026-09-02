@@ -1,5 +1,5 @@
 name: codeps
-description: Code package dependency analyzer
+description: Code deps health tracker
 
 categories:
   tutorials:
