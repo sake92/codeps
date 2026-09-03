@@ -23,8 +23,8 @@ codeps health-snapshot --format markdown
 Use explicit paths in CI so the produced artifacts are obvious:
 
 ```shell
-java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-java -jar codeps.jar health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
+java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/temp/export.json
+java -jar codeps.jar health-snapshot --input .codeps/temp/export.json --history .codeps/health.ndjson --format markdown
 ```
 
 Add the history file to version control; leave the export graph untracked unless
@@ -41,8 +41,8 @@ can be cached or downloaded in the job; this version keeps the example explicit.
 
 - name: Record dependency health
   run: |
-    java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-    java -jar codeps.jar health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
+    java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/temp/export.json
+    java -jar codeps.jar health-snapshot --input .codeps/temp/export.json --history .codeps/health.ndjson --format markdown
 ```
 
 Use the directory your build actually writes, not the source directory. See

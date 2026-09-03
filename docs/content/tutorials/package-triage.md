@@ -20,7 +20,7 @@ codeps report-packages --input testFixtures/cyclic.json
 ```
 
 The rest of this tutorial works exactly the same way with your own
-`.codeps/export.json`.
+`.codeps/temp/export.json`.
 
 ## 1. Scope the report to your code
 

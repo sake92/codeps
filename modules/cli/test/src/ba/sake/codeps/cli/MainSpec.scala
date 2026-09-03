@@ -304,11 +304,12 @@ class MainSpec extends munit.FunSuite:
     val workspace = os.temp.dir(prefix = "codeps-defaults-")
     val exported = runCliIn(workspace, "export", "--input", semdbDir.toString)
     assertEquals(exported.exitCode, 0)
-    assert(os.exists(workspace / ".codeps" / "export.json"))
+    assert(os.exists(workspace / ".codeps" / "temp" / "export.json"))
 
     val report = runCliIn(workspace, "report-packages")
     assertEquals(report.exitCode, 0)
     assert(report.out.text().startsWith("scope: packages"))
+    assert(os.exists(workspace / ".codeps" / "temp" / "report-packages.json"))
 
     val health = runCliIn(workspace, "health-snapshot", "--commit", "abc123", "--generatedAt", "2026-09-02T12:00:00Z", "--max-snapshot-age", "off")
     assertEquals(health.exitCode, 0)

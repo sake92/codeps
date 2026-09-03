@@ -30,8 +30,8 @@ The normal workflow is:
 For CI, keep artifact paths explicit:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
+codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/temp/export.json
+codeps health-snapshot --input .codeps/temp/export.json --history .codeps/health.ndjson
 ```
 
 The history file is ordinary NDJSON and committing it to the measured

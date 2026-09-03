@@ -37,8 +37,8 @@ scala-cli compile --server=false --semanticdb -d classes src/
 Then export the graph and record an overall baseline:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
+codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/temp/export.json
+codeps health-snapshot --input .codeps/temp/export.json --history .codeps/health.ndjson
 ```
 
 If your build tool already enables SemanticDB (sbt/Maven with the `semanticdb` compiler plugin),
@@ -48,12 +48,12 @@ For Java or mixed projects, produce jdeps input instead:
 
 ```shell
 jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
-codeps export --from jdeps --input jdeps.txt --out .codeps/export.json
+codeps export --from jdeps --input jdeps.txt --out .codeps/temp/export.json
 ```
 
 See [Scala/SemanticDB projects](/howtos/semdb.html) and [Java/JVM projects with jdeps](/howtos/jdeps.html) for details.
 
-The commands above write the graph to `.codeps/export.json` and append a compact
+The commands above write the graph to `.codeps/temp/export.json` and append a compact
 record to `.codeps/health.ndjson`. Commit that history if you want to review
 health changes in Git history.
 
@@ -62,7 +62,7 @@ health changes in Git history.
 Print a review-friendly snapshot:
 
 ```shell
-codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
+codeps health-snapshot --input .codeps/temp/export.json --history .codeps/health.ndjson --format markdown
 ```
 
 The snapshot is deliberately small: overall structure, cycles, exposed surface,
@@ -72,7 +72,7 @@ cycles or high findings, continue with [package triage](/tutorials/package-triag
 To see the full package report now:
 
 ```shell
-codeps report-packages --input .codeps/export.json
+codeps report-packages --input .codeps/temp/export.json
 ```
 
 ## What's next?

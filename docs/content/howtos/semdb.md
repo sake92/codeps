@@ -48,7 +48,7 @@ codeps export --from semanticdb --input classes/META-INF/semanticdb
 
 - `--from semanticdb` selects the SemanticDB producer (required)
 - `--input` takes a **directory** — the whole tree is walked for `*.semanticdb` files (repeatable)
-- Without `-o`, codeps writes `.codeps/export.json`; use `-o -` for stdout
+- Without `-o`, codeps writes `.codeps/temp/export.json`; use `-o -` for stdout
 
 Source file ids are made relative to the current working directory; pass `--root <dir>`
 to make them relative to `<dir>` instead (e.g. the project root):

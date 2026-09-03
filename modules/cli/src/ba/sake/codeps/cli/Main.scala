@@ -14,10 +14,10 @@ import java.time.{Duration, Instant}
 
 object Main:
 
-  private val defaultExportPath = ".codeps/export.json"
+  private val defaultExportPath = ".codeps/temp/export.json"
   private val defaultHealthHistoryPath = ".codeps/health.ndjson"
-  private val defaultPackagesReportPath = ".codeps/report-packages.json"
-  private val defaultFilesReportPath = ".codeps/report-files.json"
+  private val defaultPackagesReportPath = ".codeps/temp/report-packages.json"
+  private val defaultFilesReportPath = ".codeps/temp/report-files.json"
 
   def main(args: Array[String]): Unit = sys.exit(run(args))
 

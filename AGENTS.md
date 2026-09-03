@@ -44,4 +44,4 @@ Co-Authored-By: (the agent's name and attribution byline)
 - Specs and implementation plans are local working artifacts (`docs/superpowers/`); never stage or commit them.
 
 ## Local Artifacts
-- Store local exports, reports, health snapshots, and rough plans under `.codeps/`; never stage or commit this directory.
+- Store temporary exports, reports, health snapshots, and rough plans under `.codeps/temp/`; do not stage or commit them. Top-level `.codeps/*.ndjson` health-history files are the sole exception and may be committed.

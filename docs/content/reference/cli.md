@@ -33,8 +33,8 @@ The examples below use `codeps` as shorthand for `java -jar codeps.jar`.
 Use explicit repository-local paths in automation:
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
+codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/temp/export.json
+codeps health-snapshot --input .codeps/temp/export.json --history .codeps/health.ndjson
 ```
 
 For guided examples, see [Tutorials](/tutorials). The sections below are the
@@ -268,7 +268,7 @@ prints the same fields in a compact readable form. Choose `table`, `json`, or
 text as `table` for detail commands.
 
 Successful `report-packages` and `report-files` runs cache their JSON reports at
-`.codeps/report-packages.json` and `.codeps/report-files.json`. Pass `--scope packages`
+`.codeps/temp/report-packages.json` and `.codeps/temp/report-files.json`. Pass `--scope packages`
 or `--scope files` to select a cache, or `--report` to provide a report path.
 The report path may be `-` to read JSON from stdin. Errors (exit 1) include
 `report path does not exist`, `report path is not a file`, malformed report JSON,
