@@ -18,8 +18,8 @@ The normal workflow is:
    [SemanticDB](/howtos/semdb.html) (`.semanticdb` files from Scala) or
    [jdeps](/howtos/jdeps.html) (the JDK's own analyzer) — and spits out a
    dependency graph as JSON: the [codeps export format](/reference/json-input.html).
-2. **`codeps health-snapshot`** derives compact overall `structure`, `cycles`,
-   `surface`, and `findings` sections and appends a point to
+2. **`codeps health-snapshot`** derives an explainable 1–10 health score plus
+   compact `structure`, `cycles`, `surface`, and `findings` sections and appends a point to
    `.codeps/health.ndjson` only when health changes significantly (or the
    periodic checkpoint is due).
 3. **`codeps report-packages`** or **`codeps report-files`** takes that JSON (a file, or stdin
@@ -62,7 +62,7 @@ codeps health-snapshot --format markdown
 ```markdown
 # Overall dependency health
 
-**Status:** critical<br>
+**Health:** 4/10 (unhealthy)<br>
 **Commit:** `abc123`<br>
 **Recorded:** 2026-09-02 12:00 UTC
 

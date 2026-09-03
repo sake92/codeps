@@ -55,6 +55,14 @@ A new record is appended when a tracked metric changes by more than
 (`--max-snapshot-age`; `off` disables checkpoints). It does not
 store full graphs or make Git commits.
 
+Each record has an explainable `health.score` from 1 to 10 and a corresponding
+`status`: `critical` (1–2), `unhealthy` (3–4), `needs-attention` (5–6),
+`healthy` (7–8), or `excellent` (9–10). The score starts at 10 and subtracts
+capped penalties for cycles (up to 4), exposed mutable surface (2.5), exposed
+surface (2), weak structural use (1), and change propagators (0.5). Its JSON
+`health.penalties` breakdown is always included; individual report findings
+retain their separate `critical`/`high`/`medium`/`low` severities.
+
 | Option | Description |
 |---|---|
 | `-i` / `--input` | Export graph. |

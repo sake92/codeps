@@ -269,6 +269,8 @@ class MainSpec extends munit.FunSuite:
       "--history", history.toString, "--commit", "abc123", "--generatedAt", "2026-09-02T12:00:00Z", "--max-snapshot-age", "off")
     assertEquals(markdown.exitCode, 0)
     assert(markdown.out.text().startsWith("# Overall dependency health\n"))
+    assert(markdown.out.text().contains("**Health:**"))
+    assert(markdown.out.text().contains("## Health score penalties"))
     assert(markdown.out.text().contains("## Structure"))
     assert(markdown.out.text().contains("## Findings"))
 
@@ -276,6 +278,7 @@ class MainSpec extends munit.FunSuite:
       "--history", history.toString, "--commit", "abc123", "--generatedAt", "2026-09-03T12:00:00Z", "--max-snapshot-age", "off")
     assertEquals(json.exitCode, 0)
     assert(json.out.text().contains("\"schemaVersion\": 1"))
+    assert(json.out.text().contains("\"health\""))
     assert(json.out.text().contains("\"structure\""))
     assertEquals(os.read.lines(history).size, 1)
   }
