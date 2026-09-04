@@ -164,10 +164,23 @@ object Main:
   private def loadConfig(explicit: Option[String]): Either[String, Config] =
     val repoRoot = findRepoRoot()
     val path = explicit.map(os.Path(_, os.pwd)).getOrElse(repoRoot / ".codeps" / "config.yaml")
-    if !os.exists(path) then Left(s"config path does not exist: $path")
+    if !os.exists(path) && explicit.isEmpty then
+      writeFile(path, starterConfig)
+      println(s"created starter config: ${path.relativeTo(repoRoot)}")
+      parseConfig(repoRoot, starterConfig)
+    else if !os.exists(path) then Left(s"config path does not exist: $path")
     else if !os.isFile(path) then Left(s"config path is not a file: $path")
     else try parseConfig(repoRoot, os.read(path))
       catch case error: Exception => Left(s"invalid config: ${Option(error.getMessage).getOrElse(error.getClass.getSimpleName)}")
+
+  private val starterConfig = """# codeps analyzes this repository as one project by default.
+projects:
+  root:
+    root: .
+    source: semanticdb
+    inputs: [.]
+    scope: packages
+"""
 
   private def parseConfig(repoRoot: os.Path, raw: String): Either[String, Config] =
     val loaded = new Yaml(new SafeConstructor(new LoaderOptions())).load[Any](raw)

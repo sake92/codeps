@@ -3,9 +3,12 @@ package ba.sake.codeps.cli
 class MainSpec extends munit.FunSuite:
 
   private def runCli(args: String*): os.CommandResult =
+    runCliIn(os.pwd, args*)
+
+  private def runCliIn(cwd: os.Path, args: String*): os.CommandResult =
     val command: Seq[os.Shellable] =
       Seq[os.Shellable]("java", "-cp", sys.props("java.class.path"), "ba.sake.codeps.cli.Main") ++ args.map(value => value: os.Shellable)
-    os.proc(command).call(cwd = os.pwd, check = false, stderr = os.Pipe)
+    os.proc(command).call(cwd = cwd, check = false, stderr = os.Pipe)
 
   private val config = os.pwd / "tmp" / "cli-test" / "status-config.yaml"
   private val history = os.pwd / ".codeps" / "fixture.ndjson"
@@ -51,4 +54,25 @@ class MainSpec extends munit.FunSuite:
     val result = runCli("status", "--config", config.toString, "--project", "missing", "--commit", "abc123")
     assertEquals(result.exitCode, 1)
     assert(result.err.text().contains("unknown project: missing"))
+  }
+
+  test("status creates a starter config when the repository has none") {
+    val repo = os.pwd / "tmp" / "cli-test" / "starter-config"
+    os.remove.all(repo)
+    os.makeDir.all(repo)
+    assertEquals(os.proc("git", "init", "-q").call(cwd = repo, check = false).exitCode, 0)
+
+    val result = runCliIn(repo, "status", "--commit", "abc123")
+    assertEquals(result.exitCode, 1) // No SemanticDB is expected in an empty repository.
+    val generated = repo / ".codeps" / "config.yaml"
+    assert(os.exists(generated))
+    assertEquals(os.read(generated),
+      """# codeps analyzes this repository as one project by default.
+        |projects:
+        |  root:
+        |    root: .
+        |    source: semanticdb
+        |    inputs: [.]
+        |    scope: packages
+        |""".stripMargin)
   }

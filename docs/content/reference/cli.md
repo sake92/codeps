@@ -24,7 +24,7 @@ codeps inspect-node --project backend --id example.orders
 
 ## Configuration
 
-Store one committed repository configuration at `.codeps/config.yaml`. Each key under `projects` names one independently tracked project. Paths are relative to that project's `root`, which is relative to the Git repository root.
+Store one committed repository configuration at `.codeps/config.yaml`. On its first run, `codeps status` creates a starter configuration with one `root` project that scans `.` for SemanticDB; tweak that file rather than starting from scratch. Each key under `projects` names one independently tracked project. Paths are relative to that project's `root`, which is relative to the Git repository root.
 
 ```yaml
 projects:
