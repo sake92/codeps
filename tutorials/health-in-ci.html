@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Keep a compact dependency-health history in Git">
-  <title> Track health in CI | codeps </title>
+  <meta name="description" content="Generate a codeps dashboard in CI">
+  <title> Track status in CI | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
@@ -44,13 +44,7 @@
       <summary>Table of Contents</summary>
       <div>
        <ul>
-        <li><a href="#track-health-in-ci">Track health in CI</a>
-         <ul>
-          <li><a href="#1-produce-compiler-output">1. Produce compiler output</a></li>
-          <li><a href="#2-add-the-ci-step">2. Add the CI step</a></li>
-          <li><a href="#3-commit-the-history-deliberately">3. Commit the history deliberately</a></li>
-          <li><a href="#tune-the-noise-level">Tune the noise level</a></li>
-         </ul></li>
+        <li><a href="#track-status-in-ci">Track status in CI</a></li>
        </ul>
       </div>
      </details>
@@ -59,37 +53,24 @@
     <div></div>
     <div></div>
    </div>
-   <h1 id="track-health-in-ci">Track health in CI<a href="#track-health-in-ci" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>Make codeps a small, non-blocking CI step first. Each successful build updates a compact history only when dependency health materially changes (or a periodic checkpoint is due). Review the history like any other generated project artifact.</p>
-   <h2 id="1-produce-compiler-output">1. Produce compiler output<a href="#1-produce-compiler-output" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Run your normal compile step with SemanticDB enabled, then export it. For a Java-only project, replace the export line with the <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps workflow</a>.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb
-codeps health-snapshot --format markdown
-</code></pre>
-   <p>Use explicit paths in CI so the produced artifacts are obvious:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-java -jar codeps.jar health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
-</code></pre>
-   <p>Add the history file to version control; leave the export graph untracked unless you have a reason to keep it.</p>
-   <h2 id="2-add-the-ci-step">2. Add the CI step<a href="#2-add-the-ci-step" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Place this after compilation in your existing GitHub Actions job. <code>codeps.jar</code> can be cached or downloaded in the job; this version keeps the example explicit.</p>
+   <h1 id="track-status-in-ci">Track status in CI<a href="#track-status-in-ci" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>Keep <code>.codeps/config.yaml</code> in the repository. After the normal compile step has produced SemanticDB (or jdeps input), run status:</p>
    <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Download</span> <span class="hljs-string">codeps</span>
   <span class="hljs-attr">run:</span> <span class="hljs-string">curl</span> <span class="hljs-string">-L</span> <span class="hljs-string">-o</span> <span class="hljs-string">codeps.jar</span> <span class="hljs-string">https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar</span>
 
-<span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Record</span> <span class="hljs-string">dependency</span> <span class="hljs-string">health</span>
-  <span class="hljs-attr">run:</span> <span class="hljs-string">|
-    java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-    java -jar codeps.jar health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
-</span></code></pre>
-   <p>Use the directory your build actually writes, not the source directory. See <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB setup</a> if you do not yet emit <code>.semanticdb</code> files.</p>
-   <h2 id="3-commit-the-history-deliberately">3. Commit the history deliberately<a href="#3-commit-the-history-deliberately" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>The command updates the workspace; it does not create a Git commit. A common setup is a scheduled or main-branch job that commits only the history when it changes. Give that job write permission, then use your repository's existing bot/commit policy to commit <code>.codeps/health.ndjson</code>.</p>
-   <p>Do not make a pull-request check commit on behalf of a contributor. Instead, publish the Markdown output in job logs or a step summary, and let maintainers decide whether a regression needs <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage</a>.</p>
-   <h2 id="tune-the-noise-level">Tune the noise level<a href="#tune-the-noise-level" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Choose a significance threshold and checkpoint interval for your repository. Raise the threshold for a noisy, fast-changing graph; disable checkpoints when you want records only for meaningful changes.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps health-snapshot --significance 0.03 --max-snapshot-age off
+<span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">codebase</span> <span class="hljs-string">status</span>
+  <span class="hljs-attr">run:</span> <span class="hljs-string">java</span> <span class="hljs-string">-jar</span> <span class="hljs-string">codeps.jar</span> <span class="hljs-string">status</span>
 </code></pre>
-   <p>The <a href="https://sake92.github.io/codeps/reference/cli.html#health-snapshot">CLI reference</a> documents the exact snapshot fields and options.</p>
+   <p>For a project named <code>backend</code>, CI now has:</p>
+   <ul>
+    <li><code>.codeps/backend.ndjson</code> — compact history; commit it only from a trusted main-branch or scheduled job.</li>
+    <li><code>.codeps/out/backend/index.html</code> — static dashboard for GitHub Pages.</li>
+   </ul>
+   <p>To deploy that dashboard as a Pages artifact:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">mkdir -p site
+cp -R .codeps/out/backend/. site/
+</code></pre>
+   <p>The page uses Pico CSS and D3 from jsDelivr. Keep analysis configuration stable while tracking a history; if its scope or filters change materially, begin a new history rather than treating unlike snapshots as comparable.</p>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/tutorials/quickstart.html">⬅️ First health snapshot</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/tutorials/package-triage.html">Find package pain points ➡️</a>
    </div>

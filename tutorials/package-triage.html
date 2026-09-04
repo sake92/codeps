@@ -66,7 +66,7 @@
    <p>If you want to explore the report before exporting your own project, clone the <a href="https://github.com/sake92/codeps">codeps repository</a> and run the CLI against its small checked-in graph:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input testFixtures/cyclic.json
 </code></pre>
-   <p>The rest of this tutorial works exactly the same way with your own <code>.codeps/export.json</code>.</p>
+   <p>The rest of this tutorial works exactly the same way with your own <code>.codeps/temp/export.json</code>.</p>
    <h2 id="1-scope-the-report-to-your-code">1. Scope the report to your code<a href="#1-scope-the-report-to-your-code" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Use the graph created by <code>export</code>. An include pattern covers a package and its children; excludes win. This keeps platform and third-party noise out of the ranking.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --include com.example -e java -e scala

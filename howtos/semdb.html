@@ -80,7 +80,7 @@
    <ul>
     <li><code>--from semanticdb</code> selects the SemanticDB producer (required)</li>
     <li><code>--input</code> takes a <strong>directory</strong> — the whole tree is walked for <code>*.semanticdb</code> files (repeatable)</li>
-    <li>Without <code>-o</code>, codeps writes <code>.codeps/export.json</code>; use <code>-o -</code> for stdout</li>
+    <li>Without <code>-o</code>, codeps writes <code>.codeps/temp/export.json</code>; use <code>-o -</code> for stdout</li>
    </ul>
    <p>Source file ids are made relative to the current working directory; pass <code>--root &lt;dir&gt;</code> to make them relative to <code>&lt;dir&gt;</code> instead (e.g. the project root):</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb --root .

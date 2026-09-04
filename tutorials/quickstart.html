@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Record your first codeps health baseline">
-  <title> First health snapshot | codeps </title>
+  <meta name="description" content="Configure and generate your first codeps dashboard">
+  <title> First codebase status | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
@@ -44,14 +44,7 @@
       <summary>Table of Contents</summary>
       <div>
        <ul>
-        <li><a href="#first-health-snapshot">First health snapshot</a>
-         <ul>
-          <li><a href="#prerequisites">Prerequisites</a></li>
-          <li><a href="#get-the-cli">Get the CLI</a></li>
-          <li><a href="#export-then-record-health">Export, then record health</a></li>
-          <li><a href="#read-the-result">Read the result</a></li>
-          <li><a href="#whats-next">What's next?</a></li>
-         </ul></li>
+        <li><a href="#first-codebase-status">First codebase status</a></li>
        </ul>
       </div>
      </details>
@@ -60,47 +53,21 @@
     <div></div>
     <div></div>
    </div>
-   <h1 id="first-health-snapshot">First health snapshot<a href="#first-health-snapshot" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p>Use this once your compiler output is available. It produces a dependency graph, records the first baseline, and shows the next thing worth investigating. The examples use SemanticDB; the <a href="https://sake92.github.io/codeps/howtos/semdb.html">Scala setup guide</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps setup guide</a> explain where that input comes from.</p>
-   <h2 id="prerequisites">Prerequisites<a href="#prerequisites" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <ul>
-    <li>JDK 11+</li>
-   </ul>
-   <h2 id="get-the-cli">Get the CLI<a href="#get-the-cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <h1 id="first-codebase-status">First codebase status<a href="#first-codebase-status" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <p>Compile your project with SemanticDB enabled, download the CLI, and save this as <code>.codeps/config.yaml</code> at the Git repository root:</p>
+   <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-attr">projects:</span>
+  <span class="hljs-attr">app:</span>
+    <span class="hljs-attr">source:</span> <span class="hljs-string">semanticdb</span>
+    <span class="hljs-attr">inputs:</span> [<span class="hljs-string">classes/META-INF/semanticdb</span>]
+    <span class="hljs-attr">scope:</span> <span class="hljs-string">packages</span>
+    <span class="hljs-attr">skip-tests:</span> <span class="hljs-literal">true</span>
+</code></pre>
+   <p>For jdeps, use <code>source: jdeps</code> and point <code>inputs</code> at the text produced by <code>jdeps -verbose:class</code> instead. See <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB setup</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps setup</a> for input locations.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
+java -jar codeps.jar status
 </code></pre>
-   <p>(<code>codeps</code> below is shorthand for <code>java -jar codeps.jar</code>.)</p>
-   <h2 id="export-then-record-health">Export, then record health<a href="#export-then-record-health" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>codeps reads what your compiler already produced — no build integration required.</p>
-   <p><strong>Scala</strong> — compile with SemanticDB enabled (here with scala-cli):</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">scala-cli compile --server=false --semanticdb -d classes src/
-<span class="hljs-meta prompt_"># </span><span class="language-bash">-&gt; classes/META-INF/semanticdb/**/*.semanticdb</span>
-</code></pre>
-   <p>Then export the graph and record an overall baseline:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb --out .codeps/export.json
-codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson
-</code></pre>
-   <p>If your build tool already enables SemanticDB (sbt/Maven with the <code>semanticdb</code> compiler plugin), the <code>.semanticdb</code> files are already on disk — just point <code>export --input</code> at the directory that contains them.</p>
-   <p>For Java or mixed projects, produce jdeps input instead:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">jdeps -verbose:class -filter:none -cp classes classes &gt; jdeps.txt
-codeps export --from jdeps --input jdeps.txt --out .codeps/export.json
-</code></pre>
-   <p>See <a href="https://sake92.github.io/codeps/howtos/semdb.html">Scala/SemanticDB projects</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">Java/JVM projects with jdeps</a> for details.</p>
-   <p>The commands above write the graph to <code>.codeps/export.json</code> and append a compact record to <code>.codeps/health.ndjson</code>. Commit that history if you want to review health changes in Git history.</p>
-   <h2 id="read-the-result">Read the result<a href="#read-the-result" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Print a review-friendly snapshot:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps health-snapshot --input .codeps/export.json --history .codeps/health.ndjson --format markdown
-</code></pre>
-   <p>The snapshot is deliberately small: overall structure, cycles, exposed surface, and finding counts. Treat it as a signal, not a refactoring plan. When it shows cycles or high findings, continue with <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage</a>.</p>
-   <p>To see the full package report now:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-packages --input .codeps/export.json
-</code></pre>
-   <h2 id="whats-next">What's next?<a href="#whats-next" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <ul>
-    <li><a href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">Track health in CI</a></li>
-    <li><a href="https://sake92.github.io/codeps/tutorials/package-triage.html">Find package pain points</a></li>
-    <li><a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for every option</li>
-   </ul>
+   <p>The dashboard is at <code>.codeps/out/app/index.html</code>; history is stored in <code>.codeps/app.ndjson</code>. Commit the configuration and history if you want a trend that follows the repository. Use <code>inspect-cycle</code> and <code>inspect-node</code> when a dashboard metric points to a concrete item to investigate.</p>
+   <p>The <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> describes all configuration fields.</p>
    <div role="group">
     <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/tutorials/health-in-ci.html">Track health in CI ➡️</a>
    </div>
