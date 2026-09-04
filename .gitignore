@@ -23,4 +23,5 @@ docs/superpowers/
 # Reject other top-level artifacts by default, so generated JSON is not committed
 # accidentally.
 .codeps/*
+!.codeps/config.yaml
 !.codeps/*.ndjson
