@@ -15,7 +15,7 @@ case class HealthSnapshot(
     cycles: HealthCycles,
     surface: HealthSurface,
     findings: HealthFindings,
-    schemaVersion: Int = 1
+    schemaVersion: Int = 3
 ) derives JsonRW:
   def numericMetrics: Seq[(String, Option[Double])] = Seq(
     "health.score" -> Some(health.score.toDouble),
@@ -45,15 +45,50 @@ case class HealthSurface(
     encapsulationRatio: Option[Double]
 ) derives JsonRW
 case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int) derives JsonRW
-case class HealthScore(score: Int, status: String, penalties: HealthPenalties) derives JsonRW
-case class HealthPenalties(
+/** Comparable 0–10 health factors. Higher is healthier; scoring weights remain
+  * internal implementation details rather than part of the wire contract. */
+case class HealthFactors(
     cycles: Double,
     mutableSurface: Double,
     exposedSurface: Double,
     structuralUse: Double,
     propagators: Double
+) derives JsonRW
+
+case class HealthScore(score: Int, status: String, factors: HealthFactors) derives JsonRW
+
+private case class LegacyHealthScore(score: Int, status: String, penalties: LegacyHealthPenalties) derives JsonRW
+private case class LegacyHealthPenalties(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double) derives JsonRW
+private case class LegacyHealthSnapshot(
+    at: String, commit: String, status: String, health: LegacyHealthScore,
+    structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
+    findings: HealthFindings, schemaVersion: Int = 1
 ) derives JsonRW:
-  def total: Double = cycles + mutableSurface + exposedSurface + structuralUse + propagators
+  def normalized: HealthSnapshot = HealthSnapshot(
+    at, commit, status,
+    HealthScore(health.score, health.status, HealthFactors(
+      healthFactor(health.penalties.cycles, 4.0), healthFactor(health.penalties.mutableSurface, 2.5),
+      healthFactor(health.penalties.exposedSurface, 2.0), healthFactor(health.penalties.structuralUse, 1.0),
+      healthFactor(health.penalties.propagators, 0.5)
+    )), structure, cycles, surface, findings, schemaVersion = 3
+  )
+
+private case class LegacyIntensityHealthScore(score: Int, status: String, penalties: LegacyHealthPenalties) derives JsonRW
+private case class LegacyIntensityHealthSnapshot(
+    at: String, commit: String, status: String, health: LegacyIntensityHealthScore,
+    structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
+    findings: HealthFindings, schemaVersion: Int = 2
+) derives JsonRW:
+  def normalized: HealthSnapshot = HealthSnapshot(
+    at, commit, status,
+    HealthScore(health.score, health.status, HealthFactors(
+      10.0 - health.penalties.cycles, 10.0 - health.penalties.mutableSurface,
+      10.0 - health.penalties.exposedSurface, 10.0 - health.penalties.structuralUse,
+      10.0 - health.penalties.propagators
+    )), structure, cycles, surface, findings, schemaVersion = 3
+  )
+
+private def healthFactor(points: Double, maximum: Double): Double = 10.0 - points / maximum * 10.0
 
 object HealthSnapshot:
   def fromReport(report: MetricsReport, commit: String): HealthSnapshot =
@@ -98,15 +133,19 @@ object HealthSnapshot:
     val exposedSurfacePenalty = surface.encapsulationRatio.fold(0.0)(ratio => math.min(2.0, 2.0 * ratio))
     val structuralUsePenalty = math.min(1.0, report.findings.count(_.kind == "structuralUse").toDouble / nodeCount)
     val propagatorPenalty = math.min(0.5, report.propagators.size.toDouble / nodeCount * 0.5)
-    val penalties = HealthPenalties(cyclePenalty, mutablePenalty, exposedSurfacePenalty, structuralUsePenalty, propagatorPenalty)
-    val numericScore = math.max(1, math.min(10, math.floor(10.0 - penalties.total).toInt))
+    val totalPenalty = cyclePenalty + mutablePenalty + exposedSurfacePenalty + structuralUsePenalty + propagatorPenalty
+    val factors = HealthFactors(
+      healthFactor(cyclePenalty, 4.0), healthFactor(mutablePenalty, 2.5), healthFactor(exposedSurfacePenalty, 2.0),
+      healthFactor(structuralUsePenalty, 1.0), healthFactor(propagatorPenalty, 0.5)
+    )
+    val numericScore = math.max(1, math.min(10, math.floor(10.0 - totalPenalty).toInt))
     val status = numericScore match
       case 1 | 2 => "critical"
       case 3 | 4 => "unhealthy"
       case 5 | 6 => "needs-attention"
       case 7 | 8 => "healthy"
       case _     => "excellent"
-    HealthScore(numericScore, status, penalties)
+    HealthScore(numericScore, status, factors)
 
 enum HealthRecordingDecision:
   case Initial
@@ -120,7 +159,12 @@ object HealthHistory:
       acc.flatMap { snapshots =>
         if line.trim.isEmpty then Right(snapshots)
         else
-          try Right(snapshots :+ line.parseJson[HealthSnapshot])
+          try
+            val snapshot =
+              if "\\\"schemaVersion\\\"\\s*:\\s*1".r.findFirstIn(line).nonEmpty then line.parseJson[LegacyHealthSnapshot].normalized
+              else if "\\\"schemaVersion\\\"\\s*:\\s*2".r.findFirstIn(line).nonEmpty then line.parseJson[LegacyIntensityHealthSnapshot].normalized
+              else line.parseJson[HealthSnapshot]
+            Right(snapshots :+ snapshot)
           catch case e: Exception => Left(s"invalid history line ${index + 1}: ${e.getMessage}")
       }
     }
@@ -149,8 +193,8 @@ object HealthHistory:
     out.append(s"  publicSurface: ${number(snapshot.surface.publicSurface)}    publicMutableSurface: ${number(snapshot.surface.publicMutableSurface)}    totalDeclaredSurface: ${number(snapshot.surface.totalDeclaredSurface)}    encapsulationRatio: ${ratio(snapshot.surface.encapsulationRatio)}\n\n")
     out.append(styled("Findings", Attrs(Bold.On, Color.Cyan), color) + "\n")
     out.append(s"  critical: ${snapshot.findings.critical}    high: ${snapshot.findings.high}    medium: ${snapshot.findings.medium}    low: ${snapshot.findings.low}\n")
-    out.append(styled("Health score penalties", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  cycles: ${number(snapshot.health.penalties.cycles)}/4    mutableSurface: ${number(snapshot.health.penalties.mutableSurface)}/2.5    exposedSurface: ${number(snapshot.health.penalties.exposedSurface)}/2    structuralUse: ${number(snapshot.health.penalties.structuralUse)}/1    propagators: ${number(snapshot.health.penalties.propagators)}/0.5\n")
+    out.append(styled("Health factors", Attrs(Bold.On, Color.Cyan), color) + "\n")
+    out.append(s"  cycles: ${number(snapshot.health.factors.cycles)}/10    mutableSurface: ${number(snapshot.health.factors.mutableSurface)}/10    exposedSurface: ${number(snapshot.health.factors.exposedSurface)}/10    structuralUse: ${number(snapshot.health.factors.structuralUse)}/10    propagators: ${number(snapshot.health.factors.propagators)}/10\n")
     out.toString
 
   def renderMarkdown(snapshot: HealthSnapshot, decision: HealthRecordingDecision): String =
@@ -166,8 +210,8 @@ object HealthHistory:
     out.append(s"| Public surface | ${number(snapshot.surface.publicSurface)} |\n| Public mutable surface | ${number(snapshot.surface.publicMutableSurface)} |\n| Total declared surface | ${number(snapshot.surface.totalDeclaredSurface)} |\n| Encapsulation ratio | ${ratio(snapshot.surface.encapsulationRatio)} |\n\n")
     out.append("## Findings\n\n| Severity | Count |\n|---|---:|\n")
     out.append(s"| Critical | ${snapshot.findings.critical} |\n| High | ${snapshot.findings.high} |\n| Medium | ${snapshot.findings.medium} |\n| Low | ${snapshot.findings.low} |\n")
-    out.append("\n## Health score penalties\n\n| Component | Penalty | Maximum |\n|---|---:|---:|\n")
-    out.append(s"| Cycles | ${number(snapshot.health.penalties.cycles)} | 4 |\n| Exposed mutable surface | ${number(snapshot.health.penalties.mutableSurface)} | 2.5 |\n| Exposed surface | ${number(snapshot.health.penalties.exposedSurface)} | 2 |\n| Structural use | ${number(snapshot.health.penalties.structuralUse)} | 1 |\n| Change propagators | ${number(snapshot.health.penalties.propagators)} | 0.5 |\n")
+    out.append("\n## Health factors\n\n| Factor | Health |\n|---|---:|\n")
+    out.append(s"| Cycles | ${number(snapshot.health.factors.cycles)}/10 |\n| Exposed mutable surface | ${number(snapshot.health.factors.mutableSurface)}/10 |\n| Exposed surface | ${number(snapshot.health.factors.exposedSurface)}/10 |\n| Structural use | ${number(snapshot.health.factors.structuralUse)}/10 |\n| Change propagators | ${number(snapshot.health.factors.propagators)}/10 |\n")
     out.toString
 
   private def decisionText(decision: HealthRecordingDecision): String = decision match

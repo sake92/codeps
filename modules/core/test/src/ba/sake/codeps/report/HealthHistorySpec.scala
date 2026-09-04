@@ -9,7 +9,7 @@ class HealthHistorySpec extends munit.FunSuite:
       at = "2026-09-02T12:00:00Z",
       commit = "abc123",
       status = "healthy",
-      health = HealthScore(7, "healthy", HealthPenalties(1.5, 0.0, 0.4, 0.0, 0.0)),
+      health = HealthScore(7, "healthy", HealthFactors(8.5, 10.0, 9.6, 10.0, 10.0)),
       structure = HealthStructure(nodes, 200, 4),
       cycles = HealthCycles(1, 2, 2, 2),
       surface = HealthSurface(2, 0, 10, ratio),
@@ -19,7 +19,7 @@ class HealthHistorySpec extends munit.FunSuite:
   test("snapshot JSON round-trips with the compact overall sections") {
     val value = snapshot()
     val json = value.toJson(spaces = 0, sort = true)
-    assert(json.contains("\"schemaVersion\":1"))
+    assert(json.contains("\"schemaVersion\":3"))
     assert(json.contains("\"score\":7"))
     assert(json.contains("\"criticalPathLength\":4"))
     assert(json.contains("\"encapsulationRatio\":0.2"))
@@ -44,6 +44,13 @@ class HealthHistorySpec extends munit.FunSuite:
     assert(error.contains("line 1"))
   }
 
+  test("NDJSON parser normalizes schema-v1 penalty weights") {
+    val legacy = """{"at":"2026-09-02T12:00:00Z","commit":"abc123","status":"healthy","health":{"score":7,"status":"healthy","penalties":{"cycles":4,"mutableSurface":2.5,"exposedSurface":2,"structuralUse":1,"propagators":0.5}},"structure":{"nodes":1,"edges":0,"criticalPathLength":0},"cycles":{"count":0,"nodes":0,"largestScc":0,"internalEdges":0},"surface":{"publicSurface":0,"publicMutableSurface":0,"totalDeclaredSurface":0,"encapsulationRatio":null},"findings":{"critical":0,"high":0,"medium":0,"low":0},"schemaVersion":1}"""
+    val parsed = HealthHistory.parseNdjson(legacy).toOption.get.head
+    assertEquals(parsed.schemaVersion, 3)
+    assertEquals(parsed.health.factors, HealthFactors(0.0, 0.0, 0.0, 0.0, 0.0))
+  }
+
   test("health score gives cycles the largest capped penalty") {
     val report = MetricsReport(
       scope = "packages",
@@ -56,11 +63,11 @@ class HealthHistorySpec extends munit.FunSuite:
       findings = Seq(Finding("structuralUse:a", "structuralUse", "low", "a", "", "structuralProxy", "inspect-node a"))
     )
     val health = HealthSnapshot.fromReport(report, "abc123").health
-    assertEquals(health.penalties.cycles, 2.75)
-    assertEquals(health.penalties.mutableSurface, 1.0)
-    assertEquals(health.penalties.exposedSurface, 2.0)
-    assertEquals(health.penalties.structuralUse, 0.1)
-    assertEquals(health.penalties.propagators, 0.05)
+    assertEquals(health.factors.cycles, 3.125)
+    assertEquals(health.factors.mutableSurface, 6.0)
+    assertEquals(health.factors.exposedSurface, 0.0)
+    assertEquals(health.factors.structuralUse, 9.0)
+    assertEquals(health.factors.propagators, 9.0)
     assertEquals(health.score, 4)
     assertEquals(health.status, "unhealthy")
   }

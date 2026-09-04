@@ -24,12 +24,18 @@ object HealthHistoryHtml:
   <title>codeps status</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <style>
-    #chart { display: block; width: 100%; height: 340px; }
+    main.container { --pico-spacing: .75rem; }
+    main.container > header { margin-bottom: 1rem; }
+    main.container > article, main.container > .grid { margin-bottom: .75rem; }
+    article { padding: 1rem; }
+    h2 { margin-bottom: .5rem; font-size: 1.25rem; }
+    #chart { display: block; width: 100%; height: 290px; }
     #chart .domain, #chart .tick line { stroke: var(--pico-muted-border-color); }
     #chart .grid line { stroke: var(--pico-muted-border-color); stroke-dasharray: 3 5; }
     #chart text { fill: var(--pico-muted-color); font-size: 12px; }
     #chart .trend-line { fill: none; stroke: var(--pico-primary); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
     #chart .trend-point { stroke: var(--pico-background-color); stroke-width: 2; cursor: pointer; }
+    #chart .selected-point { stroke: var(--pico-primary); stroke-width: 4; }
     #chart .trend-point:focus { outline: 2px solid var(--pico-primary); outline-offset: 2px; }
     #chart .chart-hit { fill: transparent; cursor: crosshair; }
     #chart .hover-line { stroke: var(--pico-muted-color); stroke-dasharray: 3 3; pointer-events: none; }
@@ -38,42 +44,50 @@ object HealthHistoryHtml:
     .chart-tooltip { position: absolute; display: none; z-index: 2; min-width: 180px; max-width: 260px; padding: .6rem .7rem; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius); background: var(--pico-card-background-color); box-shadow: var(--pico-box-shadow); pointer-events: none; font-size: .85rem; }
     .chart-tooltip strong, .chart-tooltip small { display: block; }
     .chart-tooltip small { color: var(--pico-muted-color); }
-    .latest { text-align: right; }
-    .score { font-size: 2.5rem; font-weight: 750; line-height: 1; }
+    .trend-header h2 { margin-bottom: 0; }
+    .trend-layout { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .metric-control { margin-bottom: 1rem; }
+    #metric { min-height: 0; padding: .35rem .6rem; font-size: .9rem; }
+    .score { font-size: 2rem; font-weight: 750; line-height: 1; }
     .status, .snapshot-meta, #metric-help { color: var(--pico-muted-color); }
     .section-note { display: block; color: var(--pico-muted-color); }
     .snapshot-meta { margin-bottom: 0; }
     .metric-table td { text-align: right; }
-    .penalty { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: .6rem; align-items: center; margin: 1rem 0; }
+    .penalty { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: .6rem; align-items: center; margin: .55rem 0; }
     .penalty span, .penalty small { white-space: nowrap; }
     .penalty small { color: var(--pico-muted-color); text-align: right; }
-    @media (max-width: 700px) { .latest { text-align: left; } }
+    @media (max-width: 700px) { .trend-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <main class="container">
-    <header>
-      <div><h1>Codebase status</h1></div>
-      <div class="latest" id="latest"></div>
-    </header>
+    <header><h1>Codebase status</h1></header>
     <article>
-      <div class="grid">
-        <h2>Trend</h2>
-        <div>
-          <label for="metric">Metric</label>
-          <select id="metric" aria-describedby="metric-help"></select>
-          <small id="metric-help"></small>
+      <h2>Latest snapshot</h2>
+      <div id="latest"></div>
+    </article>
+    <article>
+      <div class="trend-header"><h2>Trend</h2><small class="section-note" id="trend-summary"></small></div>
+      <div class="trend-layout">
+        <aside>
+          <div class="metric-control">
+            <label for="metric">Metric</label>
+            <select id="metric" aria-describedby="metric-help"></select>
+            <small id="metric-help"></small>
+          </div>
+          <p class="snapshot-meta" id="selected-meta">Select a point to inspect that snapshot.</p>
+        </aside>
+        <div class="chart-wrap">
+          <svg id="chart" role="img" aria-label="Health history trend"></svg>
+          <div id="chart-tooltip" class="chart-tooltip" role="tooltip" aria-hidden="true"></div>
         </div>
       </div>
-      <div class="chart-wrap">
-        <svg id="chart" role="img" aria-label="Health history trend"></svg>
-        <div id="chart-tooltip" class="chart-tooltip" role="tooltip" aria-hidden="true"></div>
-      </div>
-      <p class="snapshot-meta" id="selected-meta">Select a point to inspect that snapshot.</p>
     </article>
+    <article><h2>Health factors</h2><small class="section-note">Higher is better — each factor is scored from 0 to 10.</small><div id="factors"></div></article>
     <div class="grid">
-      <article><h2>Selected status</h2><table class="metric-table"><tbody id="metrics"></tbody></table></article>
-      <article><h2>Health score penalties</h2><small class="section-note">Lower is better — these values are deducted from the health score.</small><div id="penalties"></div></article>
+      <article><h2>Cycles</h2><table class="metric-table"><tbody id="cycle-metrics"></tbody></table></article>
+      <article><h2>Architecture</h2><table class="metric-table"><tbody id="architecture-metrics"></tbody></table></article>
+      <article><h2>API surface</h2><table class="metric-table"><tbody id="surface-metrics"></tbody></table></article>
     </div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
@@ -168,34 +182,41 @@ object HealthHistoryHtml:
         plot.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(Math.min(5, snapshots.length)).tickFormat(d3.timeFormat("%b %Y")));
         plot.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(definition.format));
         plot.append("path").datum(points).attr("class", "trend-line").attr("d", d3.line().defined(point => point.value != null).x(point => x(point.date)).y(point => y(point.value)));
-        plot.selectAll(".trend-point").data(valid).join("circle").attr("class", "trend-point").attr("cx", point => x(point.date)).attr("cy", point => y(point.value)).attr("r", point => point.index === selected ? 7 : 5).attr("fill", point => statusColor(point.snapshot.status)).attr("tabindex", 0).attr("role", "button").attr("aria-label", point => `${definition.label}: ${definition.format(point.value)} at ${dateText(point.snapshot.at)}`).on("pointerenter", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointermove", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointerleave", hideTooltip).on("focus", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("blur", hideTooltip).on("click", (_, point) => { selected = point.index; updateDetails(); draw(); }).on("keydown", (event, point) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selected = point.index; updateDetails(); draw(); } });
+        plot.selectAll(".trend-point").data(valid).join("circle").attr("class", point => point.index === selected ? "trend-point selected-point" : "trend-point").attr("cx", point => x(point.date)).attr("cy", point => y(point.value)).attr("r", point => point.index === selected ? 7 : 5).attr("fill", point => statusColor(point.snapshot.status)).attr("tabindex", 0).attr("role", "button").attr("aria-label", point => `${definition.label}: ${definition.format(point.value)} at ${dateText(point.snapshot.at)}`).on("pointerenter", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointermove", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointerleave", hideTooltip).on("focus", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("blur", hideTooltip).on("click", (_, point) => { selected = point.index; updateDetails(); draw(); }).on("keydown", (event, point) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selected = point.index; updateDetails(); draw(); } });
       }
       function updateDetails() {
-        if (!snapshots.length) { d3.select("#latest").text("No snapshots"); d3.select("#metrics").selectAll("*").remove(); d3.select("#penalties").selectAll("*").remove(); return; }
+        if (!snapshots.length) { d3.select("#latest").text("No snapshots"); d3.select("#trend-summary").text(""); d3.selectAll("#cycle-metrics, #architecture-metrics, #surface-metrics, #factors").selectAll("*").remove(); return; }
         const snapshot = snapshots[selected], latest = snapshots[snapshots.length - 1];
-        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${latest.health.score}/10</div><div class="status">${escapeHtml(latest.status)} · ${snapshots.length} snapshot${snapshots.length === 1 ? "" : "s"}</div>`);
-        d3.select("#selected-meta").html(`${escapeHtml(dateText(snapshot.at))} · commit <code>${escapeHtml(shortCommit(snapshot.commit))}</code> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span>`);
-        const rows = [
-          ["Health score", "The overall score from 1 to 10; higher is better.", `${snapshot.health.score}/10`],
+        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${latest.health.score}/10</div><div class="status">${escapeHtml(latest.status)}</div><small>${escapeHtml(dateText(latest.at))}</small>`);
+        d3.select("#trend-summary").text(`${snapshots.length} recorded snapshot${snapshots.length === 1 ? "" : "s"}`);
+        d3.select("#selected-meta").html(`Selected snapshot · health <strong>${snapshot.health.score}/10</strong> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span> · ${escapeHtml(dateText(snapshot.at))} · commit <strong>${escapeHtml(shortCommit(snapshot.commit))}</strong>`);
+        const cycles = [
+          ["Cycles", "Number of cyclic strongly connected components.", formatNumber(snapshot.cycles.count)],
+          ["Components in cycles", "Number of components that belong to cycles.", formatNumber(snapshot.cycles.nodes)],
+          ["Largest cyclic SCC", "Number of components in the largest cyclic SCC.", formatNumber(snapshot.cycles.largestScc)]
+        ];
+        const architecture = [
           ["Components", "Number of components in the analyzed graph.", formatNumber(snapshot.structure.nodes)],
           ["Relationships", "Number of relationships between components.", formatNumber(snapshot.structure.edges)],
           ["Maximum layer depth", "Longest chain of component dependencies after each cycle is treated as one component. Higher values can indicate more architectural layers.", formatNumber(snapshot.structure.criticalPathLength)],
-          ["Cycles", "Number of cyclic strongly connected components.", formatNumber(snapshot.cycles.count)],
-          ["Components in cycles", "Number of components that belong to cycles.", formatNumber(snapshot.cycles.nodes)],
-          ["Largest cyclic SCC", "Number of components in the largest cyclic SCC.", formatNumber(snapshot.cycles.largestScc)],
-          ["Public mutable declarations", "Number of public declarations marked mutable.", formatNumber(snapshot.surface.publicMutableSurface)],
-          ["Public surface ratio", "Percentage of declarations that are public.", snapshot.surface.encapsulationRatio == null ? "—" : `${formatNumber(snapshot.surface.encapsulationRatio * 100)}%`],
           ["Findings", "Number of reported findings.", formatNumber(Object.values(snapshot.findings).reduce((sum, count) => sum + count, 0))]
         ];
-        d3.select("#metrics").html(rows.map(([label, description, value]) => `<tr><th scope="row"><span data-tooltip="${escapeHtml(description)}" data-placement="right">${label}</span></th><td>${value}</td></tr>`).join(""));
-        const penalties = [
-          ["Cycles", "Deduction: 1.5 points for any cycle, plus up to 2.5 based on the percentage of components in cycles.", snapshot.health.penalties.cycles, 4],
-          ["Mutable public declarations", "Penalty based on the percentage of public declarations marked mutable.", snapshot.health.penalties.mutableSurface, 2.5],
-          ["Public surface", "Penalty based on the percentage of declarations that are public.", snapshot.health.penalties.exposedSurface, 2],
-          ["Underused public API", "Penalty for components with fewer dependents than public API entries.", snapshot.health.penalties.structuralUse, 1],
-          ["Change propagators", "Penalty for components with above-average combined incoming and outgoing relationships.", snapshot.health.penalties.propagators, .5]
+        const surface = [
+          ["Public mutable declarations", "Number of public declarations marked mutable.", formatNumber(snapshot.surface.publicMutableSurface)],
+          ["Public surface ratio", "Percentage of declarations that are public.", snapshot.surface.encapsulationRatio == null ? "—" : `${formatNumber(snapshot.surface.encapsulationRatio * 100)}%`]
         ];
-        d3.select("#penalties").html(penalties.map(([name, description, value, maximum]) => `<div class="penalty"><span data-tooltip="${escapeHtml(description)}">${name}</span><progress max="${maximum}" value="${value}"></progress><small>${formatNumber(value)} / ${maximum}</small></div>`).join(""));
+        const renderRows = rows => rows.map(([label, description, value]) => `<tr><th scope="row"><span data-tooltip="${escapeHtml(description)}" data-placement="right">${label}</span></th><td>${value}</td></tr>`).join("");
+        d3.select("#cycle-metrics").html(renderRows(cycles));
+        d3.select("#architecture-metrics").html(renderRows(architecture));
+        d3.select("#surface-metrics").html(renderRows(surface));
+        const factors = [
+          ["Cycles", "Cycle health from 0 to 10; 10 means no cycle concern.", snapshot.health.factors.cycles],
+          ["Public mutability health", "Mutability health from 0 to 10; 10 means no public mutable declarations.", snapshot.health.factors.mutableSurface],
+          ["API exposure health", "Public-surface health from 0 to 10; 10 means a smaller public share.", snapshot.health.factors.exposedSurface],
+          ["Underused public API", "Structural-use health from 0 to 10; 10 means no underused public API concern.", snapshot.health.factors.structuralUse],
+          ["Change propagators", "Change-propagation health from 0 to 10; 10 means no propagator concern.", snapshot.health.factors.propagators]
+        ];
+        d3.select("#factors").html(factors.map(([name, description, value]) => `<div class="penalty"><span data-tooltip="${escapeHtml(description)}">${name}</span><progress max="10" value="${value}"></progress><small>${formatNumber(value)} / 10</small></div>`).join(""));
       }
       function escapeHtml(value) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
       updateMetricHelp(); updateDetails(); draw();
