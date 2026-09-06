@@ -9,10 +9,10 @@ description: Analyzing Scala dependencies with SemanticDB
 SemanticDB is a data format describing the semantic information of Scala (and Java) programs,
 produced by the Scala compiler (`-Xsemanticdb` flag) or tools like scala-cli.
 
-Scala data is the richest codeps input: it carries package/file/type/member symbols, and
-`export` materializes package and file graphs (ports/mutPorts resolved at export time),
-so the analyzer can produce metrics at both scopes. It also carries
-per-symbol access/kind information, which the exporter turns into the
+Scala data is the richest codeps input: it carries package/file/type/member symbols, so a
+project configured with `scope: packages` or `scope: files` can compute metrics at either
+granularity (ports/mutPorts resolved during parsing). It also carries
+per-symbol access/kind information, which the parser turns into the
 [exposed-surface metrics](/reference/report.html#exposed-surface)
 (`ports`/`mutPorts`: sealed hierarchies, givens, vars and mutable collections are all
 resolved at export time). Only the project's **own symbols** are exported — references to
@@ -37,84 +37,57 @@ Other ways to get SemanticDB output:
 - scalac directly: add `-Xsemanticdb` (and optionally `-P:semanticdb:sourceroot:...`) to your compile flags
 - Maven / sbt: enable the `semanticdb` compiler plugin and check the generated files in the target dir
 
-## Exporting the graph
+## Configuring and analyzing
 
-`codeps export` walks the directory, reads every `*.semanticdb` file and emits the
-[codeps export format](/reference/json-input.html) (`packages` + `files`, each with nodes and edges):
+Point a project at the SemanticDB directory in `.codeps/config.yaml`; `codeps status` walks the
+directory, reads every `*.semanticdb` file, and computes metrics in one step — there is no
+separate export/report pipeline to run:
 
-```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb
+```yaml
+projects:
+  app:
+    root: .
+    source: semanticdb
+    inputs: [classes/META-INF/semanticdb]
+    scope: packages
 ```
 
-- `--from semanticdb` selects the SemanticDB producer (required)
-- `--input` takes a **directory** — the whole tree is walked for `*.semanticdb` files (repeatable)
-- Without `-o`, codeps writes `.codeps/temp/export.json`; use `-o -` for stdout
-
-Source file ids are made relative to the current working directory; pass `--root <dir>`
-to make them relative to `<dir>` instead (e.g. the project root):
-
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb --root .
+java -jar codeps.jar status
 ```
 
-## Analyzing
+- `inputs` takes one or more **directories** — the whole tree is walked for `*.semanticdb` files
+- `scope: packages` computes cycles, change propagators, and exposed-surface/encapsulation
+  metrics (`ports`/`mutPorts`/`exposure`/`dependentsPerPublicPort` plus declaration visibility
+  counters) over packages; `scope: files` computes the same metrics over source files instead.
+  A project has exactly one scope — configure a second, separately named project against the
+  same `inputs` when you want both a package and a file history.
+- Source file ids are relative to the project's `root`.
 
-`codeps report-packages` reads the JSON graph and emits the flat metrics report over the
-package graph:
-
-```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb
-codeps report-packages --input deps.json
-```
-
-- `report-packages` — metrics over the whole package graph: cycles with optional budgeted cut
-  analysis, per-package exposed-surface and encapsulation (`ports`/`mutPorts`/`exposure`/
-  `dependentsPerPublicPort` plus declaration visibility counters),
-  and orphans
-- `report-files` — the same metrics over the **file graph** of the packages selected with
-  `--include`; e.g. `--include com.example` descends into `com.example` and everything below it
-- `--input` selects the JSON graph (a file, or `-` for stdin); `-i` works too
-- `--include`/`--exclude`/`--collapse` filter and collapse (see below)
-- `--format table` is the compact human view; `--format markdown` emits the same bounded
-  triage content as deterministic GitHub-Flavored Markdown, always without ANSI styling; and
-  `--format json` emits the schema-v2 report with canonical ids and complete cut evidence
-- table and Markdown sections show at most 10 rows; pass `--all` to show every row
-- `--columns visibility`, `--columns mutability`, `--columns coupling`, or `--columns all` expands
-  the surface-risk columns (repeat the flag to compose groups); `--color auto|always|never` controls
-  ANSI styling for table output
-- `--analyze-cuts` enables bounded SCC cut analysis; `--cut-time-limit` and
-  `--cut-candidate-limit` set per-SCC budgets. Without it, `cutAnalysis.status` is `notRequested`.
-  JSON findings are capped at 10,000 rows and report omissions in `truncation` when a very large
-  project exceeds that limit.
-
-No intermediate file needed — pipe `export` straight into `report-packages` (the `-` tells
-it to read the JSON from stdin):
-
-```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb -o - | codeps report-packages --input -
-```
-
-See the [Metrics report](/reference/report.html) for the full field reference, including
-`inspect-cycle` and `inspect-node` report-only detail views.
+See the [CLI reference](/reference/cli.html) for the full set of configuration fields, and the
+[Metrics report](/reference/report.html) for the full field reference, including `inspect-cycle`
+and `inspect-node` report-only detail views.
 
 ## Filtering and collapsing
 
-`--include`/`--exclude` take package patterns: a pattern `com.example` matches the package
-itself and everything below it; excludes win over includes.
+`include`/`exclude` config fields take package patterns: a pattern `com.example` matches the
+package itself and everything below it; excludes win over includes.
 
-```shell
-# only com.example packages, no third-party or JDK noise
-codeps report-packages --include com.example --input deps.json
-
-# com.example.* minus internal helpers
-codeps report-packages --include com.example -e com.example.internal --input deps.json
+```yaml
+projects:
+  app:
+    root: .
+    source: semanticdb
+    inputs: [classes/META-INF/semanticdb]
+    scope: packages
+    include: [com.example]
+    exclude: [com.example.internal]
 ```
 
 Collapse rules merge whole subtrees into a single node, which keeps big graphs readable:
 
-```shell
-codeps report-packages --include com.example -c com.example.modules.** --input deps.json
+```yaml
+    collapse: [com.example.modules.**]
 ```
 
 When multiple rules match, the longest prefix wins; loops created by collapsing are dropped.
-See [CLI reference](/reference/cli.html) for the full option list.

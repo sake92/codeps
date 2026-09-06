@@ -1,24 +1,27 @@
 ---
 layout: reference.html
 title: Metrics report
-description: the codeps report JSON format and Markdown/table triage views — findings, cycles, surface, orphans
+description: the codeps report JSON format — findings, cycles, propagators, surface, orphans
 ---
 
 # Metrics report
 
-`codeps report-packages` or `codeps report-files` consumes the [codeps export format](/reference/json-input.html) (a file, or stdin via `-`)
-and emits a single flat JSON document: per-scope metrics over the graph's **packages**, or over the
-**files** of the packages selected with `--include`. The `table` and `markdown` formats present the
-same report as bounded human triage; Markdown is deterministic GitHub-Flavored Markdown and never
-contains ANSI styling.
+`codeps status` consumes each configured project's source (SemanticDB, jdeps, or an existing
+[codeps export format](/reference/json-input.html) JSON file) and writes a single flat JSON
+document to `.codeps/out/<project>/report.json`: metrics over that project's configured
+**scope** — its whole graph of **packages**, or of **files** if `scope: files`. `inspect-cycle`
+and `inspect-node` read this cached file to render one cycle or node in detail, as a table or
+JSON via `--format`.
 
 ```shell
-codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - > report.json
+java -jar codeps.jar status
+cat .codeps/out/root/report.json
 ```
 
-Core metrics are computed fresh from the graph's node/edge list on every run. A report
-without `--analyze-cuts` does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit
-and can stop at a wall-clock deadline. Set the `SOURCE_DATE_EPOCH` env var (epoch seconds) to pin
+Core metrics are computed fresh from the graph's node/edge list on every run, so a report is a
+pure function of its input. Budgeted cycle-cut analysis exists in the core library but is not
+currently wired into the CLI or config, so every cycle's `cutAnalysis.status` is `notRequested`
+in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch seconds) to pin
 `generatedAt` for deterministic CI diffs.
 
 ## Structure
@@ -104,9 +107,7 @@ every node with exposed mutable ports, and every node whose structural-use proxy
 The structural-use kind is a graph proxy based on file/package edges; it does not identify
 individual declarations. JSON serialization bounds `findings` at 10,000 rows so large projects
 remain agent-usable. When rows are omitted, `truncation.findingsOmitted` records the count.
-Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound. The
-in-memory report and `--all` table or Markdown view retain the complete findings; `--all` does not
-raise the JSON cap.
+Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound.
 
 ## Cycles
 
@@ -143,18 +144,14 @@ components are just acyclic nodes and are never reported.
     containing a smaller working solution are skipped. Partial candidates are never serialized.
   - `examinedCandidates` — number of candidate simulations started before the budget check
     stopped the search.
-- Cut analysis is opt-in with `--analyze-cuts`; `--cut-time-limit` and
-  `--cut-candidate-limit` bound each SCC's investigation. A report without `--analyze-cuts` never invokes
-  feedback-edge search, so its cycle `cutAnalysis` has no estimate or solutions.
-- Table and Markdown output are intentionally shorter than this JSON schema: they display at most 8 cuts from
-  each complete solution (even with `--all`) and may replace a dense knot's cut list with structural guidance.
-  `--format json` retains every complete solution, canonical id, status, and budget count.
+- Cut analysis is not currently exposed through `codeps status` or the config file: nothing
+  enables it, so `cutAnalysis.status` is always `notRequested` and `greedyCutEstimate`/`solutions`
+  are always empty in practice. Use `members`, `witnessCycle`, and `extFanIn` to reason about a
+  cycle by hand instead.
 
 ## Change propagators
 
-The JSON index contains every node above the normalized propagation threshold. Table and Markdown views show
-the top 10 and reports its shown/total count; pass `--all` to either report command for the complete
-table inventory.
+The JSON index contains every node above the normalized propagation threshold.
 
 - `score` — `(fanIn / avgFanIn + fanOut / avgFanOut) / 2`, where `avgFanIn`/`avgFanOut`
   are the graph-wide means (`edges / nodes`). An exactly average node scores `1.0`; a hub with
@@ -164,18 +161,7 @@ table inventory.
 
 ## Surface
 
-One row per scope node is retained in JSON. Table and Markdown views show the top 10 rows as
-`Surface risks (top 10 of N)`; `--all` shows every row.
-
-The compact surface view in table and Markdown output uses the headings `node`, `in`, `out`,
-`ports`, `mut`, `encap%`, and `use`. For a wider or focused table or Markdown view, repeat `--columns` with one
-or more semantic groups: `visibility` selects `pub`, `prot`, `pkg`, `priv`, and `total`;
-`mutability` selects the aggregate `mut`, mutable declaration counts (`pubMut`, `protMut`,
-`pkgMut`, and `privMut`), and `mut%`; and `coupling` selects `in`, `out`, `exp`, and `use`.
-The focused groups intentionally overlap the compact core where useful, while composed groups
-render each heading once. `--columns all` selects the complete accounting view. Groups are
-rendered in canonical order, and these short aliases apply to table and Markdown headings; JSON
-continues to use its camelCase field names. With no `--columns`, the `core` group is used.
+One row per scope node is retained in JSON, using camelCase field names.
 
 - `fanIn` / `fanOut` — count of distinct edges in/out. Always derived from the edge list, never
   stored separately.
@@ -231,11 +217,11 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
 ## Orphans
 
 - `orphans` — node ids with `fanIn == 0 AND fanOut == 0`, sorted. Step 1 of the improvement
-  loop: dead-code-removal candidates. JSON retains the complete list; table and Markdown bound it to the
-  top 10 unless `--all` is supplied.
+  loop: dead-code-removal candidates. JSON retains the complete list.
 
-The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks,
-and orphans each include a shown/total label and display at most 10 rows. `--all` is accepted
-by `report-packages` and `report-files` only and requests every human-view row. JSON remains complete
-for graph-derived inventories; its `findings` array is capped at 10,000 rows and describes any
-omissions in `truncation`.
+`inspect-cycle` and `inspect-node` render one cycle or node from this cached report at a time
+(as `table` or `json`, via `--format`); there is no CLI command that renders the full
+findings/cycles/propagators/surface/orphans lists as a table. Use the JSON report directly, or
+the generated `.codeps/out/<project>/index.html` dashboard, to browse everything at once. The
+JSON `findings` array is capped at 10,000 rows and describes any omissions in `truncation`; the
+other graph-derived inventories (`cycles`, `propagators`, `surface`, `orphans`) are never bounded.

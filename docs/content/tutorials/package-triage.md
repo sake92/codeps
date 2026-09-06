@@ -11,31 +11,45 @@ over-exposed package deserves attention—not how to rewrite the whole system.
 
 ## Try the bundled example (optional)
 
-If you want to explore the report before exporting your own project, clone the
-[codeps repository](https://github.com/sake92/codeps) and run the CLI against
-its small checked-in graph:
+If you want to explore a report before configuring your own project, clone the
+[codeps repository](https://github.com/sake92/codeps) and point a project at its small
+checked-in graph:
 
-```shell
-codeps report-packages --input testFixtures/cyclic.json
+```yaml
+projects:
+  fixture:
+    root: .
+    source: export
+    inputs: [testFixtures/cyclic.json]
+    scope: packages
 ```
 
-The rest of this tutorial works exactly the same way with your own
-`.codeps/temp/export.json`.
+```shell
+java -jar codeps.jar status --project fixture
+```
+
+The rest of this tutorial works exactly the same way with your own SemanticDB or jdeps
+project.
 
 ## 1. Scope the report to your code
 
-Use the graph created by `export`. An include pattern covers a package and its
-children; excludes win. This keeps platform and third-party noise out of the
-ranking.
+An `include` pattern covers a package and its children; `exclude` wins over `include`. This
+keeps platform and third-party noise out of the ranking. Add both to the project in
+`.codeps/config.yaml`:
 
-```shell
-codeps report-packages --include com.example -e java -e scala
+```yaml
+projects:
+  app:
+    root: .
+    source: semanticdb
+    inputs: [classes/META-INF/semanticdb]
+    scope: packages
+    include: [com.example]
+    exclude: [java.**, scala.**]
 ```
 
-For review output, write deterministic Markdown instead of copying terminal text:
-
 ```shell
-codeps report-packages --include com.example --format markdown -o codeps-report.md
+java -jar codeps.jar status
 ```
 
 ## 2. Choose one finding
@@ -62,23 +76,23 @@ codeps inspect-cycle --id scc:com.example.orders
 codeps inspect-node --id com.example.orders
 ```
 
-If a cycle is the problem, ask for bounded cut analysis only then:
+Both commands read the most recent `.codeps/out/<project>/report.json`, so run `codeps status`
+first. Cut analysis is not currently exposed by the CLI: `cutAnalysis.status` in the report is
+always `notRequested`, so a suggested cut list will not be populated. Use `extFanIn`, `members`,
+and `witnessCycle` to reason about the cycle by hand.
 
-```shell
-codeps report-packages --include com.example --analyze-cuts
-codeps inspect-cycle --id scc:com.example.orders
-```
+For field meanings, see [Metrics report](/reference/report.html).
 
-The suggested cuts are investigation leads. Validate the dependency direction
-and domain ownership before changing an API. For field meanings and cut-analysis
-guarantees, see [Metrics report](/reference/report.html).
+The information a cycle or propagator finding surfaces is an investigation lead. Validate the
+dependency direction and domain ownership before changing an API.
 
 ## 4. Keep large graphs readable
 
-Collapse an uninteresting subtree to one node, then rerun the same question:
+Collapse an uninteresting subtree to one node with the `collapse` config field, then rerun
+`codeps status`:
 
-```shell
-codeps report-packages --include com.example -c com.example.generated.**
+```yaml
+    collapse: [com.example.generated.**]
 ```
 
 When a package is clearly the problem, move to
