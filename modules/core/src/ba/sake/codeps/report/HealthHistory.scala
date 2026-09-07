@@ -1,21 +1,16 @@
 package ba.sake.codeps.report
 
 import ba.sake.tupson.{*, given}
-import fansi.{Attrs, Bold, Color, Str}
 
-/** Compact, overall repository-health facts retained across runs. This is a
-  * separate wire contract from MetricsReport: it intentionally contains no
-  * per-node inventory or report configuration. */
+/** Health facts for one analysis granularity. Commit metadata belongs to the
+  * enclosing history entry, once for both package and file scopes. */
 case class HealthSnapshot(
-    at: String,
-    commit: String,
     status: String,
     health: HealthScore,
     structure: HealthStructure,
     cycles: HealthCycles,
     surface: HealthSurface,
-    findings: HealthFindings,
-    schemaVersion: Int = 3
+    findings: HealthFindings
 ) derives JsonRW:
   def numericMetrics: Seq[(String, Option[Double])] = Seq(
     "health.score" -> Some(health.score.toDouble),
@@ -36,109 +31,72 @@ case class HealthSnapshot(
     "findings.low" -> Some(findings.low.toDouble)
   )
 
-case class HealthStructure(nodes: Int, edges: Int, criticalPathLength: Int) derives JsonRW
-case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: Int) derives JsonRW
-case class HealthSurface(
-    publicSurface: Double,
-    publicMutableSurface: Double,
-    totalDeclaredSurface: Double,
-    encapsulationRatio: Option[Double]
-) derives JsonRW
-case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int) derives JsonRW
-/** Comparable 0–10 health factors. Higher is healthier; scoring weights remain
-  * internal implementation details rather than part of the wire contract. */
-case class HealthFactors(
-    cycles: Double,
-    mutableSurface: Double,
-    exposedSurface: Double,
-    structuralUse: Double,
-    propagators: Double
+/** One NDJSON line: one commit, with package metrics always present and file
+  * metrics present whenever the source format provides a file graph. */
+case class HealthHistoryEntry(
+    at: String,
+    commit: String,
+    packages: HealthSnapshot,
+    files: Option[HealthSnapshot] = None,
+    schemaVersion: Int = 4
 ) derives JsonRW
 
+case class HealthStructure(nodes: Int, edges: Int, criticalPathLength: Int) derives JsonRW
+case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: Int) derives JsonRW
+case class HealthSurface(publicSurface: Double, publicMutableSurface: Double, totalDeclaredSurface: Double, encapsulationRatio: Option[Double]) derives JsonRW
+case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int) derives JsonRW
+case class HealthFactors(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double) derives JsonRW
 case class HealthScore(score: Int, status: String, factors: HealthFactors) derives JsonRW
+
+/** Previous history schemas had one package snapshot per line. */
+private case class LegacyHealthSnapshot(
+    at: String, commit: String, status: String, health: HealthScore,
+    structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
+    findings: HealthFindings, schemaVersion: Int
+) derives JsonRW:
+  def normalized: HealthHistoryEntry =
+    HealthHistoryEntry(at, commit, HealthSnapshot(status, health, structure, cycles, surface, findings))
 
 private case class LegacyHealthScore(score: Int, status: String, penalties: LegacyHealthPenalties) derives JsonRW
 private case class LegacyHealthPenalties(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double) derives JsonRW
-private case class LegacyHealthSnapshot(
+private case class LegacyPenaltySnapshot(
     at: String, commit: String, status: String, health: LegacyHealthScore,
     structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
-    findings: HealthFindings, schemaVersion: Int = 1
+    findings: HealthFindings, schemaVersion: Int
 ) derives JsonRW:
-  def normalized: HealthSnapshot = HealthSnapshot(
-    at, commit, status,
-    HealthScore(health.score, health.status, HealthFactors(
-      healthFactor(health.penalties.cycles, 4.0), healthFactor(health.penalties.mutableSurface, 2.5),
-      healthFactor(health.penalties.exposedSurface, 2.0), healthFactor(health.penalties.structuralUse, 1.0),
-      healthFactor(health.penalties.propagators, 0.5)
-    )), structure, cycles, surface, findings, schemaVersion = 3
-  )
-
-private case class LegacyIntensityHealthScore(score: Int, status: String, penalties: LegacyHealthPenalties) derives JsonRW
-private case class LegacyIntensityHealthSnapshot(
-    at: String, commit: String, status: String, health: LegacyIntensityHealthScore,
-    structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
-    findings: HealthFindings, schemaVersion: Int = 2
-) derives JsonRW:
-  def normalized: HealthSnapshot = HealthSnapshot(
-    at, commit, status,
-    HealthScore(health.score, health.status, HealthFactors(
-      10.0 - health.penalties.cycles, 10.0 - health.penalties.mutableSurface,
-      10.0 - health.penalties.exposedSurface, 10.0 - health.penalties.structuralUse,
-      10.0 - health.penalties.propagators
-    )), structure, cycles, surface, findings, schemaVersion = 3
-  )
-
-private def healthFactor(points: Double, maximum: Double): Double = 10.0 - points / maximum * 10.0
+  def normalized: HealthHistoryEntry =
+    val factors = if schemaVersion == 1 then
+      HealthFactors(healthFactor(health.penalties.cycles, 4.0), healthFactor(health.penalties.mutableSurface, 2.5), healthFactor(health.penalties.exposedSurface, 2.0), healthFactor(health.penalties.structuralUse, 1.0), healthFactor(health.penalties.propagators, 0.5))
+    else HealthFactors(10.0 - health.penalties.cycles, 10.0 - health.penalties.mutableSurface, 10.0 - health.penalties.exposedSurface, 10.0 - health.penalties.structuralUse, 10.0 - health.penalties.propagators)
+    HealthHistoryEntry(at, commit, HealthSnapshot(status, HealthScore(health.score, health.status, factors), structure, cycles, surface, findings))
 
 object HealthSnapshot:
-  def fromReport(report: MetricsReport, commit: String): HealthSnapshot =
+  def fromReport(report: MetricsReport): HealthSnapshot =
     val severityCounts = report.findings.groupMapReduce(_.severity)(_ => 1)(_ + _)
     val publicSurface = report.surface.map(_.publicSurface).sum
     val publicMutableSurface = report.surface.map(_.publicMutableSurface).sum
     val totalDeclaredSurface = report.surface.map(_.totalDeclaredSurface).sum
-    val cycles = HealthCycles(
-      count = report.cycles.size,
-      nodes = report.summary.nodesInCycles,
-      largestScc = report.cycles.map(_.size).maxOption.getOrElse(0),
-      internalEdges = report.cycles.map(_.internalEdges).sum
-    )
-    val surface = HealthSurface(
-      publicSurface,
-      publicMutableSurface,
-      totalDeclaredSurface,
-      if totalDeclaredSurface == 0 then None else Some(publicSurface / totalDeclaredSurface)
-    )
+    val cycles = HealthCycles(report.cycles.size, report.summary.nodesInCycles, report.cycles.map(_.size).maxOption.getOrElse(0), report.cycles.map(_.internalEdges).sum)
+    val surface = HealthSurface(publicSurface, publicMutableSurface, totalDeclaredSurface, if totalDeclaredSurface == 0 then None else Some(publicSurface / totalDeclaredSurface))
     val health = score(report, cycles, surface)
     HealthSnapshot(
-      at = report.generatedAt,
-      commit = commit,
-      status = health.status,
-      health = health,
-      structure = HealthStructure(report.summary.nodes, report.summary.edges, report.summary.criticalPathLength),
-      cycles = cycles,
-      surface = surface,
-      findings = HealthFindings(
-        severityCounts.getOrElse("critical", 0), severityCounts.getOrElse("high", 0),
-        severityCounts.getOrElse("medium", 0), severityCounts.getOrElse("low", 0)
-      )
+      health.status, health, HealthStructure(report.summary.nodes, report.summary.edges, report.summary.criticalPathLength), cycles, surface,
+      HealthFindings(severityCounts.getOrElse("critical", 0), severityCounts.getOrElse("high", 0), severityCounts.getOrElse("medium", 0), severityCounts.getOrElse("low", 0))
     )
 
   private def score(report: MetricsReport, cycles: HealthCycles, surface: HealthSurface): HealthScore =
     val nodeCount = math.max(report.summary.nodes, 1).toDouble
     val cycleCoverage = cycles.nodes.toDouble / nodeCount
     val cyclePenalty = if cycles.count == 0 then 0.0 else math.min(4.0, 1.5 + 2.5 * cycleCoverage)
-    val mutablePenalty =
-      if surface.publicSurface == 0 then 0.0
-      else math.min(2.5, 2.5 * surface.publicMutableSurface / surface.publicSurface)
+    val mutablePenalty = if surface.publicSurface == 0 then 0.0 else math.min(2.5, 2.5 * surface.publicMutableSurface / surface.publicSurface)
     val exposedSurfacePenalty = surface.encapsulationRatio.fold(0.0)(ratio => math.min(2.0, 2.0 * ratio))
     val structuralUsePenalty = math.min(1.0, report.findings.count(_.kind == "structuralUse").toDouble / nodeCount)
     val propagatorPenalty = math.min(0.5, report.propagators.size.toDouble / nodeCount * 0.5)
-    val totalPenalty = cyclePenalty + mutablePenalty + exposedSurfacePenalty + structuralUsePenalty + propagatorPenalty
     val factors = HealthFactors(
       healthFactor(cyclePenalty, 4.0), healthFactor(mutablePenalty, 2.5), healthFactor(exposedSurfacePenalty, 2.0),
       healthFactor(structuralUsePenalty, 1.0), healthFactor(propagatorPenalty, 0.5)
     )
-    val numericScore = math.max(1, math.min(10, math.floor(10.0 - totalPenalty).toInt))
+    val numericScore = math.max(1, math.min(10, math.floor(10.0 - cyclePenalty - mutablePenalty - exposedSurfacePenalty - structuralUsePenalty - propagatorPenalty).toInt))
     val status = numericScore match
       case 1 | 2 => "critical"
       case 3 | 4 => "unhealthy"
@@ -147,6 +105,8 @@ object HealthSnapshot:
       case _     => "excellent"
     HealthScore(numericScore, status, factors)
 
+private def healthFactor(points: Double, maximum: Double): Double = 10.0 - points / maximum * 10.0
+
 enum HealthRecordingDecision:
   case Initial
   case Significant(metrics: Seq[String])
@@ -154,91 +114,41 @@ enum HealthRecordingDecision:
   case NotSignificant
 
 object HealthHistory:
-  def parseNdjson(text: String): Either[String, Seq[HealthSnapshot]] =
-    text.linesIterator.zipWithIndex.foldLeft[Either[String, Vector[HealthSnapshot]]](Right(Vector.empty)) { case (acc, (line, index)) =>
-      acc.flatMap { snapshots =>
-        if line.trim.isEmpty then Right(snapshots)
-        else
-          try
-            val snapshot =
-              if "\\\"schemaVersion\\\"\\s*:\\s*1".r.findFirstIn(line).nonEmpty then line.parseJson[LegacyHealthSnapshot].normalized
-              else if "\\\"schemaVersion\\\"\\s*:\\s*2".r.findFirstIn(line).nonEmpty then line.parseJson[LegacyIntensityHealthSnapshot].normalized
-              else line.parseJson[HealthSnapshot]
-            Right(snapshots :+ snapshot)
-          catch case e: Exception => Left(s"invalid history line ${index + 1}: ${e.getMessage}")
+  def parseNdjson(text: String): Either[String, Seq[HealthHistoryEntry]] =
+    text.linesIterator.zipWithIndex.foldLeft[Either[String, Vector[HealthHistoryEntry]]](Right(Vector.empty)) { case (acc, (line, index)) =>
+      acc.flatMap { entries =>
+        if line.trim.isEmpty then Right(entries)
+        else try
+          val entry =
+            if "\\\"packages\\\"\\s*:".r.findFirstIn(line).nonEmpty then line.parseJson[HealthHistoryEntry]
+            else if "\\\"penalties\\\"\\s*:".r.findFirstIn(line).nonEmpty then line.parseJson[LegacyPenaltySnapshot].normalized
+            else line.parseJson[LegacyHealthSnapshot].normalized
+          Right(entries :+ entry)
+        catch case e: Exception => Left(s"invalid history line ${index + 1}: ${e.getMessage}")
       }
     }
 
-  def decision(previous: Option[HealthSnapshot], current: HealthSnapshot, relativeChange: Double, checkpointDue: Boolean): HealthRecordingDecision =
+  /** A combined entry is meaningful when either available scope changed. */
+  def decision(previous: Option[HealthHistoryEntry], current: HealthHistoryEntry, relativeChange: Double, checkpointDue: Boolean): HealthRecordingDecision =
     previous match
       case None => HealthRecordingDecision.Initial
       case Some(last) =>
-        val changed = last.numericMetrics.zip(current.numericMetrics).collect {
-          case ((name, before), (_, after)) if significant(before, after, relativeChange) => name
-        }
+        val changed = significantMetrics("packages", last.packages, current.packages, relativeChange) ++ ((last.files, current.files) match
+          case (Some(before), Some(after)) => significantMetrics("files", before, after, relativeChange)
+          case (None, Some(_)) | (Some(_), None) => Seq("files.availability")
+          case (None, None) => Nil)
         if changed.nonEmpty then HealthRecordingDecision.Significant(changed)
         else if checkpointDue then HealthRecordingDecision.Checkpoint
         else HealthRecordingDecision.NotSignificant
 
-  def renderTable(snapshot: HealthSnapshot, decision: HealthRecordingDecision, color: Boolean = false): String =
-    val out = StringBuilder()
-    out.append(styled("Overall dependency health", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  health: ${snapshot.health.score}/10 ${styled(snapshot.status, statusAttrs(snapshot.status), color)}    at: ${snapshot.at}    commit: ${snapshot.commit}\n")
-    out.append(s"  ${decisionText(decision)}\n\n")
-    out.append(styled("Structure", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  nodes: ${snapshot.structure.nodes}    edges: ${snapshot.structure.edges}    criticalPathLength: ${snapshot.structure.criticalPathLength}\n\n")
-    out.append(styled("Cycles", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  count: ${snapshot.cycles.count}    nodes: ${snapshot.cycles.nodes}    largestScc: ${snapshot.cycles.largestScc}    internalEdges: ${snapshot.cycles.internalEdges}\n\n")
-    out.append(styled("Surface", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  publicSurface: ${number(snapshot.surface.publicSurface)}    publicMutableSurface: ${number(snapshot.surface.publicMutableSurface)}    totalDeclaredSurface: ${number(snapshot.surface.totalDeclaredSurface)}    encapsulationRatio: ${ratio(snapshot.surface.encapsulationRatio)}\n\n")
-    out.append(styled("Findings", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  critical: ${snapshot.findings.critical}    high: ${snapshot.findings.high}    medium: ${snapshot.findings.medium}    low: ${snapshot.findings.low}\n")
-    out.append(styled("Health factors", Attrs(Bold.On, Color.Cyan), color) + "\n")
-    out.append(s"  cycles: ${number(snapshot.health.factors.cycles)}/10    mutableSurface: ${number(snapshot.health.factors.mutableSurface)}/10    exposedSurface: ${number(snapshot.health.factors.exposedSurface)}/10    structuralUse: ${number(snapshot.health.factors.structuralUse)}/10    propagators: ${number(snapshot.health.factors.propagators)}/10\n")
-    out.toString
-
-  def renderMarkdown(snapshot: HealthSnapshot, decision: HealthRecordingDecision): String =
-    val out = StringBuilder()
-    out.append("# Overall dependency health\n\n")
-    out.append(s"**Health:** ${snapshot.health.score}/10 (${snapshot.status})  \n**Commit:** `${snapshot.commit}`  \n**Recorded:** ${snapshot.at}\n\n")
-    out.append(s"_${decisionText(decision)}._\n\n")
-    out.append("## Structure\n\n| Metric | Value |\n|---|---:|\n")
-    out.append(s"| Nodes | ${snapshot.structure.nodes} |\n| Edges | ${snapshot.structure.edges} |\n| Critical path length | ${snapshot.structure.criticalPathLength} |\n\n")
-    out.append("## Cycles\n\n| Metric | Value |\n|---|---:|\n")
-    out.append(s"| Cycles | ${snapshot.cycles.count} |\n| Nodes in cycles | ${snapshot.cycles.nodes} |\n| Largest SCC | ${snapshot.cycles.largestScc} |\n| Internal edges | ${snapshot.cycles.internalEdges} |\n\n")
-    out.append("## Surface\n\n| Metric | Value |\n|---|---:|\n")
-    out.append(s"| Public surface | ${number(snapshot.surface.publicSurface)} |\n| Public mutable surface | ${number(snapshot.surface.publicMutableSurface)} |\n| Total declared surface | ${number(snapshot.surface.totalDeclaredSurface)} |\n| Encapsulation ratio | ${ratio(snapshot.surface.encapsulationRatio)} |\n\n")
-    out.append("## Findings\n\n| Severity | Count |\n|---|---:|\n")
-    out.append(s"| Critical | ${snapshot.findings.critical} |\n| High | ${snapshot.findings.high} |\n| Medium | ${snapshot.findings.medium} |\n| Low | ${snapshot.findings.low} |\n")
-    out.append("\n## Health factors\n\n| Factor | Health |\n|---|---:|\n")
-    out.append(s"| Cycles | ${number(snapshot.health.factors.cycles)}/10 |\n| Exposed mutable surface | ${number(snapshot.health.factors.mutableSurface)}/10 |\n| Exposed surface | ${number(snapshot.health.factors.exposedSurface)}/10 |\n| Structural use | ${number(snapshot.health.factors.structuralUse)}/10 |\n| Change propagators | ${number(snapshot.health.factors.propagators)}/10 |\n")
-    out.toString
-
-  private def decisionText(decision: HealthRecordingDecision): String = decision match
-    case HealthRecordingDecision.Initial => "snapshot recorded (initial)"
-    case HealthRecordingDecision.Significant(metrics) => s"snapshot recorded (significant: ${metrics.mkString(", ")})"
-    case HealthRecordingDecision.Checkpoint => "snapshot recorded (checkpoint)"
-    case HealthRecordingDecision.NotSignificant => "current health snapshot is not significantly different from the last one; skipping recording"
-
-  private def styled(value: String, attrs: Attrs, color: Boolean): String =
-    if color then attrs(Str(value)).render else value
-
-  private def statusAttrs(status: String): Attrs = status match
-    case "critical" | "unhealthy" => Attrs(Bold.On, Color.Red)
-    case "needs-attention"          => Attrs(Bold.On, Color.Yellow)
-    case "healthy"                  => Color.Cyan
-    case _                            => Attrs(Bold.On, Color.Green)
-
-  private def number(value: Double): String =
-    if value == math.rint(value) then value.toLong.toString else String.format(java.util.Locale.ROOT, "%.2f", Double.box(value))
-
-  private def ratio(value: Option[Double]): String = value match
-    case None => "—"
-    case Some(v) => String.format(java.util.Locale.ROOT, "%.1f%%", Double.box(v * 100.0))
+  private def significantMetrics(scope: String, before: HealthSnapshot, after: HealthSnapshot, threshold: Double) =
+    before.numericMetrics.zip(after.numericMetrics).collect {
+      case ((name, earlier), (_, later)) if significant(earlier, later, threshold) => s"$scope.$name"
+    }
 
   private def significant(before: Option[Double], after: Option[Double], threshold: Double): Boolean =
     (before, after) match
-      case (None, None)             => false
+      case (None, None) => false
       case (Some(_), None) | (None, Some(_)) => true
       case (Some(a), Some(b)) if a == b => false
       case (Some(0.0), Some(_)) | (Some(_), Some(0.0)) => true

@@ -3,7 +3,7 @@ package ba.sake.codeps.cli
 import ba.sake.codeps.graph.{Aggregator, TestFilter}
 import ba.sake.codeps.jdeps.JdepsParser
 import ba.sake.codeps.model.{CollapseRule, DepsGraph, ExportGraph}
-import ba.sake.codeps.report.{CycleInspection, HealthHistory, HealthHistoryHtml, HealthRecordingDecision, HealthSnapshot, MetricsCalculator, NodeInspection, ReportInspector}
+import ba.sake.codeps.report.{CycleInspection, HealthHistory, HealthHistoryEntry, HealthHistoryHtml, HealthRecordingDecision, HealthSnapshot, MetricsCalculator, MetricsReports, NodeInspection, ReportInspector}
 import ba.sake.codeps.semanticdb.SemanticDbParser
 import ba.sake.tupson.{*, given}
 import mainargs.{arg, main, ParserForMethods, TokensReader}
@@ -48,13 +48,8 @@ object Main:
 
   private enum SourceKind:
     case Semanticdb, Jdeps, Export
-  private enum Scope:
-    case Packages, Files
-    def metrics = this match
-      case Packages => MetricsCalculator.Scope.Packages
-      case Files    => MetricsCalculator.Scope.Files
   private case class Project(
-      id: String, root: os.Path, source: SourceKind, inputs: Seq[String], scope: Scope,
+      id: String, root: os.Path, source: SourceKind, inputs: Seq[String],
       include: Seq[String], exclude: Seq[String], collapse: Seq[String], skipTests: Boolean,
       testPatterns: Seq[String], significance: Double, maxSnapshotAge: String
   )
@@ -81,25 +76,29 @@ object Main:
       @arg(name = "id") id: String,
       @arg(name = "project") project: Option[String] = None,
       @arg(name = "config") config: Option[String] = None,
+      @arg(name = "scope", doc = "Report scope: packages (default) or files") scope: String = "packages",
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
-  ): Int = inspect(project, config, id, format, ReportInspector.inspectCycle(_, id))
+  ): Int = inspect(project, config, id, scope, format, ReportInspector.inspectCycle(_, id))
 
   @main
   def inspectNode(
       @arg(name = "id") id: String,
       @arg(name = "project") project: Option[String] = None,
       @arg(name = "config") config: Option[String] = None,
+      @arg(name = "scope", doc = "Report scope: packages (default) or files") scope: String = "packages",
       @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
-  ): Int = inspect(project, config, id, format, ReportInspector.inspectNode(_, id))
+  ): Int = inspect(project, config, id, scope, format, ReportInspector.inspectNode(_, id))
 
   private def inspect(
-      requested: Option[String], configPath: Option[String], id: String, format: ReportFormat,
+      requested: Option[String], configPath: Option[String], id: String, scope: String, format: ReportFormat,
       action: ba.sake.codeps.report.MetricsReport => Either[String, Any]
   ): Int =
     val result = for
       config <- loadConfig(configPath)
       project <- selectProject(config, requested)
-      detail <- readReportInput(reportPath(config.repoRoot, project)).flatMap(action)
+      reports <- readReportInput(reportPath(config.repoRoot, project))
+      report <- reportForScope(reports, scope)
+      detail <- action(report)
     yield print(detail match
       case cycle: CycleInspection => format match
         case ReportFormat.Json => ReportInspector.renderJson(cycle)
@@ -116,15 +115,22 @@ object Main:
       exportGraph <- readSource(project)
       patterns <- testPatternsOrError(project.skipTests, project.testPatterns)
       rules <- parseRules(project.collapse)
-      report <- MetricsCalculator.run(graphFor(project.scope.metrics, exportGraph, project.skipTests), project.scope.metrics,
+      packages <- MetricsCalculator.run(graphFor(MetricsCalculator.Scope.Packages, exportGraph, project.skipTests), MetricsCalculator.Scope.Packages,
         project.include, project.exclude, rules, patterns)
-      dated <- setGeneratedAt(report, rawGeneratedAt)
+      files <- if exportGraph.files.nodes.nonEmpty then
+        MetricsCalculator.run(exportGraph.fileDeps, MetricsCalculator.Scope.Files, project.include, project.exclude, rules, patterns).map(Some(_))
+      else Right(None)
+      datedPackages <- setGeneratedAt(packages, rawGeneratedAt)
+      datedFiles <- files match
+        case None => Right(None)
+        case Some(report) => setGeneratedAt(report, rawGeneratedAt).map(Some(_))
       commit <- resolvedCommit(explicitCommit, repoRoot)
       age <- parseMaxSnapshotAge(project.maxSnapshotAge)
-      _ <- recordHistory(historyPath(repoRoot, project), HealthSnapshot.fromReport(dated, commit), project.significance, age)
+      current = HealthHistoryEntry(datedPackages.generatedAt, commit, HealthSnapshot.fromReport(datedPackages), datedFiles.map(HealthSnapshot.fromReport))
+      _ <- recordHistory(historyPath(repoRoot, project), current, project.significance, age)
       snapshots <- readHistory(historyPath(repoRoot, project)).map(_._3)
     yield
-      writeFile(reportPath(repoRoot, project), dated.toJson(spaces = 2, sort = true))
+      writeFile(reportPath(repoRoot, project), MetricsReports(datedPackages, datedFiles).toJson(spaces = 2, sort = true))
       val html = explicitOut.map(path => os.Path(path, os.pwd)).getOrElse(htmlPath(repoRoot, project))
       writeFile(html, HealthHistoryHtml.render(snapshots))
       println(s"${project.id}: ${html.relativeTo(repoRoot)}")
@@ -152,13 +158,13 @@ object Main:
               case Left(err)     => System.err.println(s"warning: $err")
             Right(Aggregator.toExport(deps.withoutDanglingEdges))
 
-  private def recordHistory(path: os.Path, current: HealthSnapshot, significance: Double, age: Option[FiniteDuration]): Either[String, Unit] =
+  private def recordHistory(path: os.Path, current: HealthHistoryEntry, significance: Double, age: Option[FiniteDuration]): Either[String, Unit] =
     if significance < 0 || !significance.isFinite then Left("significance must be a non-negative finite decimal")
     else for
       existing <- readHistory(path)
       due <- checkpointDue(existing._3.lastOption, current.at, age)
     yield
-      val containsLegacy = "\\\"schemaVersion\\\"\\s*:\\s*[12]".r.findFirstIn(existing._2).nonEmpty
+      val containsLegacy = "\\\"packages\\\"\\s*:".r.findFirstIn(existing._2).isEmpty && existing._2.trim.nonEmpty
       val canonical = if containsLegacy then existing._3.map(_.toJson(spaces = 0, sort = true)).mkString("", "\n", "\n") else existing._2
       HealthHistory.decision(existing._3.lastOption, current, significance, due) match
         case HealthRecordingDecision.NotSignificant if containsLegacy => writeFile(path, canonical)
@@ -183,7 +189,7 @@ projects:
     root: .
     source: semanticdb
     inputs: [.]
-    scope: packages
+    # Package and file metrics are both emitted when the source contains files.
 """
 
   private def parseConfig(repoRoot: os.Path, raw: String): Either[String, Config] =
@@ -198,10 +204,9 @@ projects:
     for
       inputs <- strings(values.get("inputs")).filter(_.nonEmpty).toRight(s"project '$id' needs non-empty 'inputs'")
       source <- sourceKind(string(values.get("source")).getOrElse("semanticdb"), id)
-      scope <- scopeOf(string(values.get("scope")).getOrElse("packages"), id)
       significance <- decimal(values.get("significance")).getOrElse(Right(0.01))
       _ <- if significance >= 0 && significance.isFinite then Right(()) else Left(s"project '$id' significance must be non-negative")
-    yield Project(id, os.Path(string(values.get("root")).getOrElse("."), repoRoot), source, inputs, scope,
+    yield Project(id, os.Path(string(values.get("root")).getOrElse("."), repoRoot), source, inputs,
       strings(values.get("include")).getOrElse(Nil), strings(values.get("exclude")).getOrElse(Nil), strings(values.get("collapse")).getOrElse(Nil),
       bool(values.get("skip-tests")).getOrElse(false), strings(values.get("test-pattern")).getOrElse(Nil), significance,
       string(values.get("max-snapshot-age")).getOrElse("7d"))
@@ -227,11 +232,6 @@ projects:
     case "jdeps" => Right(SourceKind.Jdeps)
     case "export" => Right(SourceKind.Export)
     case other => Left(s"project '$id' source must be semanticdb, jdeps, or export (received: $other)")
-  private def scopeOf(value: String, id: String): Either[String, Scope] = value match
-    case "packages" => Right(Scope.Packages)
-    case "files" => Right(Scope.Files)
-    case other => Left(s"project '$id' scope must be packages or files (received: $other)")
-
   private def selectProjects(config: Config, requested: Seq[String]) =
     val unknown = requested.distinct.filterNot(id => config.projects.exists(_.id == id))
     if unknown.nonEmpty then Left(s"unknown project: ${unknown.mkString(", ")}")
@@ -257,12 +257,12 @@ projects:
     case None =>
       val result = os.proc("git", "rev-parse", "HEAD").call(cwd = root, check = false, stderr = os.Pipe)
       if result.exitCode == 0 then Right(result.out.text().trim) else Left("unable to resolve git HEAD; pass --commit explicitly")
-  private def readHistory(path: os.Path): Either[String, (os.Path, String, Seq[HealthSnapshot])] =
+  private def readHistory(path: os.Path): Either[String, (os.Path, String, Seq[HealthHistoryEntry])] =
     if os.exists(path) && !os.isFile(path) then Left(s"history path is not a file: $path")
     else
       val raw = if os.exists(path) then os.read(path) else ""
       HealthHistory.parseNdjson(raw).map(snapshots => (path, raw, snapshots))
-  private def checkpointDue(last: Option[HealthSnapshot], currentAt: String, age: Option[FiniteDuration]) = (last, age) match
+  private def checkpointDue(last: Option[HealthHistoryEntry], currentAt: String, age: Option[FiniteDuration]) = (last, age) match
     case (_, None) | (None, _) => Right(false)
     case (Some(previous), Some(max)) => try Right(Duration.between(Instant.parse(previous.at), Instant.parse(currentAt)).toMillis >= max.toMillis)
       catch case _: Exception => Left("history timestamp is invalid")
@@ -294,10 +294,15 @@ projects:
     else if !os.isFile(path) then Left(s"not a file: $path")
     else try Right(os.read(path).parseJson[ExportGraph])
       catch case error: ba.sake.tupson.TupsonException => Left(s"failed to parse json: ${error.getMessage}")
-  private def readReportInput(path: os.Path): Either[String, ba.sake.codeps.report.MetricsReport] =
+  private def readReportInput(path: os.Path): Either[String, MetricsReports] =
     if !os.exists(path) then Left(s"report path does not exist: $path")
     else if !os.isFile(path) then Left(s"report path is not a file: $path")
-    else ReportInspector.parse(os.read(path)).left.map(err => s"failed to parse report json: $err")
+    else try Right(os.read(path).parseJson[MetricsReports])
+    catch case e: Exception => Left(s"failed to parse report json: ${e.getMessage}")
+  private def reportForScope(reports: MetricsReports, scope: String): Either[String, ba.sake.codeps.report.MetricsReport] = scope match
+    case "packages" => Right(reports.packages)
+    case "files" => reports.files.toRight("file metrics are unavailable for this project")
+    case other => Left(s"unknown scope: $other (expected packages or files)")
   private def writeFile(path: os.Path, content: String): Unit = { os.makeDir.all(path / os.up); os.write.over(path, content) }
   private def sequence[A](items: Seq[Either[String, A]]) = items.foldLeft(Right(Nil): Either[String, Seq[A]])((result, item) => for done <- result; value <- item yield done :+ value)
   private def fail(message: String): Int = { System.err.println(s"error: $message"); 1 }

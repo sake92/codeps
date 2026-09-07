@@ -7,11 +7,10 @@ description: the codeps report JSON format — findings, cycles, propagators, su
 # Metrics report
 
 `codeps status` consumes each configured project's source (SemanticDB, jdeps, or an existing
-[codeps export format](/reference/json-input.html) JSON file) and writes a single flat JSON
-document to `.codeps/out/<project>/report.json`: metrics over that project's configured
-**scope** — its whole graph of **packages**, or of **files** if `scope: files`. `inspect-cycle`
-and `inspect-node` read this cached file to render one cycle or node in detail, as a table or
-JSON via `--format`.
+[codeps export format](/reference/json-input.html) JSON file) and writes one JSON document to
+`.codeps/out/<project>/report.json`. It has a top-level `packages` report and, where source data
+contains files, a top-level `files` report. `inspect-cycle` and `inspect-node` read this cached
+file to render one cycle or node in detail; use `--scope files` for file detail.
 
 ```shell
 java -jar codeps.jar status
@@ -28,6 +27,8 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 
 ```json
 {
+  "schemaVersion": 3,
+  "packages": {
   "schemaVersion": 2,
   "scope": "packages",
   "generatedAt": "<ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z>",
@@ -81,6 +82,8 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
       "nextAction": "inspect-cycle scc:cache"
     }
   ]
+  },
+  "files": { "scope": "files", "...": "same report shape" }
 }
 ```
 

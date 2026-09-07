@@ -11,9 +11,8 @@ It ships with every JDK, so this workflow needs **no extra tooling** — great f
 or when you can't (or don't want to) enable SemanticDB.
 Your build already produced the `.class` files; the only extra step is piping `jdeps` output to a text file.
 
-jdeps data is class-level: it has no file information, so a project reading jdeps input must
-use `scope: packages` — `scope: files` has nothing to compute and produces an empty file
-graph. It also carries no access information, so all nodes have `ports`/`mutPorts` 0 and
+jdeps data is class-level: it has no file information, so codeps emits only package metrics
+and omits the Files tab. It also carries no access information, so all nodes have `ports`/`mutPorts` 0 and
 `dependentsPerPublicPort` `null` — a known gap, not silently meaningful.
 
 ## Generating the input
@@ -36,7 +35,6 @@ projects:
     root: .
     source: jdeps
     inputs: [jdeps.txt]
-    scope: packages
 ```
 
 ```shell
@@ -61,7 +59,6 @@ projects:
     root: .
     source: jdeps
     inputs: [jdeps.txt]
-    scope: packages
     include: [com.example]
     exclude: [java.**, scala.**]
 ```

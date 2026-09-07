@@ -1,15 +1,15 @@
 ---
 layout: reference.html
 title: Codeps export format
-description: the codeps export format, produced internally by the semanticdb/jdeps parsers and consumable directly via source: export
+description: "the codeps export format, produced internally by the semanticdb/jdeps parsers and consumable directly via source: export"
 ---
 
 # Codeps export format
 
 The codeps export format is the data contract behind every `source: semanticdb` or
 `source: jdeps` parse, and is also directly consumable via `source: export`. It has two
-independent, materialized graphs: `packages`, used when a project's `scope` is `packages`, and
-`files`, used when `scope` is `files`. Each graph contains only the ids, summary values, and
+independent, materialized graphs: `packages` and `files`. codeps analyzes both when file data is
+available. Each graph contains only the ids, summary values, and
 edges needed for that scope. It never includes declarations, members, types, or symbol
 references.
 
@@ -36,8 +36,8 @@ references.
 
 | Field | Type | Meaning |
 |---|---|---|
-| `packages` | `{nodes, edges}` | package-level graph, used when `scope: packages` |
-| `files` | `{nodes, edges}` | file-level graph, used when `scope: files` |
+| `packages` | `{nodes, edges}` | package-level graph |
+| `files` | `{nodes, edges}` | file-level graph |
 | `packages.nodes` | `[{id, ports, mutPorts, declarationSurface}]` | one summary per package |
 | `files.nodes` | `[{id, packageId?, ports, mutPorts, declarationSurface}]` | one summary per source file; `packageId` supports package filtering |
 | `*.edges` | `[{source, target, weight}]` | directed edges whose endpoints belong to the same graph |
@@ -69,7 +69,6 @@ projects:
     root: .
     source: export
     inputs: [deps.json]
-    scope: packages
 ```
 
 ```shell

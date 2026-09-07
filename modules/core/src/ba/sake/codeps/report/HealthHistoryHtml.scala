@@ -6,8 +6,8 @@ import ba.sake.tupson.{*, given}
   * same small Pico CSS dependency as the documentation site and D3 for its
   * responsive SVG chart. */
 object HealthHistoryHtml:
-  def render(snapshots: Seq[HealthSnapshot]): String =
-    val data = snapshots.map(_.toJson(spaces = 0, sort = true)).mkString("[", ",", "]")
+  def render(entries: Seq[HealthHistoryEntry]): String =
+    val data = entries.map(_.toJson(spaces = 0, sort = true)).mkString("[", ",", "]")
       .replace("<", "\\u003c")
       .replace(">", "\\u003e")
       .replace("&", "\\u0026")
@@ -61,7 +61,7 @@ object HealthHistoryHtml:
 </head>
 <body>
   <main class="container">
-    <header><h1>Codebase status</h1></header>
+    <header><h1>Codebase status</h1><div id="scope-tabs" role="tablist" aria-label="Analysis scope"></div></header>
     <article>
       <h2>Latest snapshot</h2>
       <div id="latest"></div>
@@ -93,7 +93,9 @@ object HealthHistoryHtml:
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script>
     (() => {
-      const snapshots = __HEALTH_DATA__.map(snapshot => ({ ...snapshot, date: new Date(snapshot.at) }));
+      const entries = __HEALTH_DATA__;
+      let scope = "packages";
+      let snapshots = [];
       const metricDefs = [
         { key: "health.score", label: "Health score", description: "The overall score from 1 to 10; higher is better.", value: s => s.health.score, format: value => `${value}/10` },
         { key: "structure.nodes", label: "Components", description: "Number of components in the analyzed graph.", value: s => s.structure.nodes, format: formatNumber },
@@ -112,6 +114,24 @@ object HealthHistoryHtml:
       const chartWrap = document.querySelector(".chart-wrap");
       const tooltip = document.getElementById("chart-tooltip");
       let selected = snapshots.length - 1;
+      function selectScope(nextScope) {
+        scope = nextScope;
+        snapshots = entries.flatMap(entry => entry[scope] ? [{ ...entry[scope], at: entry.at, commit: entry.commit, date: new Date(entry.at) }] : []);
+        selected = Math.max(0, snapshots.length - 1);
+        document.querySelectorAll("#scope-tabs button").forEach(button => {
+          const active = button.dataset.scope === scope;
+          button.setAttribute("aria-selected", active);
+          button.classList.toggle("secondary", !active);
+        });
+        updateDetails(); draw();
+      }
+      ["packages", ...(entries.some(entry => entry.files) ? ["files"] : [])].forEach(tabScope => {
+        const button = document.createElement("button");
+        button.type = "button"; button.dataset.scope = tabScope; button.setAttribute("role", "tab");
+        button.textContent = tabScope === "packages" ? "Packages" : "Files";
+        button.addEventListener("click", () => selectScope(tabScope));
+        document.getElementById("scope-tabs").append(button);
+      });
       metricDefs.forEach(definition => {
         const option = new Option(definition.label, definition.key);
         option.title = definition.description;
@@ -219,7 +239,7 @@ object HealthHistoryHtml:
         d3.select("#factors").html(factors.map(([name, description, value]) => `<div class="penalty"><span data-tooltip="${escapeHtml(description)}">${name}</span><progress max="10" value="${value}"></progress><small>${formatNumber(value)} / 10</small></div>`).join(""));
       }
       function escapeHtml(value) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
-      updateMetricHelp(); updateDetails(); draw();
+      updateMetricHelp(); selectScope("packages");
     })();
   </script>
 </body>

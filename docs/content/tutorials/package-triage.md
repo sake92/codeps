@@ -21,7 +21,6 @@ projects:
     root: .
     source: export
     inputs: [testFixtures/cyclic.json]
-    scope: packages
 ```
 
 ```shell
@@ -43,7 +42,6 @@ projects:
     root: .
     source: semanticdb
     inputs: [classes/META-INF/semanticdb]
-    scope: packages
     include: [com.example]
     exclude: [java.**, scala.**]
 ```

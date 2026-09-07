@@ -10,8 +10,7 @@ SemanticDB is a data format describing the semantic information of Scala (and Ja
 produced by the Scala compiler (`-Xsemanticdb` flag) or tools like scala-cli.
 
 Scala data is the richest codeps input: it carries package/file/type/member symbols, so a
-project configured with `scope: packages` or `scope: files` can compute metrics at either
-granularity (ports/mutPorts resolved during parsing). It also carries
+project can compute metrics at both granularities (ports/mutPorts resolved during parsing). It also carries
 per-symbol access/kind information, which the parser turns into the
 [exposed-surface metrics](/reference/report.html#exposed-surface)
 (`ports`/`mutPorts`: sealed hierarchies, givens, vars and mutable collections are all
@@ -49,7 +48,6 @@ projects:
     root: .
     source: semanticdb
     inputs: [classes/META-INF/semanticdb]
-    scope: packages
 ```
 
 ```shell
@@ -57,11 +55,10 @@ java -jar codeps.jar status
 ```
 
 - `inputs` takes one or more **directories** — the whole tree is walked for `*.semanticdb` files
-- `scope: packages` computes cycles, change propagators, and exposed-surface/encapsulation
-  metrics (`ports`/`mutPorts`/`exposure`/`dependentsPerPublicPort` plus declaration visibility
-  counters) over packages; `scope: files` computes the same metrics over source files instead.
-  A project has exactly one scope — configure a second, separately named project against the
-  same `inputs` when you want both a package and a file history.
+- codeps computes cycles, change propagators, and exposed-surface/encapsulation metrics
+  (`ports`/`mutPorts`/`exposure`/`dependentsPerPublicPort` plus declaration visibility counters)
+  over both packages and source files. The dashboard has a tab for each; use `--scope files`
+  with inspection commands for file detail.
 - Source file ids are relative to the project's `root`.
 
 See the [CLI reference](/reference/cli.html) for the full set of configuration fields, and the
@@ -79,7 +76,6 @@ projects:
     root: .
     source: semanticdb
     inputs: [classes/META-INF/semanticdb]
-    scope: packages
     include: [com.example]
     exclude: [com.example.internal]
 ```

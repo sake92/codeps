@@ -41,6 +41,10 @@ class MainSpec extends munit.FunSuite:
     assert(html.contains("Codebase status"))
     assert(html.contains("Maximum layer depth"))
     assert(html.contains("https://cdn.jsdelivr.net/npm/d3@7.9.0"))
+    val report = os.read(output / "report.json")
+    assert(report.contains("\"packages\""))
+    assert(report.contains("\"files\""))
+    assert(!report.contains("\"scopes\""))
   }
 
   test("inspection reads the report cached by status") {
@@ -73,6 +77,6 @@ class MainSpec extends munit.FunSuite:
         |    root: .
         |    source: semanticdb
         |    inputs: [.]
-        |    scope: packages
+        |    # Package and file metrics are both emitted when the source contains files.
         |""".stripMargin)
   }

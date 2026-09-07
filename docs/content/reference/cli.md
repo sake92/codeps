@@ -6,7 +6,7 @@ description: codeps CLI reference
 
 # CLI
 
-`codeps` has one normal workflow: configure the projects in the repository, then run `codeps status`. It parses source data, analyzes the configured scope, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.
+`codeps` has one normal workflow: configure the projects in the repository, then run `codeps status`. It parses source data, analyzes both package and file granularity when available, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.
 
 ```shell
 curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
@@ -33,7 +33,6 @@ projects:
     source: semanticdb
     inputs:
       - .deder/out/app/compile/semanticdb
-    scope: packages
     skip-tests: true
     exclude: [java.**, scala.**]
     significance: 0.01
@@ -43,7 +42,6 @@ projects:
     root: services/legacy
     source: jdeps
     inputs: [target/jdeps.txt]
-    scope: packages
 ```
 
 | Field | Default | Meaning |
@@ -51,7 +49,6 @@ projects:
 | `root` | `.` | Project directory, relative to the repository root. |
 | `source` | `semanticdb` | `semanticdb`, `jdeps`, or `export` for an existing [codeps export format](/reference/json-input.html) file. |
 | `inputs` | required | SemanticDB directories, jdeps files, or exactly one export JSON file. |
-| `scope` | `packages` | `packages` or `files`. Use a separate named project when you want both histories. |
 | `include`, `exclude`, `collapse` | empty | Analysis patterns. |
 | `skip-tests` | `false` | Remove test files before package analysis. |
 | `test-pattern` | built-in patterns | Replacement test globs; requires `skip-tests: true`. |
@@ -73,7 +70,7 @@ For a project named `backend`, default artifacts are:
 | Path | Purpose |
 |---|---|
 | `.codeps/backend.ndjson` | Compact, commit-friendly health history. |
-| `.codeps/out/backend/report.json` | Latest detailed report for inspection. |
+| `.codeps/out/backend/report.json` | Latest detailed package and file reports for inspection. |
 | `.codeps/out/backend/index.html` | D3/Pico static status dashboard. |
 
 The dashboard is for general trends, not a claim of perfectly precise architectural measurement.
@@ -85,7 +82,7 @@ codeps inspect-cycle --id <cycle-id> [--project id] [--config path] [--format <t
 codeps inspect-node --id <node-id> [--project id] [--config path] [--format <table|json>]
 ```
 
-Both read `.codeps/out/<project>/report.json`; run `codeps status` first. When the config has more than one project, `--project` is required.
+Both read `.codeps/out/<project>/report.json`; pass `--scope files` for file-level detail (packages is the default). Run `codeps status` first. When the config has more than one project, `--project` is required.
 
 ## GitHub Pages CI
 

@@ -14,7 +14,6 @@ projects:
   app:
     source: semanticdb
     inputs: [classes/META-INF/semanticdb]
-    scope: packages
     skip-tests: true
 ```
 
