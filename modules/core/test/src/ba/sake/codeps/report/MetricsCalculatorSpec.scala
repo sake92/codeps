@@ -105,7 +105,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     )
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
     assertEquals(report.scope, "packages")
-    assertEquals(report.summary, Summary(nodes = 3, edges = 2, nodesInCycles = 0, orphans = 0, criticalPathLength = 2))
+    assertEquals(report.summary, Summary(nodes = 3, edges = 2, nodesInCycles = 0, orphans = 0))
     assertEquals(report.cycles, Seq.empty)
     assertEquals(report.surface, Seq(
       SurfaceRow("com.b", 1, 1, 3.0, 0.0, 3.0, Some(1.0 / 3.0)),
@@ -185,24 +185,6 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(report.summary.orphans, 1)
   }
 
-  test("critical path length ignores cycles via condensation") {
-    // com.a <-> com.b cycle plus com.c -> com.a chain: condensation is com.c -> {a,b}, length 1
-    val graph = DepsGraph(
-      nodes = Set(
-        Node("com.a", NodeKind.`package`),
-        Node("com.b", NodeKind.`package`),
-        Node("com.c", NodeKind.`package`),
-        Node("com.a.A", NodeKind.`type`, Some("com.a"), None),
-        Node("com.b.B", NodeKind.`type`, Some("com.b"), None),
-        Node("com.c.C", NodeKind.`type`, Some("com.c"), None)
-      ),
-      edges = Set(Edge("com.a.A", "com.b.B"), Edge("com.b.B", "com.a.A"), Edge("com.c.C", "com.a.A"))
-    )
-    val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    assertEquals(report.summary.criticalPathLength, 1)
-    assertEquals(report.summary.nodesInCycles, 2)
-  }
-
   test("utilization guards: zero fan-in or zero ports yield null") {
     val graph = DepsGraph(
       nodes = Set(
@@ -272,7 +254,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(cycle.extFanIn, 1) // outside -> p1 only
     assertEquals(report.surface.find(_.node == "p1").flatMap(_.cycleId), Some("scc:p1"))
     assertEquals(report.surface.find(_.node == "outside").flatMap(_.cycleId), None)
-    assert(report.toJson().contains("\"schemaVersion\": 2"))
+    assert(report.toJson().contains("\"schemaVersion\": 3"))
     assertEquals(cycle.cutAnalysis.status, "completedExact")
     assertEquals(cycle.cutAnalysis.greedyCutEstimate, Some(1)) // cutting any ring edge resolves a 3-ring
     assertEquals(cycle.cutAnalysis.solutions, Seq(

@@ -16,7 +16,6 @@ case class HealthSnapshot(
     "health.score" -> Some(health.score.toDouble),
     "structure.nodes" -> Some(structure.nodes.toDouble),
     "structure.edges" -> Some(structure.edges.toDouble),
-    "structure.criticalPathLength" -> Some(structure.criticalPathLength.toDouble),
     "cycles.count" -> Some(cycles.count.toDouble),
     "cycles.nodes" -> Some(cycles.nodes.toDouble),
     "cycles.largestScc" -> Some(cycles.largestScc.toDouble),
@@ -38,10 +37,10 @@ case class HealthHistoryEntry(
     commit: String,
     packages: HealthSnapshot,
     files: Option[HealthSnapshot] = None,
-    schemaVersion: Int = 4
+    schemaVersion: Int = 5
 ) derives JsonRW
 
-case class HealthStructure(nodes: Int, edges: Int, criticalPathLength: Int) derives JsonRW
+case class HealthStructure(nodes: Int, edges: Int) derives JsonRW
 case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: Int) derives JsonRW
 case class HealthSurface(publicSurface: Double, publicMutableSurface: Double, totalDeclaredSurface: Double, encapsulationRatio: Option[Double]) derives JsonRW
 case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int) derives JsonRW
@@ -80,7 +79,7 @@ object HealthSnapshot:
     val surface = HealthSurface(publicSurface, publicMutableSurface, totalDeclaredSurface, if totalDeclaredSurface == 0 then None else Some(publicSurface / totalDeclaredSurface))
     val health = score(report, cycles, surface)
     HealthSnapshot(
-      health.status, health, HealthStructure(report.summary.nodes, report.summary.edges, report.summary.criticalPathLength), cycles, surface,
+      health.status, health, HealthStructure(report.summary.nodes, report.summary.edges), cycles, surface,
       HealthFindings(severityCounts.getOrElse("critical", 0), severityCounts.getOrElse("high", 0), severityCounts.getOrElse("medium", 0), severityCounts.getOrElse("low", 0))
     )
 

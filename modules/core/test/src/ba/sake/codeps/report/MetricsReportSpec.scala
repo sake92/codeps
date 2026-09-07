@@ -11,7 +11,7 @@ class MetricsReportSpec extends munit.FunSuite:
     val report = MetricsReport(
       scope = "packages",
       generatedAt = "2026-08-27T10:00:00Z",
-      summary = Summary(nodes = 100, edges = 214, nodesInCycles = 34, orphans = 3, criticalPathLength = 7),
+      summary = Summary(nodes = 100, edges = 214, nodesInCycles = 34, orphans = 3),
       cycles = Seq(Cycle(
         id = "scc:cache",
         members = Seq("cache", "scheduler"),
@@ -36,10 +36,10 @@ class MetricsReportSpec extends munit.FunSuite:
     )
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"scope\":\"packages\""))
-    assert(json.contains("\"schemaVersion\":2"))
+    assert(json.contains("\"schemaVersion\":3"))
     assert(json.contains("\"generatedAt\":\"2026-08-27T10:00:00Z\""))
     assert(json.contains("\"nodesInCycles\":34"))
-    assert(json.contains("\"criticalPathLength\":7"))
+    assert(!json.contains("criticalPathLength"))
     assert(json.contains("\"extFanIn\":5"))
     assert(json.contains("\"cutAnalysis\""))
     assert(json.contains("\"status\":\"completedExact\""))
@@ -77,9 +77,9 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(!json.contains("articulation_points"))
   }
 
-  test("report serialization always emits schema version 2") {
-    val report = MetricsReport("packages", "2026-08-27T10:00:00Z", Summary(0, 0, 0, 0, 0), Nil, Nil, Nil, Nil, schemaVersion = 1)
-    assert(report.toJson(spaces = 0, sort = false).contains("\"schemaVersion\":2"))
+  test("report serialization always emits schema version 3") {
+    val report = MetricsReport("packages", "2026-08-27T10:00:00Z", Summary(0, 0, 0, 0), Nil, Nil, Nil, Nil, schemaVersion = 1)
+    assert(report.toJson(spaces = 0, sort = false).contains("\"schemaVersion\":3"))
     assert(!report.toJson(spaces = 0, sort = false).contains("\"schemaVersion\":1"))
   }
 
@@ -96,7 +96,7 @@ class MetricsReportSpec extends munit.FunSuite:
     val report = MetricsReport(
       scope = "packages",
       generatedAt = "2026-08-27T10:00:00Z",
-      summary = Summary(10, 20, 10, 0, 1),
+      summary = Summary(10, 20, 10, 0),
       cycles = Seq(Cycle("scc:canonical.source.1", Seq("canonical.source.1", "canonical.target.1"), 10, 0,
         CutAnalysis("completedExact", Some(3), Seq(Solution(cuts)), 4))),
       propagators = Seq.empty,
@@ -112,11 +112,11 @@ class MetricsReportSpec extends munit.FunSuite:
     assert(json.contains("\"internalEdges\":0"))
   }
 
-  test("v2 report JSON can be read back for inspection") {
+  test("v3 report JSON can be read back for inspection") {
     val report = MetricsReport(
       scope = "packages",
       generatedAt = "2026-08-27T10:00:00Z",
-      summary = Summary(2, 2, 2, 0, 0),
+      summary = Summary(2, 2, 2, 0),
       cycles = Seq(Cycle(
         id = "scc:a",
         members = Seq("a", "b"),
@@ -136,7 +136,7 @@ class MetricsReportSpec extends munit.FunSuite:
     assertEquals(report.toJson(spaces = 0, sort = false).parseJson[MetricsReport], report)
   }
 
-  test("v2 report parser rejects schema version 1") {
+  test("report parser rejects schema version 1") {
     val json = """{"schemaVersion":1,"scope":"packages","generatedAt":"2026-08-27T10:00:00Z","summary":{"nodes":0,"edges":0,"nodesInCycles":0,"orphans":0,"criticalPathLength":0},"cycles":[],"propagators":[],"surface":[],"orphans":[],"findings":[]}"""
     val error = intercept[ba.sake.tupson.TupsonException](json.parseJson[MetricsReport])
     assert(error.getMessage.contains("incompatible schema version"))
@@ -160,7 +160,7 @@ class MetricsReportSpec extends munit.FunSuite:
       encapsulationRatio = Some(0.3),
       publicMutableRatio = Some(1.0 / 3.0)
     )
-    val report = MetricsReport("packages", "x", Summary(1, 0, 0, 0, 0), Nil, Nil, Seq(row), Nil,
+    val report = MetricsReport("packages", "x", Summary(1, 0, 0, 0), Nil, Nil, Seq(row), Nil,
       truncation = Some(ReportTruncation(findingsOmitted = 3)))
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"dependentsPerPublicPort\":"))

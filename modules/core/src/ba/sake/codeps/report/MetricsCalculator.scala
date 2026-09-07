@@ -195,8 +195,7 @@ object MetricsCalculator:
         nodes = sg.nodes.size,
         edges = sg.edges.size,
         nodesInCycles = cycleSets.map(_.size).sum,
-        orphans = orphans.size,
-        criticalPathLength = criticalPathLength(sg)
+        orphans = orphans.size
       ),
       cycles = cycles,
       propagators = propagators,
@@ -290,31 +289,6 @@ object MetricsCalculator:
   private def formatNumber(value: Double): String =
     if !value.isNaN && !value.isInfinite && value == math.rint(value) then value.toLong.toString
     else value.toString
-
-  /** Longest path (in number of edges) through the condensation DAG: collapse each
-    * SCC to a single node, drop the self-loops the collapse creates, then relax in
-    * topological order. Acyclic by construction. */
-  private def criticalPathLength(sg: ScopeGraph): Int =
-    val comps = TarjanScc.components(sg.nodes, sg.edges)
-    val compOf = comps.iterator.flatMap(c => c.iterator.map(m => m -> c.min)).toMap
-    val dagEdges = sg.edges.iterator
-      .map(e => (compOf(e.source), compOf(e.target)))
-      .filter { case (s, t) => s != t }
-      .toSet
-    val compIds = comps.map(_.min).toSet
-    val outMap = dagEdges.groupMap(_._1)(_._2)
-    val inDeg = scala.collection.mutable.Map.from(dagEdges.groupMapReduce(_._2)(_ => 1)(_ + _))
-    val dist = scala.collection.mutable.Map.empty[String, Int].withDefaultValue(0)
-    val ready = scala.collection.mutable.SortedSet.from(compIds.filter(id => inDeg.getOrElse(id, 0) == 0))
-    while ready.nonEmpty do
-      val u = ready.head
-      ready -= u
-      // Set.empty (not Nil): the Set + List LUB breaks Ordering inference in Scala 3.7
-      for v <- outMap.getOrElse(u, Set.empty).toSeq.sorted do
-        if dist(v) < dist(u) + 1 then dist(v) = dist(u) + 1
-        inDeg(v) = inDeg(v) - 1
-        if inDeg(v) == 0 then ready += v
-    dist.values.maxOption.getOrElse(0)
 
   // ---------- cycles ----------
 

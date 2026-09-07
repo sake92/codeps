@@ -5,7 +5,7 @@ class ReportMarkdownSpec extends munit.FunSuite:
   private val report = MetricsReport(
     scope = "packages",
     generatedAt = "2026-08-27T10:00:00Z",
-    summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1, criticalPathLength = 1),
+    summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1),
     cycles = Seq(Cycle("scc:cache", Seq("cache", "scheduler", "cache"), 2, 5,
       CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2))),
     propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
@@ -29,7 +29,7 @@ class ReportMarkdownSpec extends munit.FunSuite:
     assert(text.contains("## Public mutability"))
     assert(text.contains("## Public exposure ratio"))
     assert(text.contains("## Orphans"))
-    assert(text.contains("|         Metric         | Value |"))
+    assert(text.contains("Nodes"))
     assert(text.contains("| `cache` | `3`"))
     assert(text.contains("Solution 1"))
     assert(!text.contains("\u001b["))

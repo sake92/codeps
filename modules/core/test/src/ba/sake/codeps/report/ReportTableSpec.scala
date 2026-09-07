@@ -9,7 +9,7 @@ class ReportTableSpec extends munit.FunSuite:
   private val report = MetricsReport(
     scope = "packages",
     generatedAt = "2026-08-27T10:00:00Z",
-    summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1, criticalPathLength = 1),
+    summary = Summary(nodes = 2, edges = 1, nodesInCycles = 2, orphans = 1),
     cycles = Seq(Cycle("scc:cache", Seq("cache", "scheduler", "cache"), 2, 5,
       CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("scheduler", "cache", 4)))), 2))),
     propagators = Seq(PropagatorRow("cache", 3, 2, 2.0)),
@@ -24,7 +24,7 @@ class ReportTableSpec extends munit.FunSuite:
     val text = ReportTable.render(report)
     assert(text.contains("scope: packages"))
     assert(text.contains("nodes: 2"))
-    assert(text.contains("criticalPathLength: 1"))
+    assert(!text.contains("criticalPathLength"))
     assert(text.contains("scc:cache"))
     assert(text.contains("Cycle scc:cache"))
     assert(text.contains("solution 1: scheduler -> cache (w=4)"))
@@ -277,7 +277,7 @@ class ReportTableSpec extends munit.FunSuite:
     val empty = MetricsReport(
       scope = "packages",
       generatedAt = "x",
-      summary = Summary(0, 0, 0, 0, 0),
+      summary = Summary(0, 0, 0, 0),
       cycles = Seq.empty,
       propagators = Seq.empty,
       surface = Seq.empty,
@@ -292,7 +292,7 @@ class ReportTableSpec extends munit.FunSuite:
     val r = MetricsReport(
       scope = "packages",
       generatedAt = "x",
-      summary = Summary(2, 1, 2, 1, 1),
+      summary = Summary(2, 1, 2, 1),
       cycles = Seq(Cycle("scc:cache", Seq("org.sake.cache", "org.sake.scheduler"), 2, 5,
         CutAnalysis("completedExact", Some(1), Seq(Solution(Seq(CutCandidate("org.sake.scheduler", "org.sake.cache", 4)))), 1))),
       propagators = Seq(PropagatorRow("org.sake.cache", 3, 2, 2.0)),

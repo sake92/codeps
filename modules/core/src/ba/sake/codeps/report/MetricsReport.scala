@@ -15,7 +15,7 @@ case class MetricsReport(
     propagators: Seq[PropagatorRow],
     surface: Seq[SurfaceRow],
     orphans: Seq[String],
-    schemaVersion: Int = 2,
+    schemaVersion: Int = 3,
     findings: Seq[Finding] = Nil,
     /** Present when the default JSON inventory limit omitted rows. */
     truncation: Option[ReportTruncation] = None
@@ -25,8 +25,7 @@ case class Summary(
     nodes: Int,
     edges: Int,
     nodesInCycles: Int,
-    orphans: Int,
-    criticalPathLength: Int
+    orphans: Int
 )
 
 /** One cycle (multi-member SCC). `id` = "scc:" + smallest member id — stable
@@ -140,7 +139,7 @@ object MetricsReport:
       }
       val fields = scala.collection.mutable.Map[String, JValue](
         // Schema version is a wire-level contract; callers cannot emit a different version.
-        "schemaVersion" -> JsonRW[Int].write(2),
+        "schemaVersion" -> JsonRW[Int].write(3),
         "scope" -> JsonRW[String].write(value.scope),
         "generatedAt" -> JsonRW[String].write(value.generatedAt),
         "summary" -> JsonRW[Summary].write(value.summary),
@@ -155,8 +154,8 @@ object MetricsReport:
     override def parse(path: String, jValue: JValue): MetricsReport =
       val map = objectFields(path, jValue)
       val schemaVersion = required[Int](map, path, "schemaVersion")
-      if schemaVersion != 2 then
-        throw TupsonException(s"incompatible schema version: $schemaVersion (expected 2)")
+      if schemaVersion != 2 && schemaVersion != 3 then
+        throw TupsonException(s"incompatible schema version: $schemaVersion (expected 2 or 3)")
       MetricsReport(
         requiredString(map, path, "scope"),
         requiredString(map, path, "generatedAt"),
@@ -179,8 +178,7 @@ object Summary:
         "nodes" -> JsonRW[Int].write(value.nodes),
         "edges" -> JsonRW[Int].write(value.edges),
         "nodesInCycles" -> JsonRW[Int].write(value.nodesInCycles),
-        "orphans" -> JsonRW[Int].write(value.orphans),
-        "criticalPathLength" -> JsonRW[Int].write(value.criticalPathLength)
+        "orphans" -> JsonRW[Int].write(value.orphans)
       )
     override def parse(path: String, jValue: JValue): Summary =
       val map = objectFields(path, jValue)
@@ -188,8 +186,7 @@ object Summary:
         required[Int](map, path, "nodes"),
         required[Int](map, path, "edges"),
         required[Int](map, path, "nodesInCycles"),
-        required[Int](map, path, "orphans"),
-        required[Int](map, path, "criticalPathLength")
+        required[Int](map, path, "orphans")
       )
 
 object Cycle:

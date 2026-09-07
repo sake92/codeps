@@ -67,8 +67,7 @@ object ReportMarkdown:
         Seq("Nodes", summary.nodes.toString),
         Seq("Edges", summary.edges.toString),
         Seq("Nodes in cycles", summary.nodesInCycles.toString),
-        Seq("Orphans", summary.orphans.toString),
-        Seq("Critical path length", summary.criticalPathLength.toString)
+        Seq("Orphans", summary.orphans.toString)
       )
     ))
     source.append("\n\n")

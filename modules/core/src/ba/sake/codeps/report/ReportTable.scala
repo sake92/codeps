@@ -50,7 +50,7 @@ object ReportTable:
     val s = report.summary
     sb.append(
       s"  nodes: ${s.nodes}    edges: ${s.edges}    nodesInCycles: ${s.nodesInCycles}" +
-        s"    orphans: ${s.orphans}    criticalPathLength: ${s.criticalPathLength}\n\n"
+        s"    orphans: ${s.orphans}\n\n"
     )
 
     def appendSectionSeparator(): Unit = sb.append(styled(sectionSeparator, separatorAttrs, color) + "\n")

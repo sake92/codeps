@@ -27,17 +27,16 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "packages": {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "scope": "packages",
   "generatedAt": "<ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z>",
   "summary": {
     "nodes": 100,
     "edges": 214,
     "nodesInCycles": 34,
-    "orphans": 3,
-    "criticalPathLength": 7
+    "orphans": 3
   },
   "cycles": [
     {
@@ -89,16 +88,11 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 
 ## Summary
 
-- `schemaVersion` — integer `2`. This is a schema break; v1 is not an accepted output compatibility target.
+- `schemaVersion` — integer `3` inside each report. This is a schema break; v1 is not an accepted output compatibility target.
 
 - `nodes` / `edges` — size of the scope graph.
 - `nodesInCycles` — total members of all cycles (multi-member strongly connected components).
 - `orphans` — count of nodes with zero fan-in and zero fan-out (dead-code-removal candidates).
-- `criticalPathLength` — the longest path, in edges, through the condensation DAG (each SCC
-  collapsed to one node). The structural lower bound on best-case parallel build time, whether
-  or not cycles exist. A value of `0` for a graph that is one SCC means the condensation graph
-  has one node (and therefore no edges); it does **not** mean the underlying code is healthy or
-  acyclic.
 
 ## Findings
 

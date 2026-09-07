@@ -8,5 +8,5 @@ import ba.sake.tupson.JsonRW
 case class MetricsReports(
     packages: MetricsReport,
     files: Option[MetricsReport] = None,
-    schemaVersion: Int = 3
+    schemaVersion: Int = 4
 ) derives JsonRW

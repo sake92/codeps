@@ -100,7 +100,6 @@ object HealthHistoryHtml:
         { key: "health.score", label: "Health score", description: "The overall score from 1 to 10; higher is better.", value: s => s.health.score, format: value => `${value}/10` },
         { key: "structure.nodes", label: "Components", description: "Number of components in the analyzed graph.", value: s => s.structure.nodes, format: formatNumber },
         { key: "structure.edges", label: "Relationships", description: "Number of relationships between components.", value: s => s.structure.edges, format: formatNumber },
-        { key: "structure.criticalPathLength", label: "Maximum layer depth", description: "Longest chain of component dependencies after each cycle is treated as one component. Higher values can indicate more architectural layers.", value: s => s.structure.criticalPathLength, format: formatNumber },
         { key: "cycles.count", label: "Cycles", description: "Number of cyclic strongly connected components.", value: s => s.cycles.count, format: formatNumber },
         { key: "cycles.nodes", label: "Components in cycles", description: "Number of components that belong to cycles.", value: s => s.cycles.nodes, format: formatNumber },
         { key: "cycles.largestScc", label: "Largest cyclic SCC", description: "Number of components in the largest cyclic SCC.", value: s => s.cycles.largestScc, format: formatNumber },
@@ -217,8 +216,7 @@ object HealthHistoryHtml:
         ];
         const architecture = [
           ["Components", "Number of components in the analyzed graph.", formatNumber(snapshot.structure.nodes)],
-          ["Relationships", "Number of relationships between components.", formatNumber(snapshot.structure.edges)],
-          ["Maximum layer depth", "Longest chain of component dependencies after each cycle is treated as one component. Higher values can indicate more architectural layers.", formatNumber(snapshot.structure.criticalPathLength)],
+          ["Relationships", "Number of relationships between components." , formatNumber(snapshot.structure.edges)],
           ["Findings", "Number of reported findings.", formatNumber(Object.values(snapshot.findings).reduce((sum, count) => sum + count, 0))]
         ];
         const surface = [
