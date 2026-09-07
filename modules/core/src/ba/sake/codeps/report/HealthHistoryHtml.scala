@@ -129,7 +129,7 @@ object HealthHistoryHtml:
       const homeSnapshot = entry => {
         const views = scopeSnapshots(entry), snapshots = views.map(([, snapshot]) => snapshot);
         const factor = key => average(snapshots.map(snapshot => snapshot.health.factors[key]));
-        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score))));
+        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score)));
         const publicSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.publicSurface, 0);
         const totalSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.totalDeclaredSurface, 0);
         return {
