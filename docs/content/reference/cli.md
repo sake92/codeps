@@ -73,7 +73,10 @@ For a project named `backend`, default artifacts are:
 | `.codeps/out/backend/report.json` | Latest detailed package and file reports for inspection. |
 | `.codeps/out/backend/index.html` | D3/Pico static status dashboard. |
 
-The dashboard is for general trends, not a claim of perfectly precise architectural measurement.
+The dashboard opens on Home: a rounded average of the available package and file health scores,
+with both underlying scores shown beside it. Use the Packages and Files pills to inspect each
+scope's trend and evidence. The combined score is a directional needle, not a claim of perfectly
+precise architectural measurement.
 
 ## inspect-cycle and inspect-node
 

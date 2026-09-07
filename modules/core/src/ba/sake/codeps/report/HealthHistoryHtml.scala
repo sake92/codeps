@@ -29,6 +29,11 @@ object HealthHistoryHtml:
     main.container > article, main.container > .grid { margin-bottom: .75rem; }
     article { padding: 1rem; }
     h2 { margin-bottom: .5rem; font-size: 1.25rem; }
+    #scope-tabs { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .8rem; }
+    #scope-tabs button { width: auto; min-width: 6.5rem; margin: 0; padding: .45rem .9rem; border-radius: 999px; font-weight: 650; box-shadow: none; }
+    #scope-tabs button[aria-selected="true"] { background: var(--pico-primary); border-color: var(--pico-primary); color: var(--pico-primary-inverse); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pico-primary) 20%, transparent); }
+    #scope-tabs button[aria-selected="false"] { background: transparent; border-color: var(--pico-muted-border-color); color: var(--pico-muted-color); }
+    #scope-tabs button:hover[aria-selected="false"] { border-color: var(--pico-primary); color: var(--pico-primary); }
     #chart { display: block; width: 100%; height: 290px; }
     #chart .domain, #chart .tick line { stroke: var(--pico-muted-border-color); }
     #chart .grid line { stroke: var(--pico-muted-border-color); stroke-dasharray: 3 5; }
@@ -49,6 +54,8 @@ object HealthHistoryHtml:
     .metric-control { margin-bottom: 1rem; }
     #metric { min-height: 0; padding: .35rem .6rem; font-size: .9rem; }
     .score { font-size: 2rem; font-weight: 750; line-height: 1; }
+    .scope-scores { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .7rem; }
+    .scope-score { padding: .3rem .55rem; border: 1px solid var(--pico-muted-border-color); border-radius: var(--pico-border-radius); font-size: .85rem; }
     .status, .snapshot-meta, #metric-help { color: var(--pico-muted-color); }
     .section-note { display: block; color: var(--pico-muted-color); }
     .snapshot-meta { margin-bottom: 0; }
@@ -83,18 +90,18 @@ object HealthHistoryHtml:
         </div>
       </div>
     </article>
-    <article><h2>Health factors</h2><small class="section-note">Higher is better — each factor is scored from 0 to 10.</small><div id="factors"></div></article>
+      <article><h2 id="factors-title">Health factors</h2><small class="section-note">Higher is better — each factor is scored from 0 to 10.</small><div id="factors"></div></article>
     <div class="grid">
-      <article><h2>Cycles</h2><table class="metric-table"><tbody id="cycle-metrics"></tbody></table></article>
-      <article><h2>Architecture</h2><table class="metric-table"><tbody id="architecture-metrics"></tbody></table></article>
-      <article><h2>API surface</h2><table class="metric-table"><tbody id="surface-metrics"></tbody></table></article>
+      <article><h2 id="cycles-title">Cycles</h2><table class="metric-table"><tbody id="cycle-metrics"></tbody></table></article>
+      <article><h2 id="architecture-title">Architecture</h2><table class="metric-table"><tbody id="architecture-metrics"></tbody></table></article>
+      <article><h2 id="surface-title">API surface</h2><table class="metric-table"><tbody id="surface-metrics"></tbody></table></article>
     </div>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script>
     (() => {
       const entries = __HEALTH_DATA__;
-      let scope = "packages";
+      let scope = "home";
       let snapshots = [];
       const metricDefs = [
         { key: "health.score", label: "Health score", description: "The overall score from 1 to 10; higher is better.", value: s => s.health.score, format: value => `${value}/10` },
@@ -113,10 +120,35 @@ object HealthHistoryHtml:
       const chartWrap = document.querySelector(".chart-wrap");
       const tooltip = document.getElementById("chart-tooltip");
       let selected = snapshots.length - 1;
+      const scopeSnapshots = entry => [
+        ["Packages", entry.packages],
+        ...(entry.files ? [["Files", entry.files]] : [])
+      ];
+      const average = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+      const statusForScore = score => score <= 2 ? "critical" : score <= 4 ? "unhealthy" : score <= 6 ? "needs-attention" : score <= 8 ? "healthy" : "excellent";
+      const homeSnapshot = entry => {
+        const views = scopeSnapshots(entry), snapshots = views.map(([, snapshot]) => snapshot);
+        const factor = key => average(snapshots.map(snapshot => snapshot.health.factors[key]));
+        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score))));
+        const publicSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.publicSurface, 0);
+        const totalSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.totalDeclaredSurface, 0);
+        return {
+          at: entry.at, commit: entry.commit, date: new Date(entry.at),
+          status: statusForScore(score),
+          health: { score, factors: { cycles: factor("cycles"), mutableSurface: factor("mutableSurface"), exposedSurface: factor("exposedSurface"), structuralUse: factor("structuralUse"), propagators: factor("propagators") } },
+          cycles: { count: snapshots.reduce((sum, snapshot) => sum + snapshot.cycles.count, 0), nodes: snapshots.reduce((sum, snapshot) => sum + snapshot.cycles.nodes, 0), largestScc: Math.max(...snapshots.map(snapshot => snapshot.cycles.largestScc)) },
+          structure: { nodes: snapshots.reduce((sum, snapshot) => sum + snapshot.structure.nodes, 0), edges: snapshots.reduce((sum, snapshot) => sum + snapshot.structure.edges, 0) },
+          surface: { publicMutableSurface: snapshots.reduce((sum, snapshot) => sum + snapshot.surface.publicMutableSurface, 0), encapsulationRatio: totalSurface === 0 ? null : publicSurface / totalSurface },
+          findings: snapshots.reduce((totals, snapshot) => Object.fromEntries(Object.keys(totals).map(key => [key, totals[key] + snapshot.findings[key]])), { critical: 0, high: 0, medium: 0, low: 0 }),
+          scopeScores: views.map(([label, snapshot]) => ({ label, score: snapshot.health.score, status: snapshot.status, cycles: snapshot.cycles, surface: snapshot.surface }))
+        };
+      };
       function selectScope(nextScope) {
         scope = nextScope;
-        snapshots = entries.flatMap(entry => entry[scope] ? [{ ...entry[scope], at: entry.at, commit: entry.commit, date: new Date(entry.at) }] : []);
+        snapshots = scope === "home" ? entries.map(homeSnapshot) : entries.flatMap(entry => entry[scope] ? [{ ...entry[scope], at: entry.at, commit: entry.commit, date: new Date(entry.at) }] : []);
         selected = Math.max(0, snapshots.length - 1);
+        metricSelect.value = "health.score";
+        document.querySelector(".metric-control").hidden = scope === "home";
         document.querySelectorAll("#scope-tabs button").forEach(button => {
           const active = button.dataset.scope === scope;
           button.setAttribute("aria-selected", active);
@@ -124,10 +156,10 @@ object HealthHistoryHtml:
         });
         updateDetails(); draw();
       }
-      ["packages", ...(entries.some(entry => entry.files) ? ["files"] : [])].forEach(tabScope => {
+      ["home", "packages", ...(entries.some(entry => entry.files) ? ["files"] : [])].forEach(tabScope => {
         const button = document.createElement("button");
         button.type = "button"; button.dataset.scope = tabScope; button.setAttribute("role", "tab");
-        button.textContent = tabScope === "packages" ? "Packages" : "Files";
+        button.textContent = tabScope === "home" ? "Home" : tabScope === "packages" ? "Packages" : "Files";
         button.addEventListener("click", () => selectScope(tabScope));
         document.getElementById("scope-tabs").append(button);
       });
@@ -206,20 +238,33 @@ object HealthHistoryHtml:
       function updateDetails() {
         if (!snapshots.length) { d3.select("#latest").text("No snapshots"); d3.select("#trend-summary").text(""); d3.selectAll("#cycle-metrics, #architecture-metrics, #surface-metrics, #factors").selectAll("*").remove(); return; }
         const snapshot = snapshots[selected], latest = snapshots[snapshots.length - 1];
-        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${latest.health.score}/10</div><div class="status">${escapeHtml(latest.status)}</div><small>${escapeHtml(dateText(latest.at))}</small>`);
+        const scopeScoreCards = latest.scopeScores ? `<div class="scope-scores">${latest.scopeScores.map(view => `<span class="scope-score">${escapeHtml(view.label)} <strong style="color:${statusColor(view.status)}">${view.score}/10</strong></span>`).join("")}</div>` : "";
+        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${latest.health.score}/10</div><div class="status">${scope === "home" ? "combined health needle" : escapeHtml(latest.status)}</div><small>${escapeHtml(dateText(latest.at))}</small>${scopeScoreCards}`);
         d3.select("#trend-summary").text(`${snapshots.length} recorded snapshot${snapshots.length === 1 ? "" : "s"}`);
         d3.select("#selected-meta").html(`Selected snapshot · health <strong>${snapshot.health.score}/10</strong> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span> · ${escapeHtml(dateText(snapshot.at))} · commit <strong>${escapeHtml(shortCommit(snapshot.commit))}</strong>`);
-        const cycles = [
+        const home = scope === "home";
+        document.getElementById("cycles-title").textContent = home ? "Cycle signals" : "Cycles";
+        document.getElementById("architecture-title").textContent = home ? "Scope scores" : "Architecture";
+        document.getElementById("surface-title").textContent = home ? "Mutable surface" : "API surface";
+        document.getElementById("factors-title").textContent = home ? "Combined health factors" : "Health factors";
+        const cycles = home ? snapshot.scopeScores.flatMap(view => [
+          [`${view.label} cycles`, "Cyclic strongly connected components in this view.", formatNumber(view.cycles.count)],
+          [`${view.label} largest cycle`, "Largest cyclic strongly connected component in this view.", formatNumber(view.cycles.largestScc)]
+        ]) : [
           ["Cycles", "Number of cyclic strongly connected components.", formatNumber(snapshot.cycles.count)],
           ["Components in cycles", "Number of components that belong to cycles.", formatNumber(snapshot.cycles.nodes)],
           ["Largest cyclic SCC", "Number of components in the largest cyclic SCC.", formatNumber(snapshot.cycles.largestScc)]
         ];
-        const architecture = [
+        const architecture = home ? snapshot.scopeScores.map(view => [
+          `${view.label} health`, "The underlying scope score; use its tab to inspect the evidence.", `${view.score}/10`
+        ]) : [
           ["Components", "Number of components in the analyzed graph.", formatNumber(snapshot.structure.nodes)],
           ["Relationships", "Number of relationships between components." , formatNumber(snapshot.structure.edges)],
           ["Findings", "Number of reported findings.", formatNumber(Object.values(snapshot.findings).reduce((sum, count) => sum + count, 0))]
         ];
-        const surface = [
+        const surface = home ? snapshot.scopeScores.map(view => [
+          `${view.label} public mutable declarations`, "Public declarations marked mutable in this view.", formatNumber(view.surface.publicMutableSurface)
+        ]) : [
           ["Public mutable declarations", "Number of public declarations marked mutable.", formatNumber(snapshot.surface.publicMutableSurface)],
           ["Public surface ratio", "Percentage of declarations that are public.", snapshot.surface.encapsulationRatio == null ? "—" : `${formatNumber(snapshot.surface.encapsulationRatio * 100)}%`]
         ];
@@ -237,7 +282,7 @@ object HealthHistoryHtml:
         d3.select("#factors").html(factors.map(([name, description, value]) => `<div class="penalty"><span data-tooltip="${escapeHtml(description)}">${name}</span><progress max="10" value="${value}"></progress><small>${formatNumber(value)} / 10</small></div>`).join(""));
       }
       function escapeHtml(value) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
-      updateMetricHelp(); selectScope("packages");
+      updateMetricHelp(); selectScope("home");
     })();
   </script>
 </body>
