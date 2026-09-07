@@ -46,7 +46,7 @@
        <ul>
         <li><a href="#drill-into-files">Drill into files</a>
          <ul>
-          <li><a href="#1-select-exactly-one-package-area">1. Select exactly one package area</a></li>
+          <li><a href="#1-run-status">1. Run status</a></li>
           <li><a href="#2-inspect-the-concrete-file">2. Inspect the concrete file</a></li>
           <li><a href="#3-re-measure-the-change">3. Re-measure the change</a></li>
          </ul></li>
@@ -60,27 +60,30 @@
    </div>
    <h1 id="drill-into-files">Drill into files<a href="#drill-into-files" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p>Use file analysis after package triage has named a package worth changing. This is the level that helps with incremental-compilation pain: a file cycle or hub can force changes through more of the build than intended.</p>
-   <h2 id="1-select-exactly-one-package-area">1. Select exactly one package area<a href="#1-select-exactly-one-package-area" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>report-files</code> requires <code>--include</code>; it analyzes the files belonging to the selected package and its children.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-files --include com.example.orders
+   <h2 id="1-run-status">1. Run status<a href="#1-run-status" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>A file-level report needs SemanticDB input (jdeps carries no file information). One project emits both package and file metrics from the same inputs:</p>
+   <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-attr">projects:</span>
+  <span class="hljs-attr">app:</span>
+    <span class="hljs-attr">root:</span> <span class="hljs-string">.</span>
+    <span class="hljs-attr">source:</span> <span class="hljs-string">semanticdb</span>
+    <span class="hljs-attr">inputs:</span> [<span class="hljs-string">classes/META-INF/semanticdb</span>]
+    <span class="hljs-attr">include:</span> [<span class="hljs-string">com.example.orders</span>]
 </code></pre>
-   <p>The output uses the same sections as the package report, but ids are source-file paths. Start with cycles, then change propagators, then surface risks.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status --project app
+</code></pre>
+   <p>The report uses the same sections as the package report, but ids are source-file paths. Start with cycles, then change propagators, then surface risks.</p>
    <h2 id="2-inspect-the-concrete-file">2. Inspect the concrete file<a href="#2-inspect-the-concrete-file" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Save or use the cached report, then inspect an id from the output:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-node --scope files --id src/com/example/orders/OrderService.scala
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-node --project app --scope files --id src/com/example/orders/OrderService.scala
 </code></pre>
-   <p>For a file-level cycle, enable bounded cut analysis and inspect the SCC:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps report-files --include com.example.orders --analyze-cuts
-codeps inspect-cycle --scope files --id scc:src/com/example/orders/OrderService.scala
+   <p>For a file-level cycle, inspect the SCC directly:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --project app --scope files --id scc:src/com/example/orders/OrderService.scala
 </code></pre>
-   <p>Use the witness cycle to follow the actual dependency path in the source. A cut candidate is not an instruction to delete an import; common fixes are moving an abstraction to the owning package, inverting a dependency, or narrowing a file's public surface.</p>
+   <p>Cut analysis is not currently exposed by the CLI, so <code>cutAnalysis.status</code> is always <code>notRequested</code>; use <code>members</code> and <code>witnessCycle</code> to follow the actual dependency path in the source. A cycle finding is not an instruction to delete an import; common fixes are moving an abstraction to the owning package, inverting a dependency, or narrowing a file's public surface.</p>
    <h2 id="3-re-measure-the-change">3. Re-measure the change<a href="#3-re-measure-the-change" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>After the refactor, rebuild compiler output and run the same scoped report. Compare the targeted cycle, fan-in/out, and exposed surface—not just the overall health status.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb
-codeps report-files --include com.example.orders
-codeps health-snapshot --format markdown
+   <p>After the refactor, rebuild compiler output (so the SemanticDB files are current) and run <code>codeps status</code> again for the same project. Compare the targeted cycle, fan-in/out, and exposed surface — not just the overall health status.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status --project app
 </code></pre>
-   <p>File reports need SemanticDB input. jdeps exports package information only, so use <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage</a> for a jdeps project.</p>
+   <p>jdeps-sourced projects have no file graph, so use <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage</a> instead when your project's <code>source</code> is <code>jdeps</code>.</p>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/tutorials/package-triage.html">⬅️ Find package pain points</a> <span></span> <span></span>
    </div>

@@ -59,12 +59,10 @@
   <span class="hljs-attr">app:</span>
     <span class="hljs-attr">source:</span> <span class="hljs-string">semanticdb</span>
     <span class="hljs-attr">inputs:</span> [<span class="hljs-string">classes/META-INF/semanticdb</span>]
-    <span class="hljs-attr">scope:</span> <span class="hljs-string">packages</span>
     <span class="hljs-attr">skip-tests:</span> <span class="hljs-literal">true</span>
 </code></pre>
    <p>For jdeps, use <code>source: jdeps</code> and point <code>inputs</code> at the text produced by <code>jdeps -verbose:class</code> instead. See <a href="https://sake92.github.io/codeps/howtos/semdb.html">SemanticDB setup</a> and <a href="https://sake92.github.io/codeps/howtos/jdeps.html">jdeps setup</a> for input locations.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar status
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
 </code></pre>
    <p>The dashboard is at <code>.codeps/out/app/index.html</code>; history is stored in <code>.codeps/app.ndjson</code>. Commit the configuration and history if you want a trend that follows the repository. Use <code>inspect-cycle</code> and <code>inspect-node</code> when a dashboard metric points to a concrete item to investigate.</p>
    <p>The <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> describes all configuration fields.</p>

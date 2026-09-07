@@ -60,10 +60,7 @@
     <div></div>
    </div>
    <h1 id="cli">CLI<a href="#cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps</code> has one normal workflow: configure the projects in the repository, then run <code>codeps status</code>. It parses source data, analyzes the configured scope, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar status
-</code></pre>
+   <p><code>codeps</code> has one normal workflow: configure the projects in the repository, then run <code>codeps status</code>. It parses source data, analyzes both package and file granularity when available, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.</p>
    <p>The only other public commands open detail from the most recent cached report:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --project backend --id scc:example.orders
 codeps inspect-node --project backend --id example.orders
@@ -77,7 +74,6 @@ codeps inspect-node --project backend --id example.orders
     <span class="hljs-attr">source:</span> <span class="hljs-string">semanticdb</span>
     <span class="hljs-attr">inputs:</span>
       <span class="hljs-bullet">-</span> <span class="hljs-string">.deder/out/app/compile/semanticdb</span>
-    <span class="hljs-attr">scope:</span> <span class="hljs-string">packages</span>
     <span class="hljs-attr">skip-tests:</span> <span class="hljs-literal">true</span>
     <span class="hljs-attr">exclude:</span> [<span class="hljs-string">java.**</span>, <span class="hljs-string">scala.**</span>]
     <span class="hljs-attr">significance:</span> <span class="hljs-number">0.01</span>
@@ -87,7 +83,6 @@ codeps inspect-node --project backend --id example.orders
     <span class="hljs-attr">root:</span> <span class="hljs-string">services/legacy</span>
     <span class="hljs-attr">source:</span> <span class="hljs-string">jdeps</span>
     <span class="hljs-attr">inputs:</span> [<span class="hljs-string">target/jdeps.txt</span>]
-    <span class="hljs-attr">scope:</span> <span class="hljs-string">packages</span>
 </code></pre>
    <table>
     <thead>
@@ -112,11 +107,6 @@ codeps inspect-node --project backend --id example.orders
       <td><code>inputs</code></td>
       <td>required</td>
       <td>SemanticDB directories, jdeps files, or exactly one export JSON file.</td>
-     </tr>
-     <tr>
-      <td><code>scope</code></td>
-      <td><code>packages</code></td>
-      <td><code>packages</code> or <code>files</code>. Use a separate named project when you want both histories.</td>
      </tr>
      <tr>
       <td><code>include</code>, <code>exclude</code>, <code>collapse</code></td>
@@ -165,7 +155,7 @@ codeps inspect-node --project backend --id example.orders
      </tr>
      <tr>
       <td><code>.codeps/out/backend/report.json</code></td>
-      <td>Latest detailed report for inspection.</td>
+      <td>Latest detailed package and file reports for inspection.</td>
      </tr>
      <tr>
       <td><code>.codeps/out/backend/index.html</code></td>
@@ -173,15 +163,15 @@ codeps inspect-node --project backend --id example.orders
      </tr>
     </tbody>
    </table>
-   <p>The dashboard is for general trends, not a claim of perfectly precise architectural measurement.</p>
+   <p>The dashboard opens on Home: a one-decimal average of the available package and file health scores, with both underlying scores shown beside it. Use the Packages and Files pills to inspect each scope's trend and evidence. The combined score is directional, not a claim of perfectly precise architectural measurement.</p>
    <h2 id="inspect-cycle-and-inspect-node">inspect-cycle and inspect-node<a href="#inspect-cycle-and-inspect-node" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id &lt;cycle-id&gt; [--project id] [--config path] [--format &lt;table|json&gt;]
 codeps inspect-node --id &lt;node-id&gt; [--project id] [--config path] [--format &lt;table|json&gt;]
 </code></pre>
-   <p>Both read <code>.codeps/out/&lt;project&gt;/report.json</code>; run <code>codeps status</code> first. When the config has more than one project, <code>--project</code> is required.</p>
+   <p>Both read <code>.codeps/out/&lt;project&gt;/report.json</code>; pass <code>--scope files</code> for file-level detail (packages is the default). Run <code>codeps status</code> first. When the config has more than one project, <code>--project</code> is required.</p>
    <h2 id="github-pages-ci">GitHub Pages CI<a href="#github-pages-ci" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Commit <code>.codeps/config.yaml</code> and the desired <code>.codeps/&lt;project&gt;.ndjson</code> history. Generate the site in CI, then publish the per-project directory directly:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">java -jar codeps.jar status
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
 cp -R .codeps/out/backend site
 </code></pre>
    <p>That produces <code>site/index.html</code> for the <code>backend</code> project. codeps never commits history or deploys Pages for you.</p>

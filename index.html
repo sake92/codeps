@@ -56,15 +56,17 @@
    <h1 id="codeps">codeps<a href="#codeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p>codeps tracks broad dependency-health trends for JVM projects. It reads compiler output, identifies cycles and coupling signals, keeps compact history, and generates a static dashboard for each configured project.</p>
    <p>Configure the repository once, then run one command in CI:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
+   <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
+java -jar codeps.jar status
 </code></pre>
+   <p>The examples below use <code>codeps</code> as the installed CLI command.</p>
    <p>The command writes:</p>
    <ul>
-    <li><code>.codeps/&lt;project&gt;.ndjson</code> — compact history intended for Git.</li>
+    <li><code>.codeps/&lt;project&gt;.ndjson</code> — compact package/file health history intended for Git.</li>
     <li><code>.codeps/out/&lt;project&gt;/report.json</code> — latest detailed report.</li>
     <li><code>.codeps/out/&lt;project&gt;/index.html</code> — interactive D3/Pico dashboard.</li>
    </ul>
-   <p>Use <code>codeps inspect-cycle</code> or <code>codeps inspect-node</code> to drill into a saved report after the dashboard identifies something worth investigating. The report is a trend signal, not a substitute for architectural judgment: its metrics are intended to be good enough to reveal a direction of travel.</p>
+   <p>Use <code>codeps inspect-cycle</code> or <code>codeps inspect-node</code> to drill into a saved report after the dashboard identifies something worth investigating; pass <code>--scope files</code> for file detail. The report is a trend signal, not a substitute for architectural judgment: its metrics are intended to be good enough to reveal a direction of travel.</p>
    <p>See the <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for the repository configuration and GitHub Pages workflow, <a href="https://sake92.github.io/codeps/tutorials">Tutorials</a> for guided setup, and <a href="https://sake92.github.io/codeps/howtos">How Tos</a> for SemanticDB and jdeps input.</p>
   </main>
   <footer class="pico container">codeps | Code deps health tracker</footer>

@@ -55,11 +55,8 @@
    </div>
    <h1 id="track-status-in-ci">Track status in CI<a href="#track-status-in-ci" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p>Keep <code>.codeps/config.yaml</code> in the repository. After the normal compile step has produced SemanticDB (or jdeps input), run status:</p>
-   <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Download</span> <span class="hljs-string">codeps</span>
-  <span class="hljs-attr">run:</span> <span class="hljs-string">curl</span> <span class="hljs-string">-L</span> <span class="hljs-string">-o</span> <span class="hljs-string">codeps.jar</span> <span class="hljs-string">https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar</span>
-
-<span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">codebase</span> <span class="hljs-string">status</span>
-  <span class="hljs-attr">run:</span> <span class="hljs-string">java</span> <span class="hljs-string">-jar</span> <span class="hljs-string">codeps.jar</span> <span class="hljs-string">status</span>
+   <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">codebase</span> <span class="hljs-string">status</span>
+  <span class="hljs-attr">run:</span> <span class="hljs-string">codeps</span> <span class="hljs-string">status</span>
 </code></pre>
    <p>For a project named <code>backend</code>, CI now has:</p>
    <ul>
@@ -70,7 +67,7 @@
    <pre><code class="language-shell hljs" data-highlighted="yes">mkdir -p site
 cp -R .codeps/out/backend/. site/
 </code></pre>
-   <p>The page uses Pico CSS and D3 from jsDelivr. Keep analysis configuration stable while tracking a history; if its scope or filters change materially, begin a new history rather than treating unlike snapshots as comparable.</p>
+   <p>The page uses Pico CSS and D3 from jsDelivr. Keep analysis configuration stable while tracking a history; if its inputs, filters, test handling, or collapse rules change materially, begin a new history rather than treating unlike snapshots as comparable.</p>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/tutorials/quickstart.html">⬅️ First health snapshot</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/tutorials/package-triage.html">Find package pain points ➡️</a>
    </div>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="the codeps report JSON format and Markdown/table triage views — findings, cycles, surface, orphans">
+  <meta name="description" content="the codeps report JSON format — findings, cycles, propagators, surface, orphans">
   <title> Metrics report | codeps </title>
   <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
@@ -49,6 +49,7 @@
           <li><a href="#structure">Structure</a></li>
           <li><a href="#summary">Summary</a></li>
           <li><a href="#findings">Findings</a></li>
+          <li><a href="#history-and-dashboard">History and dashboard</a></li>
           <li><a href="#cycles">Cycles</a></li>
           <li><a href="#change-propagators">Change propagators</a></li>
           <li><a href="#surface">Surface</a>
@@ -67,23 +68,25 @@
     <div></div>
    </div>
    <h1 id="metrics-report">Metrics report<a href="#metrics-report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
-   <p><code>codeps report-packages</code> or <code>codeps report-files</code> consumes the <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> (a file, or stdin via <code>-</code>) and emits a single flat JSON document: per-scope metrics over the graph's <strong>packages</strong>, or over the <strong>files</strong> of the packages selected with <code>--include</code>. The <code>table</code> and <code>markdown</code> formats present the same report as bounded human triage; Markdown is deterministic GitHub-Flavored Markdown and never contains ANSI styling.</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps export --from semanticdb --input classes/META-INF/semanticdb | codeps report-packages --format json --input - &gt; report.json
+   <p><code>codeps status</code> consumes each configured project's source (SemanticDB, jdeps, or an existing <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> JSON file) and writes one JSON document to <code>.codeps/out/&lt;project&gt;/report.json</code>. It has a top-level <code>packages</code> report and, where source data contains files, a top-level <code>files</code> report. <code>inspect-cycle</code> and <code>inspect-node</code> read this cached file to render one cycle or node in detail; use <code>--scope files</code> for file detail.</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
+cat .codeps/out/root/report.json
 </code></pre>
-   <p>Core metrics are computed fresh from the graph's node/edge list on every run. A report without <code>--analyze-cuts</code> does no cut search and is a pure function of its input; optional budgeted cut analysis is explicit and can stop at a wall-clock deadline. Set the <code>SOURCE_DATE_EPOCH</code> env var (epoch seconds) to pin <code>generatedAt</code> for deterministic CI diffs.</p>
+   <p>Core metrics are computed fresh from the graph's node/edge list on every run, so a report is a pure function of its input. Budgeted cycle-cut analysis exists in the core library but is not currently wired into the CLI or config, so every cycle's <code>cutAnalysis.status</code> is <code>notRequested</code> in practice (see <a href="#cycles">Cycles</a>). Set the <code>SOURCE_DATE_EPOCH</code> env var (epoch seconds) to pin <code>generatedAt</code> for deterministic CI diffs.</p>
    <h2 id="structure">Structure<a href="#structure" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-json hljs" data-highlighted="yes"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"schemaVersion"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"scope"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"packages"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"generatedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"&lt;ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z&gt;"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"summary"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">100</span><span class="hljs-punctuation">,</span>
-    <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">214</span><span class="hljs-punctuation">,</span>
-    <span class="hljs-attr">"nodesInCycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">34</span><span class="hljs-punctuation">,</span>
-    <span class="hljs-attr">"orphans"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span>
-    <span class="hljs-attr">"criticalPathLength"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">7</span>
-  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"cycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+  <span class="hljs-attr">"schemaVersion"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"packages"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"schemaVersion"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"scope"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"packages"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"generatedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"&lt;ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z&gt;"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"summary"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+      <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">100</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">214</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"nodesInCycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">34</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"orphans"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span>
+    <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"cycles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"scc:cache"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"members"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"cache"</span><span class="hljs-punctuation">,</span> <span class="hljs-string">"scheduler"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
@@ -100,11 +103,11 @@
         <span class="hljs-attr">"examinedCandidates"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0</span>
       <span class="hljs-punctuation">}</span>
     <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"propagators"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"propagators"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-punctuation">{</span> <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cache"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanIn"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanOut"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"score"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2.5</span> <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"surface"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"surface"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cache"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanIn"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"fanOut"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"ports"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">9</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"mutPorts"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"exposure"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">24</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"dependentsPerPublicPort"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.33</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"cycleId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"scc:cache"</span><span class="hljs-punctuation">,</span>
@@ -113,9 +116,9 @@
       <span class="hljs-attr">"privateMutableSurface"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"totalDeclaredSurface"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">10</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"encapsulationRatio"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.3</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"publicMutableRatio"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">0.33</span>
     <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"orphans"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"DeadUtil.scala"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"findings"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+    <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"orphans"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"DeadUtil.scala"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"findings"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cycle:scc:cache"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"kind"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cycle"</span><span class="hljs-punctuation">,</span>
@@ -125,13 +128,18 @@
       <span class="hljs-attr">"confidence"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"high"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"nextAction"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"inspect-cycle scc:cache"</span>
     <span class="hljs-punctuation">}</span>
-  <span class="hljs-punctuation">]</span>
+    <span class="hljs-punctuation">]</span>
+  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"files"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">"scope"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"files"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"..."</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"same report shape"</span> <span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
    <h2 id="summary">Summary<a href="#summary" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
     <li>
-     <p><code>schemaVersion</code> — integer <code>2</code>. This is a schema break; v1 is not an accepted output compatibility target.</p>
+     <p>The outer <code>schemaVersion</code> is <code>4</code>; each scope report has <code>schemaVersion</code> <code>3</code>.</p>
+    </li>
+    <li>
+     <p><code>packages</code> is always present. <code>files</code> is omitted when the input has no file graph, such as jdeps.</p>
     </li>
     <li>
      <p><code>nodes</code> / <code>edges</code> — size of the scope graph.</p>
@@ -142,12 +150,11 @@
     <li>
      <p><code>orphans</code> — count of nodes with zero fan-in and zero fan-out (dead-code-removal candidates).</p>
     </li>
-    <li>
-     <p><code>criticalPathLength</code> — the longest path, in edges, through the condensation DAG (each SCC collapsed to one node). The structural lower bound on best-case parallel build time, whether or not cycles exist. A value of <code>0</code> for a graph that is one SCC means the condensation graph has one node (and therefore no edges); it does <strong>not</strong> mean the underlying code is healthy or acyclic.</p>
-    </li>
    </ul>
    <h2 id="findings">Findings<a href="#findings" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>findings</code> is a deterministic index of actionable diagnostics. Each finding has a stable <code>id</code>, a <code>kind</code> (<code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, or <code>structuralUse</code>), <code>severity</code>, and <code>subject</code>, plus human-readable <code>evidence</code>, <code>confidence</code>, and a <code>nextAction</code>. Findings are ranked by severity, then metric score, then id. They cover every reported SCC, every above-average propagator, every node with exposed mutable ports, and every node whose structural-use proxy is below <code>1.0</code>. The structural-use kind is a graph proxy based on file/package edges; it does not identify individual declarations. JSON serialization bounds <code>findings</code> at 10,000 rows so large projects remain agent-usable. When rows are omitted, <code>truncation.findingsOmitted</code> records the count. Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound. The in-memory report and <code>--all</code> table or Markdown view retain the complete findings; <code>--all</code> does not raise the JSON cap.</p>
+   <p><code>findings</code> is a deterministic index of actionable diagnostics. Each finding has a stable <code>id</code>, a <code>kind</code> (<code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, or <code>structuralUse</code>), <code>severity</code>, and <code>subject</code>, plus human-readable <code>evidence</code>, <code>confidence</code>, and a <code>nextAction</code>. Findings are ranked by severity, then metric score, then id. They cover every reported SCC, every above-average propagator, every node with exposed mutable ports, and every node whose structural-use proxy is below <code>1.0</code>. The structural-use kind is a graph proxy based on file/package edges; it does not identify individual declarations. JSON serialization bounds <code>findings</code> at 10,000 rows so large projects remain agent-usable. When rows are omitted, <code>truncation.findingsOmitted</code> records the count. Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound.</p>
+   <h2 id="history-and-dashboard">History and dashboard<a href="#history-and-dashboard" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p><code>.codeps/&lt;project&gt;.ndjson</code> contains one JSON object per recorded commit. Each entry owns its commit metadata once and has direct <code>packages</code> and optional <code>files</code> health sections. Scores are stored and displayed to one decimal place. The dashboard's Home tab shows the one-decimal average of the available package and file scores, with both underlying scores visible; it is a compact directional summary, not a replacement for either scope's evidence.</p>
    <h2 id="cycles">Cycles<a href="#cycles" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>A cycle is a strongly connected component with more than 1 member (Tarjan's algorithm). Singleton components are just acyclic nodes and are never reported.</p>
    <ul>
@@ -165,18 +172,16 @@
       <li><code>solutions</code> — up to 3 <strong>complete</strong> ways to break the cycle, simplest first. Each solution is a list of <code>cuts</code> (<code>{edge, weight}</code>); removing ALL of them together dissolves the cycle (no multi-member component remains among its members). A solution can be 1 edge or several. Results are ranked by fewest cuts, cheapest total weight, then lexicographic order. Sets containing a smaller working solution are skipped. Partial candidates are never serialized.</li>
       <li><code>examinedCandidates</code> — number of candidate simulations started before the budget check stopped the search.</li>
      </ul></li>
-    <li>Cut analysis is opt-in with <code>--analyze-cuts</code>; <code>--cut-time-limit</code> and <code>--cut-candidate-limit</code> bound each SCC's investigation. A report without <code>--analyze-cuts</code> never invokes feedback-edge search, so its cycle <code>cutAnalysis</code> has no estimate or solutions.</li>
-    <li>Table and Markdown output are intentionally shorter than this JSON schema: they display at most 8 cuts from each complete solution (even with <code>--all</code>) and may replace a dense knot's cut list with structural guidance. <code>--format json</code> retains every complete solution, canonical id, status, and budget count.</li>
+    <li>Cut analysis is not currently exposed through <code>codeps status</code> or the config file: nothing enables it, so <code>cutAnalysis.status</code> is always <code>notRequested</code> and <code>greedyCutEstimate</code>/<code>solutions</code> are always empty in practice. Use <code>members</code>, <code>witnessCycle</code>, and <code>extFanIn</code> to reason about a cycle by hand instead.</li>
    </ul>
    <h2 id="change-propagators">Change propagators<a href="#change-propagators" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>The JSON index contains every node above the normalized propagation threshold. Table and Markdown views show the top 10 and reports its shown/total count; pass <code>--all</code> to either report command for the complete table inventory.</p>
+   <p>The JSON index contains every node above the normalized propagation threshold.</p>
    <ul>
     <li><code>score</code> — <code>(fanIn / avgFanIn + fanOut / avgFanOut) / 2</code>, where <code>avgFanIn</code>/<code>avgFanOut</code> are the graph-wide means (<code>edges / nodes</code>). An exactly average node scores <code>1.0</code>; a hub with twice the average fan-in and no fan-out scores <code>2.0</code>. Only nodes above <code>1.0</code> are listed, sorted by score descending. A graph with no edges has no propagators.</li>
     <li><code>fanIn</code>/<code>fanOut</code> — the raw counts (same values as in <code>surface</code>), shown for context.</li>
    </ul>
    <h2 id="surface">Surface<a href="#surface" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>One row per scope node is retained in JSON. Table and Markdown views show the top 10 rows as <code>Surface risks (top 10 of N)</code>; <code>--all</code> shows every row.</p>
-   <p>The compact surface view in table and Markdown output uses the headings <code>node</code>, <code>in</code>, <code>out</code>, <code>ports</code>, <code>mut</code>, <code>encap%</code>, and <code>use</code>. For a wider or focused table or Markdown view, repeat <code>--columns</code> with one or more semantic groups: <code>visibility</code> selects <code>pub</code>, <code>prot</code>, <code>pkg</code>, <code>priv</code>, and <code>total</code>; <code>mutability</code> selects the aggregate <code>mut</code>, mutable declaration counts (<code>pubMut</code>, <code>protMut</code>, <code>pkgMut</code>, and <code>privMut</code>), and <code>mut%</code>; and <code>coupling</code> selects <code>in</code>, <code>out</code>, <code>exp</code>, and <code>use</code>. The focused groups intentionally overlap the compact core where useful, while composed groups render each heading once. <code>--columns all</code> selects the complete accounting view. Groups are rendered in canonical order, and these short aliases apply to table and Markdown headings; JSON continues to use its camelCase field names. With no <code>--columns</code>, the <code>core</code> group is used.</p>
+   <p>One row per scope node is retained in JSON, using camelCase field names.</p>
    <ul>
     <li><code>fanIn</code> / <code>fanOut</code> — count of distinct edges in/out. Always derived from the edge list, never stored separately.</li>
     <li><code>ports</code> — weighted count of exposed members (see <a href="#exposed-surface">Exposed surface</a>).</li>
@@ -207,9 +212,9 @@
    <p><code>private[pkg]</code> and <code>protected</code> members are not exposed; class-private members are omitted from dependency nodes but retained in file declaration counters; <code>var</code> setters are accessors and never count as surface. jdeps data carries no access info, so all its nodes have <code>ports</code>/<code>mutPorts</code> 0 and <code>dependentsPerPublicPort</code> <code>null</code> — a known gap, not silently meaningful.</p>
    <h2 id="orphans">Orphans<a href="#orphans" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <ul>
-    <li><code>orphans</code> — node ids with <code>fanIn == 0 AND fanOut == 0</code>, sorted. Step 1 of the improvement loop: dead-code-removal candidates. JSON retains the complete list; table and Markdown bound it to the top 10 unless <code>--all</code> is supplied.</li>
+    <li><code>orphans</code> — node ids with <code>fanIn == 0 AND fanOut == 0</code>, sorted. Step 1 of the improvement loop: dead-code-removal candidates. JSON retains the complete list.</li>
    </ul>
-   <p>The table and Markdown formats are bounded triage views: findings, cycles, propagators, surface risks, and orphans each include a shown/total label and display at most 10 rows. <code>--all</code> is accepted by <code>report-packages</code> and <code>report-files</code> only and requests every human-view row. JSON remains complete for graph-derived inventories; its <code>findings</code> array is capped at 10,000 rows and describes any omissions in <code>truncation</code>.</p>
+   <p><code>inspect-cycle</code> and <code>inspect-node</code> render one cycle or node from this cached report at a time (as <code>table</code> or <code>json</code>, via <code>--format</code>); there is no CLI command that renders the full findings/cycles/propagators/surface/orphans lists as a table. Use the JSON report directly for the full inventories; the generated <code>.codeps/out/&lt;project&gt;/index.html</code> dashboard shows trends and summary evidence. The JSON <code>findings</code> array is capped at 10,000 rows and describes any omissions in <code>truncation</code>; the other graph-derived inventories (<code>cycles</code>, <code>propagators</code>, <code>surface</code>, <code>orphans</code>) are never bounded.</p>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/reference/cli.html">⬅️ CLI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/json-input.html">Codeps export format ➡️</a>
    </div>
