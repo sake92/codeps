@@ -40,7 +40,7 @@ class MainSpec extends munit.FunSuite:
     val html = os.read(output / "index.html")
     assert(html.contains("Codebase status"))
     assert(html.contains("Home"))
-    assert(html.contains("combined health needle"))
+    assert(html.contains("combined health"))
     assert(html.contains("aria-selected"))
     assert(!html.contains("Maximum layer depth"))
     assert(html.contains("https://cdn.jsdelivr.net/npm/d3@7.9.0"))

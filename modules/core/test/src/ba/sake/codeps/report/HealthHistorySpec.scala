@@ -20,7 +20,7 @@ class HealthHistorySpec extends munit.FunSuite:
   test("history JSON records one commit with direct package and file sections") {
     val value = entry()
     val json = value.toJson(spaces = 0, sort = true)
-    assert(json.contains("\"schemaVersion\":5"))
+    assert(json.contains("\"schemaVersion\":6"))
     assert(json.contains("\"packages\":{"))
     assert(json.contains("\"files\":{"))
     assert(!json.contains("\"scopes\""))
@@ -45,7 +45,7 @@ class HealthHistorySpec extends munit.FunSuite:
   test("NDJSON parser migrates a package-only v1 line") {
     val legacy = """{"at":"2026-09-02T12:00:00Z","commit":"abc123","status":"healthy","health":{"score":7,"status":"healthy","penalties":{"cycles":4,"mutableSurface":2.5,"exposedSurface":2,"structuralUse":1,"propagators":0.5}},"structure":{"nodes":1,"edges":0,"criticalPathLength":0},"cycles":{"count":0,"nodes":0,"largestScc":0,"internalEdges":0},"surface":{"publicSurface":0,"publicMutableSurface":0,"totalDeclaredSurface":0,"encapsulationRatio":null},"findings":{"critical":0,"high":0,"medium":0,"low":0},"schemaVersion":1}"""
     val parsed = HealthHistory.parseNdjson(legacy).toOption.get.head
-    assertEquals(parsed.schemaVersion, 5)
+    assertEquals(parsed.schemaVersion, 6)
     assertEquals(parsed.files, None)
     assertEquals(parsed.packages.health.factors, HealthFactors(0.0, 0.0, 0.0, 0.0, 0.0))
   }
@@ -60,5 +60,5 @@ class HealthHistorySpec extends munit.FunSuite:
     val health = HealthSnapshot.fromReport(report).health
     assertEquals(health.factors.cycles, 3.125)
     assertEquals(health.factors.mutableSurface, 6.0)
-    assertEquals(health.score, 4)
+    assertEquals(health.score, 4.1)
   }

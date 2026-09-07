@@ -13,7 +13,7 @@ case class HealthSnapshot(
     findings: HealthFindings
 ) derives JsonRW:
   def numericMetrics: Seq[(String, Option[Double])] = Seq(
-    "health.score" -> Some(health.score.toDouble),
+    "health.score" -> Some(health.score),
     "structure.nodes" -> Some(structure.nodes.toDouble),
     "structure.edges" -> Some(structure.edges.toDouble),
     "cycles.count" -> Some(cycles.count.toDouble),
@@ -37,7 +37,7 @@ case class HealthHistoryEntry(
     commit: String,
     packages: HealthSnapshot,
     files: Option[HealthSnapshot] = None,
-    schemaVersion: Int = 5
+    schemaVersion: Int = 6
 ) derives JsonRW
 
 case class HealthStructure(nodes: Int, edges: Int) derives JsonRW
@@ -45,7 +45,7 @@ case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: 
 case class HealthSurface(publicSurface: Double, publicMutableSurface: Double, totalDeclaredSurface: Double, encapsulationRatio: Option[Double]) derives JsonRW
 case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int) derives JsonRW
 case class HealthFactors(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double) derives JsonRW
-case class HealthScore(score: Int, status: String, factors: HealthFactors) derives JsonRW
+case class HealthScore(score: Double, status: String, factors: HealthFactors) derives JsonRW
 
 /** Previous history schemas had one package snapshot per line. */
 private case class LegacyHealthSnapshot(
@@ -95,13 +95,14 @@ object HealthSnapshot:
       healthFactor(cyclePenalty, 4.0), healthFactor(mutablePenalty, 2.5), healthFactor(exposedSurfacePenalty, 2.0),
       healthFactor(structuralUsePenalty, 1.0), healthFactor(propagatorPenalty, 0.5)
     )
-    val numericScore = math.max(1, math.min(10, math.floor(10.0 - cyclePenalty - mutablePenalty - exposedSurfacePenalty - structuralUsePenalty - propagatorPenalty).toInt))
+    val rawScore = math.max(1.0, math.min(10.0, 10.0 - cyclePenalty - mutablePenalty - exposedSurfacePenalty - structuralUsePenalty - propagatorPenalty))
+    val numericScore = math.round(rawScore * 10.0) / 10.0
     val status = numericScore match
-      case 1 | 2 => "critical"
-      case 3 | 4 => "unhealthy"
-      case 5 | 6 => "needs-attention"
-      case 7 | 8 => "healthy"
-      case _     => "excellent"
+      case score if score <= 2.0 => "critical"
+      case score if score <= 4.0 => "unhealthy"
+      case score if score <= 6.0 => "needs-attention"
+      case score if score <= 8.0 => "healthy"
+      case _ => "excellent"
     HealthScore(numericScore, status, factors)
 
 private def healthFactor(points: Double, maximum: Double): Double = 10.0 - points / maximum * 10.0

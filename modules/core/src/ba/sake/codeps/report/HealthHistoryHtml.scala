@@ -104,7 +104,7 @@ object HealthHistoryHtml:
       let scope = "home";
       let snapshots = [];
       const metricDefs = [
-        { key: "health.score", label: "Health score", description: "The overall score from 1 to 10; higher is better.", value: s => s.health.score, format: value => `${value}/10` },
+        { key: "health.score", label: "Health score", description: "The overall score from 1 to 10; higher is better.", value: s => s.health.score, format: value => `${scoreText(value)}/10` },
         { key: "structure.nodes", label: "Components", description: "Number of components in the analyzed graph.", value: s => s.structure.nodes, format: formatNumber },
         { key: "structure.edges", label: "Relationships", description: "Number of relationships between components.", value: s => s.structure.edges, format: formatNumber },
         { key: "cycles.count", label: "Cycles", description: "Number of cyclic strongly connected components.", value: s => s.cycles.count, format: formatNumber },
@@ -129,7 +129,7 @@ object HealthHistoryHtml:
       const homeSnapshot = entry => {
         const views = scopeSnapshots(entry), snapshots = views.map(([, snapshot]) => snapshot);
         const factor = key => average(snapshots.map(snapshot => snapshot.health.factors[key]));
-        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score)));
+        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score)) * 10) / 10;
         const publicSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.publicSurface, 0);
         const totalSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.totalDeclaredSurface, 0);
         return {
@@ -173,6 +173,7 @@ object HealthHistoryHtml:
       window.addEventListener("resize", draw);
 
       function formatNumber(value) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+      function scoreText(value) { return Number(value).toFixed(1); }
       function shortCommit(commit) { return commit.length > 12 ? commit.slice(0, 12) : commit; }
       function dateText(at) { return new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
       function statusColor(status) {
@@ -238,10 +239,10 @@ object HealthHistoryHtml:
       function updateDetails() {
         if (!snapshots.length) { d3.select("#latest").text("No snapshots"); d3.select("#trend-summary").text(""); d3.selectAll("#cycle-metrics, #architecture-metrics, #surface-metrics, #factors").selectAll("*").remove(); return; }
         const snapshot = snapshots[selected], latest = snapshots[snapshots.length - 1];
-        const scopeScoreCards = latest.scopeScores ? `<div class="scope-scores">${latest.scopeScores.map(view => `<span class="scope-score">${escapeHtml(view.label)} <strong style="color:${statusColor(view.status)}">${view.score}/10</strong></span>`).join("")}</div>` : "";
-        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${latest.health.score}/10</div><div class="status">${scope === "home" ? "combined health needle" : escapeHtml(latest.status)}</div><small>${escapeHtml(dateText(latest.at))}</small>${scopeScoreCards}`);
+        const scopeScoreCards = latest.scopeScores ? `<div class="scope-scores">${latest.scopeScores.map(view => `<span class="scope-score">${escapeHtml(view.label)} <strong style="color:${statusColor(view.status)}">${scoreText(view.score)}/10</strong></span>`).join("")}</div>` : "";
+        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${scoreText(latest.health.score)}/10</div><div class="status">${scope === "home" ? "combined health" : escapeHtml(latest.status)}</div><small>${escapeHtml(dateText(latest.at))}</small>${scopeScoreCards}`);
         d3.select("#trend-summary").text(`${snapshots.length} recorded snapshot${snapshots.length === 1 ? "" : "s"}`);
-        d3.select("#selected-meta").html(`Selected snapshot · health <strong>${snapshot.health.score}/10</strong> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span> · ${escapeHtml(dateText(snapshot.at))} · commit <strong>${escapeHtml(shortCommit(snapshot.commit))}</strong>`);
+        d3.select("#selected-meta").html(`Selected snapshot · health <strong>${scoreText(snapshot.health.score)}/10</strong> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span> · ${escapeHtml(dateText(snapshot.at))} · commit <strong>${escapeHtml(shortCommit(snapshot.commit))}</strong>`);
         const home = scope === "home";
         document.getElementById("cycles-title").textContent = home ? "Cycle signals" : "Cycles";
         document.getElementById("architecture-title").textContent = home ? "Scope scores" : "Architecture";
@@ -256,7 +257,7 @@ object HealthHistoryHtml:
           ["Largest cyclic SCC", "Number of components in the largest cyclic SCC.", formatNumber(snapshot.cycles.largestScc)]
         ];
         const architecture = home ? snapshot.scopeScores.map(view => [
-          `${view.label} health`, "The underlying scope score; use its tab to inspect the evidence.", `${view.score}/10`
+          `${view.label} health`, "The underlying scope score; use its tab to inspect the evidence.", `${scoreText(view.score)}/10`
         ]) : [
           ["Components", "Number of components in the analyzed graph.", formatNumber(snapshot.structure.nodes)],
           ["Relationships", "Number of relationships between components." , formatNumber(snapshot.structure.edges)],
