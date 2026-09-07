@@ -38,7 +38,7 @@ projects:
 ```
 
 ```shell
-java -jar codeps.jar status
+codeps status
 ```
 
 Only the project's own classes appear — the parser drops edges to external classes that are

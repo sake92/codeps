@@ -25,7 +25,7 @@ projects:
 ```
 
 ```shell
-java -jar codeps.jar status --project app
+codeps status --project app
 ```
 
 The report uses the same sections as the package report, but ids are source-file
@@ -52,11 +52,11 @@ public surface.
 ## 3. Re-measure the change
 
 After the refactor, rebuild compiler output (so the SemanticDB files are current) and run
-`codeps status` again for the file-scoped project. Compare the targeted cycle, fan-in/out, and
+`codeps status` again for the same project. Compare the targeted cycle, fan-in/out, and
 exposed surface — not just the overall health status.
 
 ```shell
-java -jar codeps.jar status --project app
+codeps status --project app
 ```
 
 jdeps-sourced projects have no file graph, so use [package triage](/tutorials/package-triage.html)

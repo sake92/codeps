@@ -13,7 +13,7 @@ contains files, a top-level `files` report. `inspect-cycle` and `inspect-node` r
 file to render one cycle or node in detail; use `--scope files` for file detail.
 
 ```shell
-java -jar codeps.jar status
+codeps status
 cat .codeps/out/root/report.json
 ```
 
@@ -29,16 +29,16 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 {
   "schemaVersion": 4,
   "packages": {
-  "schemaVersion": 3,
-  "scope": "packages",
-  "generatedAt": "<ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z>",
-  "summary": {
-    "nodes": 100,
-    "edges": 214,
-    "nodesInCycles": 34,
-    "orphans": 3
-  },
-  "cycles": [
+    "schemaVersion": 3,
+    "scope": "packages",
+    "generatedAt": "<ISO8601 UTC, second precision, e.g. 2026-08-27T10:00:00Z>",
+    "summary": {
+      "nodes": 100,
+      "edges": 214,
+      "nodesInCycles": 34,
+      "orphans": 3
+    },
+    "cycles": [
     {
       "id": "scc:cache",
       "members": ["cache", "scheduler"],
@@ -55,11 +55,11 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
         "examinedCandidates": 0
       }
     }
-  ],
-  "propagators": [
+    ],
+    "propagators": [
     { "node": "cache", "fanIn": 3, "fanOut": 2, "score": 2.5 }
-  ],
-  "surface": [
+    ],
+    "surface": [
     {
       "node": "cache", "fanIn": 3, "fanOut": 2, "ports": 9, "mutPorts": 5, "exposure": 24,
       "dependentsPerPublicPort": 0.33, "cycleId": "scc:cache",
@@ -68,9 +68,9 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
       "privateMutableSurface": 1, "totalDeclaredSurface": 10,
       "encapsulationRatio": 0.3, "publicMutableRatio": 0.33
     }
-  ],
-  "orphans": ["DeadUtil.scala"],
-  "findings": [
+    ],
+    "orphans": ["DeadUtil.scala"],
+    "findings": [
     {
       "id": "cycle:scc:cache",
       "kind": "cycle",
@@ -80,7 +80,7 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
       "confidence": "high",
       "nextAction": "inspect-cycle scc:cache"
     }
-  ]
+    ]
   },
   "files": { "scope": "files", "...": "same report shape" }
 }
@@ -88,7 +88,8 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 
 ## Summary
 
-- `schemaVersion` — integer `3` inside each report. This is a schema break; v1 is not an accepted output compatibility target.
+- The outer `schemaVersion` is `4`; each scope report has `schemaVersion` `3`.
+- `packages` is always present. `files` is omitted when the input has no file graph, such as jdeps.
 
 - `nodes` / `edges` — size of the scope graph.
 - `nodesInCycles` — total members of all cycles (multi-member strongly connected components).
@@ -105,6 +106,14 @@ The structural-use kind is a graph proxy based on file/package edges; it does no
 individual declarations. JSON serialization bounds `findings` at 10,000 rows so large projects
 remain agent-usable. When rows are omitted, `truncation.findingsOmitted` records the count.
 Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound.
+
+## History and dashboard
+
+`.codeps/<project>.ndjson` contains one JSON object per recorded commit. Each entry owns its
+commit metadata once and has direct `packages` and optional `files` health sections. Scores are
+stored and displayed to one decimal place. The dashboard's Home tab shows the one-decimal average
+of the available package and file scores, with both underlying scores visible; it is a compact
+directional summary, not a replacement for either scope's evidence.
 
 ## Cycles
 
@@ -218,7 +227,8 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
 
 `inspect-cycle` and `inspect-node` render one cycle or node from this cached report at a time
 (as `table` or `json`, via `--format`); there is no CLI command that renders the full
-findings/cycles/propagators/surface/orphans lists as a table. Use the JSON report directly, or
-the generated `.codeps/out/<project>/index.html` dashboard, to browse everything at once. The
+findings/cycles/propagators/surface/orphans lists as a table. Use the JSON report directly for
+the full inventories; the generated `.codeps/out/<project>/index.html` dashboard shows trends
+and summary evidence. The
 JSON `findings` array is capped at 10,000 rows and describes any omissions in `truncation`; the
 other graph-derived inventories (`cycles`, `propagators`, `surface`, `orphans`) are never bounded.

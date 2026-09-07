@@ -8,11 +8,6 @@ description: codeps CLI reference
 
 `codeps` has one normal workflow: configure the projects in the repository, then run `codeps status`. It parses source data, analyzes both package and file granularity when available, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.
 
-```shell
-curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar status
-```
-
 The only other public commands open detail from the most recent cached report:
 
 ```shell
@@ -92,7 +87,7 @@ Both read `.codeps/out/<project>/report.json`; pass `--scope files` for file-lev
 Commit `.codeps/config.yaml` and the desired `.codeps/<project>.ndjson` history. Generate the site in CI, then publish the per-project directory directly:
 
 ```shell
-java -jar codeps.jar status
+codeps status
 cp -R .codeps/out/backend site
 ```
 

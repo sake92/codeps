@@ -72,7 +72,7 @@ projects:
 ```
 
 ```shell
-java -jar codeps.jar status
+codeps status
 ```
 
 External tools should emit both scopes. A package-only tool such as `go list` or `pydeps`

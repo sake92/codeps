@@ -24,7 +24,7 @@ projects:
 ```
 
 ```shell
-java -jar codeps.jar status --project fixture
+codeps status --project fixture
 ```
 
 The rest of this tutorial works exactly the same way with your own SemanticDB or jdeps
@@ -47,12 +47,12 @@ projects:
 ```
 
 ```shell
-java -jar codeps.jar status
+codeps status
 ```
 
 ## 2. Choose one finding
 
-Read the sections in this order:
+Read the report JSON in this order (the dashboard is for trend and summary evidence):
 
 1. **Cycles** — a package SCC blocks clean module boundaries. Start with the
    largest SCC; `extFanIn` shows how much code feeds into it.

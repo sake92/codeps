@@ -22,8 +22,7 @@ For jdeps, use `source: jdeps` and point `inputs` at the text produced by
 [jdeps setup](/howtos/jdeps.html) for input locations.
 
 ```shell
-curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar status
+codeps status
 ```
 
 The dashboard is at `.codeps/out/app/index.html`; history is stored in

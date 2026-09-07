@@ -51,7 +51,7 @@ projects:
 ```
 
 ```shell
-java -jar codeps.jar status
+codeps status
 ```
 
 - `inputs` takes one or more **directories** — the whole tree is walked for `*.semanticdb` files

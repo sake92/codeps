@@ -10,11 +10,8 @@ Keep `.codeps/config.yaml` in the repository. After the normal compile step has
 produced SemanticDB (or jdeps input), run status:
 
 ```yaml
-- name: Download codeps
-  run: curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-
 - name: Generate codebase status
-  run: java -jar codeps.jar status
+  run: codeps status
 ```
 
 For a project named `backend`, CI now has:
@@ -31,5 +28,5 @@ cp -R .codeps/out/backend/. site/
 ```
 
 The page uses Pico CSS and D3 from jsDelivr. Keep analysis configuration stable
-while tracking a history; if its scope or filters change materially, begin a new
+while tracking a history; if its inputs, filters, test handling, or collapse rules change materially, begin a new
 history rather than treating unlike snapshots as comparable.
