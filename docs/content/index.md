@@ -35,5 +35,7 @@ intended to be good enough to reveal a direction of travel.
 See the [CLI reference](/reference/cli.html) for the repository configuration
 and GitHub Pages workflow, [Tutorials](/tutorials) for guided setup, and [How
 Tos](/howtos) for SemanticDB and jdeps input. You can also use the
+[codeps example projects](https://github.com/sake92/codeps-examples) as ready-made
+repositories to try, and the
 [codeps skill](https://github.com/sake92/skills/tree/main/skills/codeps) with
 an AI coding agent.

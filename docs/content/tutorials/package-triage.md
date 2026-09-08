@@ -12,7 +12,8 @@ over-exposed package deserves attention—not how to rewrite the whole system.
 ## Try the bundled example (optional)
 
 If you want to explore a report before configuring your own project, clone the
-[codeps repository](https://github.com/sake92/codeps) and point a project at its small
+[codeps repository](https://github.com/sake92/codeps) or the
+[example projects](https://github.com/sake92/codeps-examples), then point a project at its small
 checked-in graph:
 
 ```yaml
@@ -43,7 +44,7 @@ projects:
     source: semanticdb
     inputs: [classes/META-INF/semanticdb]
     include: [com.example]
-    exclude: [java.**, scala.**]
+    exclude: [com.example.internal]
 ```
 
 ```shell
@@ -90,7 +91,7 @@ Collapse an uninteresting subtree to one node with the `collapse` config field, 
 `codeps status`:
 
 ```yaml
-    collapse: [com.example.generated.**]
+    collapse: [com.example.generated.*]
 ```
 
 When a package is clearly the problem, move to

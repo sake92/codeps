@@ -60,11 +60,12 @@ projects:
     source: jdeps
     inputs: [jdeps.txt]
     include: [com.example]
-    exclude: [java.**, scala.**]
+    exclude: [com.example.internal]
 ```
 
-> Note: excludes are package patterns matched against each node's root package —
-> `java.**` excludes everything under `java` (see [Include / exclude patterns](/reference/cli.html#include--exclude-patterns)).
+> Note: excludes are package prefixes matched against each node's root package. To filter JDK
+> noise in this example, use `exclude: [java, scala]`; these are package prefixes, not file
+> globs (see [Include / exclude patterns](/reference/cli.html#include--exclude-patterns)).
 
 ## Collapsing
 

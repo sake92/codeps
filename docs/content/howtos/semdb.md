@@ -67,8 +67,9 @@ and `inspect-node` report-only detail views.
 
 ## Filtering and collapsing
 
-`include`/`exclude` config fields take package patterns: a pattern `com.example` matches the
-package itself and everything below it; excludes win over includes.
+`include`/`exclude` config fields take package prefixes, not glob patterns: a pattern
+`com.example` matches the package itself and everything below it; excludes win over includes.
+For example, use `java` to exclude the JDK package tree, not `java.**`.
 
 ```yaml
 projects:

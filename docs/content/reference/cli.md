@@ -29,7 +29,7 @@ projects:
     inputs:
       - .deder/out/app/compile/semanticdb
     skip-tests: true
-    exclude: [java.**, scala.**]
+    exclude: [com.example.internal]
     significance: 0.01
     max-snapshot-age: 7d
 
@@ -51,6 +51,17 @@ projects:
 | `max-snapshot-age` | `7d` | Periodic checkpoint age (`off` disables checkpoints). |
 
 Keep this configuration stable for a history you intend to compare. codeps does not fingerprint settings or segment charts: when analysis settings change materially, start that project's history again deliberately.
+
+### Include / exclude patterns
+
+`include` and `exclude` values are package prefixes, not file globs or other wildcard
+patterns. A pattern such as `com.example.internal` matches that package and every subpackage
+below it; `exclude` wins when a node matches both an include and an exclude. For example, to
+exclude the JDK package tree, use `java`, not `java.**`.
+
+The trailing `*` and `**` syntax belongs to `collapse` rules: `com.example.generated.*`
+collapses each immediate subpackage into its own node, while `com.example.generated.**`
+collapses the entire subtree into `com.example.generated`.
 
 ## status
 

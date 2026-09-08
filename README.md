@@ -11,6 +11,7 @@ encapsulation —
 over the package graph, or the file graph of the packages you select.
 
 - [Documentation](https://sake92.github.io/codeps/)
+- [Example projects](https://github.com/sake92/codeps-examples)
 - [Codeps skill](https://github.com/sake92/skills/tree/main/skills/codeps)
 
 ## Quick start
