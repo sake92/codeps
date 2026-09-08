@@ -63,7 +63,7 @@
    <h1 id="find-package-pain-points">Find package pain points<a href="#find-package-pain-points" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p>Start broad. A package report tells you which dependency knot, change hub, or over-exposed package deserves attention—not how to rewrite the whole system.</p>
    <h2 id="try-the-bundled-example-optional">Try the bundled example (optional)<a href="#try-the-bundled-example-optional" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>If you want to explore a report before configuring your own project, clone the <a href="https://github.com/sake92/codeps">codeps repository</a> and point a project at its small checked-in graph:</p>
+   <p>If you want to explore a report before configuring your own project, clone the <a href="https://github.com/sake92/codeps">codeps repository</a> or the <a href="https://github.com/sake92/codeps-examples">example projects</a>, then point a project at its small checked-in graph:</p>
    <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-attr">projects:</span>
   <span class="hljs-attr">fixture:</span>
     <span class="hljs-attr">root:</span> <span class="hljs-string">.</span>
@@ -81,7 +81,7 @@
     <span class="hljs-attr">source:</span> <span class="hljs-string">semanticdb</span>
     <span class="hljs-attr">inputs:</span> [<span class="hljs-string">classes/META-INF/semanticdb</span>]
     <span class="hljs-attr">include:</span> [<span class="hljs-string">com.example</span>]
-    <span class="hljs-attr">exclude:</span> [<span class="hljs-string">java.**</span>, <span class="hljs-string">scala.**</span>]
+    <span class="hljs-attr">exclude:</span> [<span class="hljs-string">com.example.internal</span>]
 </code></pre>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
 </code></pre>
@@ -103,7 +103,7 @@ codeps inspect-node --id com.example.orders
    <p>The information a cycle or propagator finding surfaces is an investigation lead. Validate the dependency direction and domain ownership before changing an API.</p>
    <h2 id="4-keep-large-graphs-readable">4. Keep large graphs readable<a href="#4-keep-large-graphs-readable" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Collapse an uninteresting subtree to one node with the <code>collapse</code> config field, then rerun <code>codeps status</code>:</p>
-   <pre><code class="language-yaml hljs" data-highlighted="yes">    <span class="hljs-attr">collapse:</span> [<span class="hljs-string">com.example.generated.**</span>]
+   <pre><code class="language-yaml hljs" data-highlighted="yes">    <span class="hljs-attr">collapse:</span> [<span class="hljs-string">com.example.generated.*</span>]
 </code></pre>
    <p>When a package is clearly the problem, move to <a href="https://sake92.github.io/codeps/tutorials/file-triage.html">file-level drill-down</a> rather than trying to infer the responsible files from package totals.</p>
    <div role="group">

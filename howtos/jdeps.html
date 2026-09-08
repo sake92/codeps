@@ -89,10 +89,10 @@
     <span class="hljs-attr">source:</span> <span class="hljs-string">jdeps</span>
     <span class="hljs-attr">inputs:</span> [<span class="hljs-string">jdeps.txt</span>]
     <span class="hljs-attr">include:</span> [<span class="hljs-string">com.example</span>]
-    <span class="hljs-attr">exclude:</span> [<span class="hljs-string">java.**</span>, <span class="hljs-string">scala.**</span>]
+    <span class="hljs-attr">exclude:</span> [<span class="hljs-string">com.example.internal</span>]
 </code></pre>
    <blockquote>
-    <p>Note: excludes are package patterns matched against each node's root package — <code>java.**</code> excludes everything under <code>java</code> (see <a href="https://sake92.github.io/codeps/reference/cli.html#include--exclude-patterns">Include / exclude patterns</a>).</p>
+    <p>Note: excludes are package prefixes matched against each node's root package. To filter JDK noise in this example, use <code>exclude: [java, scala]</code>; these are package prefixes, not file globs (see <a href="https://sake92.github.io/codeps/reference/cli.html#include--exclude-patterns">Include / exclude patterns</a>).</p>
    </blockquote>
    <h2 id="collapsing">Collapsing<a href="#collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Just like with SemanticDB input, the <code>collapse</code> config field applies:</p>

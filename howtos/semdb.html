@@ -89,7 +89,7 @@
    </ul>
    <p>See the <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> for the full set of configuration fields, and the <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a> for the full field reference, including <code>inspect-cycle</code> and <code>inspect-node</code> report-only detail views.</p>
    <h2 id="filtering-and-collapsing">Filtering and collapsing<a href="#filtering-and-collapsing" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>include</code>/<code>exclude</code> config fields take package patterns: a pattern <code>com.example</code> matches the package itself and everything below it; excludes win over includes.</p>
+   <p><code>include</code>/<code>exclude</code> config fields take package prefixes, not glob patterns: a pattern <code>com.example</code> matches the package itself and everything below it; excludes win over includes. For example, use <code>java</code> to exclude the JDK package tree, not <code>java.**</code>.</p>
    <pre><code class="language-yaml hljs" data-highlighted="yes"><span class="hljs-attr">projects:</span>
   <span class="hljs-attr">app:</span>
     <span class="hljs-attr">root:</span> <span class="hljs-string">.</span>

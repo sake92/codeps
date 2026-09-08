@@ -46,7 +46,10 @@
        <ul>
         <li><a href="#cli">CLI</a>
          <ul>
-          <li><a href="#configuration">Configuration</a></li>
+          <li><a href="#configuration">Configuration</a>
+           <ul>
+            <li><a href="#include--exclude-patterns">Include / exclude patterns</a></li>
+           </ul></li>
           <li><a href="#status">status</a></li>
           <li><a href="#inspect-cycle-and-inspect-node">inspect-cycle and inspect-node</a></li>
           <li><a href="#github-pages-ci">GitHub Pages CI</a></li>
@@ -75,7 +78,7 @@ codeps inspect-node --project backend --id example.orders
     <span class="hljs-attr">inputs:</span>
       <span class="hljs-bullet">-</span> <span class="hljs-string">.deder/out/app/compile/semanticdb</span>
     <span class="hljs-attr">skip-tests:</span> <span class="hljs-literal">true</span>
-    <span class="hljs-attr">exclude:</span> [<span class="hljs-string">java.**</span>, <span class="hljs-string">scala.**</span>]
+    <span class="hljs-attr">exclude:</span> [<span class="hljs-string">com.example.internal</span>]
     <span class="hljs-attr">significance:</span> <span class="hljs-number">0.01</span>
     <span class="hljs-attr">max-snapshot-age:</span> <span class="hljs-string">7d</span>
 
@@ -136,6 +139,9 @@ codeps inspect-node --project backend --id example.orders
     </tbody>
    </table>
    <p>Keep this configuration stable for a history you intend to compare. codeps does not fingerprint settings or segment charts: when analysis settings change materially, start that project's history again deliberately.</p>
+   <h3 id="include--exclude-patterns">Include / exclude patterns<a href="#include--exclude-patterns" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h3>
+   <p><code>include</code> and <code>exclude</code> values are package prefixes, not file globs or other wildcard patterns. A pattern such as <code>com.example.internal</code> matches that package and every subpackage below it; <code>exclude</code> wins when a node matches both an include and an exclude. For example, to exclude the JDK package tree, use <code>java</code>, not <code>java.**</code>.</p>
+   <p>The trailing <code>*</code> and <code>**</code> syntax belongs to <code>collapse</code> rules: <code>com.example.generated.*</code> collapses each immediate subpackage into its own node, while <code>com.example.generated.**</code> collapses the entire subtree into <code>com.example.generated</code>.</p>
    <h2 id="status">status<a href="#status" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps status [--config path] [--project id]... [--commit sha] [--generated-at instant] [--out index.html]
 </code></pre>
