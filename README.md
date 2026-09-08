@@ -26,30 +26,44 @@ Requires a JDK (11+).
 # Download the prebuilt CLI jar
 curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
 
+# In the commands below, `codeps` means `java -jar codeps.jar`.
+
 # Scala: compile with SemanticDB enabled
 scala-cli compile --server=false --semanticdb -d classes src/
 
-# Java: use the JDK's own analyzer
-jdeps -verbose:class -filter:none -cp classes classes > jdeps.txt
-
-# Export the graph, then analyze it
-java -jar codeps.jar export --from semanticdb --input classes/META-INF/semanticdb -o deps.json
-# or: java -jar codeps.jar export --from jdeps --input jdeps.txt -o deps.json
-java -jar codeps.jar report-packages --input deps.json
-# file-level view for one package:
-java -jar codeps.jar report-files --include com.example --input deps.json
-# table is the default; --color auto styles only interactive terminal output
-# use --format markdown for deterministic GFM or --format json for machine-readable JSON
+# Configure codeps to read the compiler output, then analyze it
+mkdir -p .codeps
+cat > .codeps/config.yaml <<'EOF'
+projects:
+  app:
+    root: .
+    source: semanticdb
+    inputs: [classes/META-INF/semanticdb]
+    skip-tests: true
+EOF
+codeps status
 ```
+
+One `status` run writes package and file reports when the selected source
+supplies file data. See the [jdeps setup guide](https://sake92.github.io/codeps/howtos/jdeps.html)
+for Java input.
 
 ### Other languages
 
 For any other ecosystem, produce the [codeps export format](https://sake92.github.io/codeps/reference/json-input.html)
-with a tool of your choice (madge, pydeps, `go list`, ...) and feed it to `report-packages` —
-codeps never parses that source code itself:
+with a tool of your choice (madge, pydeps, `go list`, ...), configure it as an
+`export` source, then run `status` — codeps never parses that source code itself:
 
 ```shell
-madge --json src | jq '... shape it into the codeps export format ...' | java -jar codeps.jar report-packages --input -
+madge --json src | jq '... shape it into the codeps export format ...' > deps.json
+cat > .codeps/config.yaml <<'EOF'
+projects:
+  app:
+    root: .
+    source: export
+    inputs: [deps.json]
+EOF
+codeps status
 ```
 
 The metrics are language-agnostic once the node/edge list carries per-node `isExposed`/`ports`/`mutPorts`
@@ -67,8 +81,7 @@ Developing codeps itself requires [deder](https://sake92.github.io/deder/) (`bre
 
 ```shell
 deder exec -t test      # run all tests
-deder exec -t run -m cli export --from semanticdb --input tmp/examples/example1/classes/META-INF/semanticdb -o /tmp/deps.json
-deder exec -t run -m cli report-packages --input /tmp/deps.json
+deder exec -t run -m cli status
 ```
 
 The website is built with [flatmark](https://github.com/sake92/flatmark):
