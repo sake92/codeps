@@ -11,6 +11,7 @@ encapsulation —
 over the package graph, or the file graph of the packages you select.
 
 - [Documentation](https://sake92.github.io/codeps/)
+- [Codeps skill](https://github.com/sake92/skills/tree/main/skills/codeps)
 - Built with [deder](https://sake92.github.io/deder/) (development only — users run the prebuilt jar)
 
 ## Quick start

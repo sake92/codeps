@@ -175,6 +175,7 @@ object HealthHistoryHtml:
       function formatNumber(value) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
       function scoreText(value) { return Number(value).toFixed(1); }
       function shortCommit(commit) { return commit.length > 12 ? commit.slice(0, 12) : commit; }
+      function axisDateText(date) { return d3.utcFormat("%b %-d, %H:%M UTC")(date); }
       function dateText(at) { return new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
       function statusColor(status) {
         return status === "excellent" || status === "healthy" ? "var(--pico-ins-color)" : status === "needs-attention" ? "var(--pico-mark-background-color)" : "var(--pico-del-color)";
@@ -231,7 +232,7 @@ object HealthHistoryHtml:
         plot.append("rect").attr("class", "chart-hit").attr("width", innerWidth).attr("height", innerHeight)
           .on("pointermove", moveTooltip).on("pointerleave", hideTooltip).on("pointerdown", moveTooltip);
         plot.append("g").attr("class", "grid").call(d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat(() => ""));
-        plot.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(Math.min(5, snapshots.length)).tickFormat(d3.timeFormat("%b %Y")));
+        plot.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(Math.min(5, snapshots.length)).tickFormat(axisDateText));
         plot.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(definition.format));
         plot.append("path").datum(points).attr("class", "trend-line").attr("d", d3.line().defined(point => point.value != null).x(point => x(point.date)).y(point => y(point.value)));
         plot.selectAll(".trend-point").data(valid).join("circle").attr("class", point => point.index === selected ? "trend-point selected-point" : "trend-point").attr("cx", point => x(point.date)).attr("cy", point => y(point.value)).attr("r", point => point.index === selected ? 7 : 5).attr("fill", point => statusColor(point.snapshot.status)).attr("tabindex", 0).attr("role", "button").attr("aria-label", point => `${definition.label}: ${definition.format(point.value)} at ${dateText(point.snapshot.at)}`).on("pointerenter", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointermove", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointerleave", hideTooltip).on("focus", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("blur", hideTooltip).on("click", (_, point) => { selected = point.index; updateDetails(); draw(); }).on("keydown", (event, point) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selected = point.index; updateDetails(); draw(); } });
