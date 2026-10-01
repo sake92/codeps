@@ -76,8 +76,13 @@ jobs:
       - name: Version
         id: vars
         shell: bash
+        env:
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          VERSION="${{ github.event.inputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "version must be semantic (for example, 1.2.3)" >&2
+            exit 2
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "GitHub Action"
