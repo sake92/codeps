@@ -1,0 +1,40 @@
+project:
+  name: codeps
+  description: Code dependency health tracker
+  authors:
+    - Sakib Hadžiavdić
+  links:
+    homepage: https://github.com/sake92/codeps
+  license: Apache-2
+  inceptionYear: 2026
+  stereotype: CLI
+  languages:
+    java:
+      groupId: ba.sake.codeps
+
+release:
+  github:
+    owner: sake92
+    name: codeps
+    overwrite: true
+    changelog:
+      formatted: ALWAYS
+      preset: conventional-commits
+      contributors:
+        format: '- {{contributorName}}{{#contributorUsernameAsLink}} ({{.}}){{/contributorUsernameAsLink}}'
+
+distributions:
+  codeps:
+    type: SINGLE_JAR
+    artifacts:
+      - path: codeps-cli-{{projectVersion}}.jar
+    brew:
+      active: RELEASE
+      formulaName: codeps
+
+packagers:
+  brew:
+    active: NEVER
+    repository:
+      owner: sake92
+      name: homebrew-tap

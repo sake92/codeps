@@ -23,7 +23,10 @@ that existing output. No extra tooling to install.
 Requires a JDK (11+).
 
 ```shell
-# Download the prebuilt CLI jar
+# macOS or Linux (Homebrew)
+brew install sake92/tap/codeps
+
+# Or download the prebuilt CLI jar
 curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
 
 # In the commands below, `codeps` means `java -jar codeps.jar`.

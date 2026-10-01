@@ -3,7 +3,11 @@ name: CD
 on:
   push:
     branches: [main]
-    tags: ['**']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (no v prefix, e.g. 1.2.3)'
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -12,9 +16,13 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  JAVA_VERSION: '21'
+  JAVA_DISTRO: zulu
+
 jobs:
-  build-cli:
-    if: github.repository == 'sake92/codeps'
+  build-main:
+    if: github.event_name == 'push' && github.repository == 'sake92/codeps'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,8 +30,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-java@v5
         with:
-          distribution: zulu
-          java-version: 21
+          distribution: ${{ env.JAVA_DISTRO }}
+          java-version: ${{ env.JAVA_VERSION }}
       - uses: coursier/cache-action@v7
       - name: Set Homebrew env
         shell: bash
@@ -38,13 +46,8 @@ jobs:
       - name: Name the jar
         shell: bash -eo pipefail {0}
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION=$(deder exec -t version -m cli -f json | jq -r '.results.cli')
-            JAR="codeps-cli-${VERSION}.jar"
-          else
-            # fixed name so the rolling "main" release asset gets overridden on every push
-            JAR="codeps-cli-main.jar"
-          fi
+          # fixed name so the rolling "main" release asset gets overridden on every push
+          JAR="codeps-cli-main.jar"
           cp .deder/out/cli/assembly/out.jar "$JAR"
           echo "JAR_NAME=$JAR" >> $GITHUB_ENV
       - name: Upload artifact
@@ -55,12 +58,72 @@ jobs:
           path: ${{ env.JAR_NAME }}
           if-no-files-found: error
       - name: Create GitHub Release
-        # on main pushes: rolling "main" release, always overridden with the latest build
-        # on tag pushes: versioned release (e.g. v1.2.3)
-        # explicit tag_name is required: the action refuses to run without a tag ref
+        # rolling "main" release, always overridden with the latest build
+        # versioned releases are created by the manual JReleaser jobs below
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: main
           files: ${{ env.JAR_NAME }}
-          # no changelog needed for the rolling main release
-          generate_release_notes: ${{ github.ref_type == 'tag' }}
+          generate_release_notes: false
+
+  precheck:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'sake92/codeps'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Version
+        id: vars
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "GitHub Action"
+          git commit -a --allow-empty -m "Releasing version $VERSION"
+          git push origin main
+
+  release:
+    needs: precheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRO }}
+      - uses: coursier/cache-action@v7
+        with:
+          extraFiles: deder.pkl
+      - name: Set Homebrew environment
+        shell: bash
+        run: echo "HOMEBREW_NO_SANDBOX_LINUX=1" >> "$GITHUB_ENV"
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+      - name: Install deder
+        run: brew install sake92/tap/deder
+      - name: Build CLI assembly
+        shell: bash -eo pipefail {0}
+        run: |
+          deder exec -t assembly -m cli
+          cp .deder/out/cli/assembly/out.jar codeps-cli-${{ needs.precheck.outputs.version }}.jar
+      - name: Release and publish Homebrew formula
+        uses: jreleaser/release-action@v2
+        with:
+          arguments: full-release
+        env:
+          JRELEASER_PROJECT_VERSION: ${{ needs.precheck.outputs.version }}
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          JRELEASER_HOMEBREW_GITHUB_TOKEN: ${{ secrets.JRELEASER_HOMEBREW_GITHUB_TOKEN }}
+      - name: Upload JReleaser output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jreleaser-release
+          path: |
+            out/jreleaser/trace.log
+            out/jreleaser/output.properties
