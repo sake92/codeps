@@ -125,7 +125,7 @@ jobs:
           arguments: full-release
         env:
           JRELEASER_PROJECT_VERSION: ${{ needs.precheck.outputs.version }}
-          JRELEASER_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JRELEASER_HOMEBREW_GITHUB_TOKEN: ${{ secrets.JRELEASER_HOMEBREW_GITHUB_TOKEN }}
       - name: Upload JReleaser output
         if: always()
