@@ -89,6 +89,9 @@ jobs:
           git commit -a --allow-empty -m "Releasing version $VERSION"
           git push origin main
 
+  # Releases are manual, not tag-triggered: JReleaser creates the v<version> tag.
+  # On a main push precheck is skipped, so GitHub skips this dependent job; tag
+  # pushes do not trigger this workflow.
   release:
     needs: precheck
     runs-on: ubuntu-latest
