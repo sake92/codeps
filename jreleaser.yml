@@ -31,6 +31,8 @@ distributions:
     brew:
       active: RELEASE
       formulaName: codeps
+      extraProperties:
+        skipJava: true
 
 packagers:
   brew:
