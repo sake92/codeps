@@ -40,9 +40,9 @@
   <main class="pico container">
    <div class="grid">
     <div>
-     <details>
-      <summary>Table of Contents</summary>
-      <div>
+     <details open>
+      <summary>On this page</summary>
+      <nav aria-label="Table of contents">
        <ul>
         <li><a href="#metrics-report">Metrics report</a>
          <ul>
@@ -60,9 +60,8 @@
           <li><a href="#orphans">Orphans</a></li>
          </ul></li>
        </ul>
-      </div>
+      </nav>
      </details>
-     <hr>
     </div>
     <div></div>
     <div></div>
@@ -154,7 +153,7 @@ cat .codeps/out/root/report.json
    <h2 id="findings">Findings<a href="#findings" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>findings</code> is a deterministic index of actionable diagnostics. Each finding has a stable <code>id</code>, a <code>kind</code> (<code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, or <code>structuralUse</code>), <code>severity</code>, and <code>subject</code>, plus human-readable <code>evidence</code>, <code>confidence</code>, and a <code>nextAction</code>. Findings are ranked by severity, then metric score, then id. They cover every reported SCC, every above-average propagator, every node with exposed mutable ports, and every node whose structural-use proxy is below <code>1.0</code>. The structural-use kind is a graph proxy based on file/package edges; it does not identify individual declarations. JSON serialization bounds <code>findings</code> at 10,000 rows so large projects remain agent-usable. When rows are omitted, <code>truncation.findingsOmitted</code> records the count. Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound.</p>
    <h2 id="history-and-dashboard">History and dashboard<a href="#history-and-dashboard" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p><code>.codeps/&lt;project&gt;.ndjson</code> contains one JSON object per recorded commit. Each entry owns its commit metadata once and has direct <code>packages</code> and optional <code>files</code> health sections. Scores are stored and displayed to one decimal place. The dashboard's Home tab shows the one-decimal average of the available package and file scores, with both underlying scores visible; it is a compact directional summary, not a replacement for either scope's evidence.</p>
+   <p><code>.codeps/&lt;project&gt;.ndjson</code> contains one JSON object per recorded commit. Each entry owns its commit metadata once and has direct <code>packages</code> and optional <code>files</code> health sections. Scores are stored and displayed to two decimal places. The dashboard's Home tab shows the two-decimal average of the available package and file scores, with both underlying scores visible; it is a compact directional summary, not a replacement for either scope's evidence.</p>
    <h2 id="cycles">Cycles<a href="#cycles" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>A cycle is a strongly connected component with more than 1 member (Tarjan's algorithm). Singleton components are just acyclic nodes and are never reported.</p>
    <ul>

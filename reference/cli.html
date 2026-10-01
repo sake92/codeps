@@ -40,9 +40,9 @@
   <main class="pico container">
    <div class="grid">
     <div>
-     <details>
-      <summary>Table of Contents</summary>
-      <div>
+     <details open>
+      <summary>On this page</summary>
+      <nav aria-label="Table of contents">
        <ul>
         <li><a href="#cli">CLI</a>
          <ul>
@@ -55,9 +55,8 @@
           <li><a href="#github-pages-ci">GitHub Pages CI</a></li>
          </ul></li>
        </ul>
-      </div>
+      </nav>
      </details>
-     <hr>
     </div>
     <div></div>
     <div></div>
@@ -169,7 +168,7 @@ codeps inspect-node --project backend --id example.orders
      </tr>
     </tbody>
    </table>
-   <p>The dashboard opens on Home: a one-decimal average of the available package and file health scores, with both underlying scores shown beside it. Use the Packages and Files pills to inspect each scope's trend and evidence. The combined score is directional, not a claim of perfectly precise architectural measurement.</p>
+   <p>The dashboard opens on Home: a two-decimal average of the available package and file health scores, with both underlying scores shown beside it. Use the Packages and Files pills to inspect each scope's trend and evidence. The combined score is directional, not a claim of perfectly precise architectural measurement.</p>
    <h2 id="inspect-cycle-and-inspect-node">inspect-cycle and inspect-node<a href="#inspect-cycle-and-inspect-node" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id &lt;cycle-id&gt; [--project id] [--config path] [--format &lt;table|json&gt;]
 codeps inspect-node --id &lt;node-id&gt; [--project id] [--config path] [--format &lt;table|json&gt;]
