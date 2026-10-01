@@ -3,7 +3,6 @@ name: CD
 on:
   push:
     branches: [main]
-    tags: ['**']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -38,13 +37,8 @@ jobs:
       - name: Name the jar
         shell: bash -eo pipefail {0}
         run: |
-          if [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION=$(deder exec -t version -m cli -f json | jq -r '.results.cli')
-            JAR="codeps-cli-${VERSION}.jar"
-          else
-            # fixed name so the rolling "main" release asset gets overridden on every push
-            JAR="codeps-cli-main.jar"
-          fi
+          # fixed name so the rolling "main" release asset gets overridden on every push
+          JAR="codeps-cli-main.jar"
           cp .deder/out/cli/assembly/out.jar "$JAR"
           echo "JAR_NAME=$JAR" >> $GITHUB_ENV
       - name: Upload artifact
@@ -55,12 +49,10 @@ jobs:
           path: ${{ env.JAR_NAME }}
           if-no-files-found: error
       - name: Create GitHub Release
-        # on main pushes: rolling "main" release, always overridden with the latest build
-        # on tag pushes: versioned release (e.g. v1.2.3)
-        # explicit tag_name is required: the action refuses to run without a tag ref
+        # rolling "main" release, always overridden with the latest build
+        # versioned releases are created by JReleaser in release.yml
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: main
           files: ${{ env.JAR_NAME }}
-          # no changelog needed for the rolling main release
-          generate_release_notes: ${{ github.ref_type == 'tag' }}
+          generate_release_notes: false
