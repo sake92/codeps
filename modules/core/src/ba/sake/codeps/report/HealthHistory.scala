@@ -96,7 +96,7 @@ object HealthSnapshot:
       healthFactor(structuralUsePenalty, 1.0), healthFactor(propagatorPenalty, 0.5)
     )
     val rawScore = math.max(1.0, math.min(10.0, 10.0 - cyclePenalty - mutablePenalty - exposedSurfacePenalty - structuralUsePenalty - propagatorPenalty))
-    val numericScore = math.round(rawScore * 10.0) / 10.0
+    val numericScore = math.round(rawScore * 100.0) / 100.0
     val status = numericScore match
       case score if score <= 2.0 => "critical"
       case score if score <= 4.0 => "unhealthy"

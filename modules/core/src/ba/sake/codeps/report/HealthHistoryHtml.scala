@@ -129,7 +129,7 @@ object HealthHistoryHtml:
       const homeSnapshot = entry => {
         const views = scopeSnapshots(entry), snapshots = views.map(([, snapshot]) => snapshot);
         const factor = key => average(snapshots.map(snapshot => snapshot.health.factors[key]));
-        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score)) * 10) / 10;
+        const score = Math.round(average(snapshots.map(snapshot => snapshot.health.score)) * 100) / 100;
         const publicSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.publicSurface, 0);
         const totalSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.totalDeclaredSurface, 0);
         return {
@@ -173,7 +173,7 @@ object HealthHistoryHtml:
       window.addEventListener("resize", draw);
 
       function formatNumber(value) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
-      function scoreText(value) { return Number(value).toFixed(1); }
+      function scoreText(value) { return Number(value).toFixed(2); }
       function shortCommit(commit) { return commit.length > 12 ? commit.slice(0, 12) : commit; }
       function axisDateText(date) { return d3.utcFormat("%b %-d, %H:%M UTC")(date); }
       function dateText(at) { return new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }

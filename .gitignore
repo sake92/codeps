@@ -17,11 +17,6 @@ docs/.flatmark-cache/
 # AI
 docs/superpowers/
 .superpowers/
-# Keep disposable exports, reports, and scratch artifacts in `.codeps/temp/`.
-# Health history is intentionally versioned as top-level newline-delimited JSON.
-.codeps/temp/
-# Reject other top-level artifacts by default, so generated JSON is not committed
-# accidentally.
-.codeps/*
-!.codeps/config.yaml
-!.codeps/*.ndjson
+
+.codeps/out/
+

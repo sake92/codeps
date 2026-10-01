@@ -111,7 +111,7 @@ Cycles, propagators, surface rows, and orphans are not subject to this JSON inve
 
 `.codeps/<project>.ndjson` contains one JSON object per recorded commit. Each entry owns its
 commit metadata once and has direct `packages` and optional `files` health sections. Scores are
-stored and displayed to one decimal place. The dashboard's Home tab shows the one-decimal average
+stored and displayed to two decimal places. The dashboard's Home tab shows the two-decimal average
 of the available package and file scores, with both underlying scores visible; it is a compact
 directional summary, not a replacement for either scope's evidence.
 

@@ -50,15 +50,19 @@ class HealthHistorySpec extends munit.FunSuite:
     assertEquals(parsed.packages.health.factors, HealthFactors(0.0, 0.0, 0.0, 0.0, 0.0))
   }
 
-  test("health score gives cycles the largest capped penalty") {
+  test("health score retains two decimal places after applying penalties") {
     val report = MetricsReport(
-      scope = "packages", generatedAt = "2026-09-02T12:00:00Z", summary = Summary(10, 10, 5, 0),
+      scope = "packages", generatedAt = "2026-09-02T12:00:00Z", summary = Summary(12, 10, 5, 0),
       cycles = Seq(Cycle("scc:a", Seq("a", "b", "c", "d", "e"), 5, 0)), propagators = Seq(PropagatorRow("a", 3, 3, 2.0)),
       surface = Seq(SurfaceRow("a", 0, 0, 0, 0, 0, None, publicSurface = 10, publicMutableSurface = 4, totalDeclaredSurface = 10)),
       orphans = Nil, findings = Seq(Finding("structuralUse:a", "structuralUse", "low", "a", "", "structuralProxy", "inspect-node a"))
     )
     val health = HealthSnapshot.fromReport(report).health
-    assertEquals(health.factors.cycles, 3.125)
+    assert(math.abs(health.factors.cycles - 3.645833333333333) < 1e-12)
     assertEquals(health.factors.mutableSurface, 6.0)
-    assertEquals(health.score, 4.1)
+    assertEquals(health.score, 4.33)
+  }
+
+  test("dashboard formats health scores to two decimal places") {
+    assert(HealthHistoryHtml.render(Seq(entry())).contains("Number(value).toFixed(2)"))
   }
