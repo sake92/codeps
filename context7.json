@@ -1,0 +1,16 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "codeps",
+  "description": "A CLI that analyzes JVM dependency graphs from SemanticDB, jdeps, or the codeps export format and reports dependency health.",
+  "folders": ["docs/content", "modules"],
+  "excludeFolders": ["test", "testFixtures"],
+  "rules": [
+    "Configure projects in the committed .codeps/config.yaml, then run `codeps status` to analyze them.",
+    "Use SemanticDB for Scala compiler output, jdeps for Java dependency output, and export only for an existing codeps export format JSON file.",
+    "Resolve each project's input paths relative to its root; an export source requires exactly one JSON input.",
+    "Keep analysis settings stable when comparing history; deliberately restart that project's history after material settings changes.",
+    "Treat include and exclude as package-prefix patterns, not globs; exclude takes precedence. The * and ** wildcard syntax applies only to collapse rules.",
+    "Use test-pattern only with skip-tests: true; skip-tests removes test files before package analysis.",
+    "Run status before inspect-cycle or inspect-node; specify --project when the config contains multiple projects."
+  ]
+}

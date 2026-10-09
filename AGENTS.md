@@ -25,6 +25,7 @@
 | Report JSON schema | `docs/content/reference/report.md` |
 | Standard JSON export format | `docs/content/reference/json-input.md` |
 | Build config | `deder.pkl` |
+| Context7 library guidance | `context7.json` |
 | CI/CD | `.github/workflows/` |
 
 ## Key Conventions
@@ -32,6 +33,7 @@
 - Tests: munit `FunSuite`, files named `*Spec.scala`.
 - Fixtures: sources in `testFixtures/example1/`; compiled at test runtime by `FixtureCompiler` into `tmp/` (gitignored). `testFixtures/cyclic.json` is a checked-in graph in the codeps export format — used by CLI tests and as the homepage example output.
 - JSON: all emitted JSON field names are camelCase (`generatedAt`, `nodesInCycles`, `solutions`, `propagators`, `score`, `extFanIn`, `fanIn`, `mutPorts`, ...); CLI table headers use the same names. The export graph format is called the *codeps export format* (page title/label; never "common JSON").
+- Keep the actionable usage rules in `context7.json` aligned with the public CLI docs.
 - Generated — do not edit: `docs/_site/`, `.deder/out/`, `tmp/`.
 
 ## Commit Attribution
