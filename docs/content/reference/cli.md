@@ -8,9 +8,10 @@ description: codeps CLI reference
 
 `codeps` has one normal workflow: configure the projects in the repository, then run `codeps status`. It parses source data, analyzes both package and file granularity when available, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.
 
-The only other public commands open detail from the most recent cached report:
+The other public commands select findings or open detail from the most recent cached report:
 
 ```shell
+codeps findings --project backend --limit 10 --format json
 codeps inspect-cycle --project backend --id scc:example.orders
 codeps inspect-node --project backend --id example.orders
 ```
@@ -84,14 +85,51 @@ with both underlying scores shown beside it. Use the Packages and Files pills to
 scope's trend and evidence. The combined score is directional, not a claim of perfectly precise
 architectural measurement.
 
+## findings
+
+```shell
+codeps findings [--project id] [--config path] [--scope <packages|files>] [--limit n] [--severity value] [--kind value] [--format <table|json>]
+```
+
+Reads the cached report without analyzing inputs or recording history. Defaults are
+`--scope packages`, `--limit 10`, and `--format table`. The limit must be between 1 and
+10,000. `--project` is required when the config contains multiple projects.
+
+`--severity` matches exactly one of `critical`, `high`, `medium`, or `low`. `--kind`
+matches exactly one of `cycle`, `propagator`, `mutableSurface`, or `structuralUse`.
+Both filters apply together, before the limit; rows retain their cached ranking.
+No matches is a successful result with an empty `findings` array.
+
+JSON follows the [findings selection schema](/schemas/findings.schema.json):
+
+| Field | Meaning |
+|---|---|
+| `schemaVersion` | `1` for the findings selection envelope. |
+| `project`, `scope`, `generatedAt` | Selected project, report scope, and cached analysis time. |
+| `total` | Number of cached findings matching the filters, before the limit. |
+| `omitted` | Matching cached findings omitted by the limit. `total = findings.length + omitted`. |
+| `sourceFindingsOmitted` | Findings omitted when the scope report was serialized, before these filters. Their kinds and severities are unavailable. |
+| `findings` | Selected finding objects, in report order. |
+
+A selection is exhaustive only when both omission counts are zero. The full cached
+report remains at `.codeps/out/<project>/report.json`; selecting findings does not
+rewrite it. Cached commands require an existing config and report; `status` creates
+the starter config and refreshes the report.
+
 ## inspect-cycle and inspect-node
 
 ```shell
-codeps inspect-cycle --id <cycle-id> [--project id] [--config path] [--format <table|json>]
-codeps inspect-node --id <node-id> [--project id] [--config path] [--format <table|json>]
+codeps inspect-cycle --id <cycle-id> [--project id] [--config path] [--scope <packages|files>] [--format <table|json>]
+codeps inspect-node --id <node-id> [--project id] [--config path] [--scope <packages|files>] [--format <table|json>]
 ```
 
 Both read `.codeps/out/<project>/report.json`; pass `--scope files` for file-level detail (packages is the default). Run `codeps status` first. When the config has more than one project, `--project` is required.
+
+JSON contracts: [cycle inspection](/schemas/inspect-cycle.schema.json) and
+[node inspection](/schemas/inspect-node.schema.json). These existing detail shapes
+have no `schemaVersion` field. A finding's `nextAction` is an action hint with `--id`,
+not a complete shell command: callers supply `codeps`, the selected project and
+scope, any custom config, and argument quoting for the subject id.
 
 ## GitHub Pages CI
 

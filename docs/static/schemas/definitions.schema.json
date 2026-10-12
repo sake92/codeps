@@ -1,0 +1,717 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sake92.github.io/codeps/schemas/definitions.schema.json",
+  "title": "Shared codeps artifact definitions",
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "cycle",
+            "propagator",
+            "mutableSurface",
+            "structuralUse"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
+        },
+        "subject": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "structuralProxy"
+          ]
+        },
+        "nextAction": {
+          "type": "string",
+          "description": "Action hint using --id; supply project, scope, config, and argument quoting as needed. Not a shell script."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "subject",
+        "evidence",
+        "confidence",
+        "nextAction"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "edges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nodesInCycles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "orphans": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "nodes",
+        "edges",
+        "nodesInCycles",
+        "orphans"
+      ]
+    },
+    "cut": {
+      "type": "object",
+      "properties": {
+        "edge": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "weight": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "edge",
+        "weight"
+      ]
+    },
+    "cutAnalysis": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "notRequested",
+            "completedExact",
+            "completedHeuristic",
+            "budgetExceeded"
+          ]
+        },
+        "greedyCutEstimate": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "solutions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cuts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/cut"
+                }
+              }
+            },
+            "required": [
+              "cuts"
+            ]
+          }
+        },
+        "examinedCandidates": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "status",
+        "greedyCutEstimate",
+        "solutions",
+        "examinedCandidates"
+      ]
+    },
+    "cycle": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "witnessCycle": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "extFanIn": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "internalEdges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "incomingEdges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outgoingEdges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cutAnalysis": {
+          "$ref": "#/$defs/cutAnalysis"
+        }
+      },
+      "required": [
+        "id",
+        "members",
+        "witnessCycle",
+        "size",
+        "extFanIn",
+        "internalEdges",
+        "incomingEdges",
+        "outgoingEdges",
+        "cutAnalysis"
+      ]
+    },
+    "surface": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "fanIn": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fanOut": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ports": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mutPorts": {
+          "type": "number",
+          "minimum": 0
+        },
+        "exposure": {
+          "type": "number",
+          "minimum": 0
+        },
+        "publicSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "protectedSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "packageSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "privateSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "publicMutableSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "protectedMutableSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "packageMutableSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "privateMutableSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "totalDeclaredSurface": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dependentsPerPublicPort": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "cycleId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "encapsulationRatio": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "publicMutableRatio": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "node",
+        "fanIn",
+        "fanOut",
+        "ports",
+        "mutPorts",
+        "exposure",
+        "publicSurface",
+        "protectedSurface",
+        "packageSurface",
+        "privateSurface",
+        "publicMutableSurface",
+        "protectedMutableSurface",
+        "packageMutableSurface",
+        "privateMutableSurface",
+        "totalDeclaredSurface",
+        "dependentsPerPublicPort",
+        "cycleId",
+        "encapsulationRatio",
+        "publicMutableRatio"
+      ]
+    },
+    "propagator": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "fanIn": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fanOut": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "score": {
+          "type": "number",
+          "exclusiveMinimum": 1
+        }
+      },
+      "required": [
+        "node",
+        "fanIn",
+        "fanOut",
+        "score"
+      ]
+    },
+    "scopeReport": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 3
+        },
+        "scope": {
+          "enum": [
+            "packages",
+            "files"
+          ]
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cycle"
+          }
+        },
+        "propagators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/propagator"
+          }
+        },
+        "surface": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/surface"
+          }
+        },
+        "orphans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          },
+          "maxItems": 10000
+        },
+        "truncation": {
+          "type": "object",
+          "properties": {
+            "findingsOmitted": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "findingsOmitted"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "scope",
+        "generatedAt",
+        "summary",
+        "cycles",
+        "propagators",
+        "surface",
+        "orphans",
+        "findings"
+      ]
+    },
+    "healthSnapshot": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "enum": [
+            "critical",
+            "unhealthy",
+            "needs-attention",
+            "healthy",
+            "excellent"
+          ]
+        },
+        "health": {
+          "type": "object",
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "status": {
+              "enum": [
+                "critical",
+                "unhealthy",
+                "needs-attention",
+                "healthy",
+                "excellent"
+              ]
+            },
+            "factors": {
+              "type": "object",
+              "properties": {
+                "cycles": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "mutableSurface": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "exposedSurface": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "structuralUse": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "propagators": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10
+                }
+              },
+              "required": [
+                "cycles",
+                "mutableSurface",
+                "exposedSurface",
+                "structuralUse",
+                "propagators"
+              ]
+            }
+          },
+          "required": [
+            "score",
+            "status",
+            "factors"
+          ]
+        },
+        "structure": {
+          "type": "object",
+          "properties": {
+            "nodes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "edges": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "nodes",
+            "edges"
+          ]
+        },
+        "cycles": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nodes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "largestScc": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "internalEdges": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "nodes",
+            "largestScc",
+            "internalEdges"
+          ]
+        },
+        "surface": {
+          "type": "object",
+          "properties": {
+            "publicSurface": {
+              "type": "number",
+              "minimum": 0
+            },
+            "publicMutableSurface": {
+              "type": "number",
+              "minimum": 0
+            },
+            "totalDeclaredSurface": {
+              "type": "number",
+              "minimum": 0
+            },
+            "encapsulationRatio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "publicSurface",
+            "publicMutableSurface",
+            "totalDeclaredSurface",
+            "encapsulationRatio"
+          ]
+        },
+        "findings": {
+          "type": "object",
+          "properties": {
+            "critical": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "high": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "low": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "health",
+        "structure",
+        "cycles",
+        "surface",
+        "findings"
+      ]
+    },
+    "declarationSurface": {
+      "type": "object",
+      "properties": {
+        "public": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "protected": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "packageRestricted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "privateMembers": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "publicMutable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "protectedMutable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "packageRestrictedMutable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "privateMutable": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": []
+    },
+    "packageNode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "ports": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mutPorts": {
+          "type": "number",
+          "minimum": 0
+        },
+        "declarationSurface": {
+          "$ref": "#/$defs/declarationSurface"
+        }
+      },
+      "required": [
+        "id",
+        "ports",
+        "mutPorts",
+        "declarationSurface"
+      ]
+    },
+    "fileNode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "packageId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ports": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mutPorts": {
+          "type": "number",
+          "minimum": 0
+        },
+        "declarationSurface": {
+          "$ref": "#/$defs/declarationSurface"
+        }
+      },
+      "required": [
+        "id",
+        "ports",
+        "mutPorts",
+        "declarationSurface"
+      ]
+    },
+    "edge": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "default": 1
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ]
+    }
+  }
+}

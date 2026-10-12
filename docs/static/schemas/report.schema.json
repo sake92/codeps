@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sake92.github.io/codeps/schemas/report.schema.json",
+  "title": "Codeps metrics report v4",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 4
+    },
+    "packages": {
+      "allOf": [
+        {
+          "$ref": "definitions.schema.json#/$defs/scopeReport"
+        },
+        {
+          "properties": {
+            "scope": {
+              "const": "packages"
+            }
+          }
+        }
+      ]
+    },
+    "files": {
+      "anyOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "definitions.schema.json#/$defs/scopeReport"
+            },
+            {
+              "properties": {
+                "scope": {
+                  "const": "files"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "packages"
+  ]
+}

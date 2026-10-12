@@ -14,7 +14,7 @@ file to render one cycle or node in detail; use `--scope files` for file detail.
 
 ```shell
 codeps status
-cat .codeps/out/root/report.json
+codeps findings --project root --limit 10 --format json
 ```
 
 Core metrics are computed fresh from the graph's node/edge list on every run, so a report is a
@@ -78,7 +78,7 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
       "subject": "scc:cache",
       "evidence": "size=2, extFanIn=5, greedyCutEstimate=none",
       "confidence": "high",
-      "nextAction": "inspect-cycle scc:cache"
+      "nextAction": "inspect-cycle --id scc:cache"
     }
     ]
   },
@@ -89,11 +89,35 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 ## Summary
 
 - The outer `schemaVersion` is `4`; each scope report has `schemaVersion` `3`.
-- `packages` is always present. `files` is omitted when the input has no file graph, such as jdeps.
+- `packages` is always present. `files` is `null` when the input has no file graph, such as jdeps; readers also accept an omitted `files` field.
 
 - `nodes` / `edges` — size of the scope graph.
 - `nodesInCycles` — total members of all cycles (multi-member strongly connected components).
 - `orphans` — count of nodes with zero fan-in and zero fan-out (dead-code-removal candidates).
+
+## JSON Schemas
+
+Machine-readable contracts use JSON Schema Draft 2020-12. The schemas describe
+current output; older versions accepted by compatibility readers are not covered.
+Unknown properties are allowed for additive evolution. Relative `$ref` links share
+[definitions](/schemas/definitions.schema.json); offline validators need the entire
+`docs/static/schemas/` directory, with each `$id` mapped to its local file.
+
+| Artifact | Schema |
+|---|---|
+| `report.json` (outer v4, scope v3) | [report.schema.json](/schemas/report.schema.json) |
+| Codeps export format | [export.schema.json](/schemas/export.schema.json) |
+| One health history NDJSON line (v6) | [history.schema.json](/schemas/history.schema.json) |
+| `findings --format json` (v1) | [findings.schema.json](/schemas/findings.schema.json) |
+| `inspect-cycle --format json` | [inspect-cycle.schema.json](/schemas/inspect-cycle.schema.json) |
+| `inspect-node --format json` | [inspect-node.schema.json](/schemas/inspect-node.schema.json) |
+
+Unavailable `files` and file node `packageId` values serialize as explicit `null`;
+readers also accept omitted fields. `truncation` is omitted when no findings were
+omitted. Unavailable surface ratios, `cycleId`, and `greedyCutEstimate` are explicit `null`.
+Export declaration counters default to zero when missing, and edge weight defaults
+to one. Schemas validate shapes and types; they do not prove that edges reference
+existing nodes, that cycle paths are valid, or that aggregate counts agree.
 
 ## Findings
 
@@ -106,6 +130,12 @@ The structural-use kind is a graph proxy based on file/package edges; it does no
 individual declarations. JSON serialization bounds `findings` at 10,000 rows so large projects
 remain agent-usable. When rows are omitted, `truncation.findingsOmitted` records the count.
 Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound.
+
+`codeps findings` returns a bounded selection of this cached index with exact kind
+and severity filters. Its `omitted` counts cached matches beyond the requested limit;
+`sourceFindingsOmitted` separately carries the scope report's `truncation.findingsOmitted`.
+See the [CLI contract](/reference/cli.html#findings). Action hints require callers to
+preserve the selected project and scope when inspecting a subject.
 
 ## History and dashboard
 
@@ -226,8 +256,9 @@ count as surface. jdeps data carries no access info, so all its nodes have `port
   loop: dead-code-removal candidates. JSON retains the complete list.
 
 `inspect-cycle` and `inspect-node` render one cycle or node from this cached report at a time
-(as `table` or `json`, via `--format`); there is no CLI command that renders the full
-findings/cycles/propagators/surface/orphans lists as a table. Use the JSON report directly for
+(as `table` or `json`, via `--format`). `findings` renders a bounded selection of the
+findings index; cycles/propagators/surface/orphans have no full-inventory table command.
+Use the JSON report directly for
 the full inventories; the generated `.codeps/out/<project>/index.html` dashboard shows trends
 and summary evidence. The
 JSON `findings` array is capped at 10,000 rows and describes any omissions in `truncation`; the
