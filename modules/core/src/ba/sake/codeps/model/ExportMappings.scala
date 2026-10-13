@@ -1,20 +1,20 @@
 package ba.sake.codeps.model
 
-import ba.sake.codeps.artifacts.models.*
+import ba.sake.codeps.artifacts.models
 
 /** Generated export types are mapped to the graph representations used by the
   * parsers.
   */
 private[codeps] object ExportMappings {
   type WDeclarationSurface =
-    `Shared codeps artifact definitions__declarationSurface`
-  type WEdge = `Shared codeps artifact definitions__edge`
-  type WPackageNode = `Shared codeps artifact definitions__packageNode`
-  type WFileNode = `Shared codeps artifact definitions__fileNode`
-  type WExportGraph = `Codeps export format`
+    models.Artifact__declarationSurface
+  type WEdge = models.Artifact__edge
+  type WPackageNode = models.Artifact__packageNode
+  type WFileNode = models.Artifact__fileNode
+  type WExportGraph = models.ExportGraph
 
   def toDeclarationSurface(v: DeclarationSurface): WDeclarationSurface =
-    `Shared codeps artifact definitions__declarationSurface`(
+    models.Artifact__declarationSurface(
       public = Some(v.public.toLong),
       `protected` = Some(v.`protected`.toLong),
       packageRestricted = Some(v.packageRestricted.toLong),
@@ -37,7 +37,7 @@ private[codeps] object ExportMappings {
       privateMutable = Math.toIntExact(v.privateMutable.getOrElse(0L))
     )
 
-  def toEdge(v: Edge): WEdge = `Shared codeps artifact definitions__edge`(
+  def toEdge(v: Edge): WEdge = models.Artifact__edge(
     source = v.source,
     target = v.target,
     weight = Some(v.weight.toLong)
@@ -49,7 +49,7 @@ private[codeps] object ExportMappings {
   )
 
   def toPackageNode(v: PackageNode): WPackageNode =
-    `Shared codeps artifact definitions__packageNode`(
+    models.Artifact__packageNode(
       id = v.id,
       ports = v.ports,
       mutPorts = v.mutPorts,
@@ -63,7 +63,7 @@ private[codeps] object ExportMappings {
   )
 
   def toFileNode(v: FileNode): WFileNode =
-    `Shared codeps artifact definitions__fileNode`(
+    models.Artifact__fileNode(
       id = v.id,
       packageId = v.packageId,
       ports = v.ports,
@@ -79,7 +79,7 @@ private[codeps] object ExportMappings {
   )
 
   def toExportGraph(v: ExportGraph): WExportGraph =
-    `Codeps export format`(
+    models.ExportGraph(
       (
         nodes = v.packages.nodes.toSeq.sortBy(_.id).map(toPackageNode),
         edges = v.packages.edges.toSeq

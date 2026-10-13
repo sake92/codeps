@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/inspect-cycle.schema.json",
-  "title": "Codeps cycle inspection",
+  "title": "CycleInspection",
+  "description": "Codeps cycle inspection",
   "type": "object",
   "properties": {
     "id": {

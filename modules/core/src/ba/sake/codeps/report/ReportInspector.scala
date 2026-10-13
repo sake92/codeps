@@ -67,7 +67,7 @@ object ReportInspector:
     appendFindings(sb, selection.findings)
     sb.result()
 
-  /** Parses only report JSON carrying schema version 2. */
+  /** Parses report JSON carrying the current schema version. */
   def parse(json: String): Either[String, MetricsReport] =
     try Right(json.parseJson[MetricsReport])
     catch case e: TupsonException => Left(e.getMessage)

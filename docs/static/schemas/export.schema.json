@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/export.schema.json",
-  "title": "Codeps export format",
+  "title": "ExportGraph",
+  "description": "Codeps export format",
   "type": "object",
   "properties": {
     "packages": {

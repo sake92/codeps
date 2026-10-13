@@ -11,7 +11,7 @@ case class HealthSnapshot(
     cycles: HealthCycles,
     surface: HealthSurface,
     findings: HealthFindings
-) derives JsonRW:
+):
   def numericMetrics: Seq[(String, Option[Double])] = Seq(
     "health.score" -> Some(health.score),
     "structure.nodes" -> Some(structure.nodes.toDouble),
@@ -40,34 +40,12 @@ case class HealthHistoryEntry(
     schemaVersion: Int = 6
 )
 
-case class HealthStructure(nodes: Int, edges: Int) derives JsonRW
-case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: Int) derives JsonRW
-case class HealthSurface(publicSurface: Double, publicMutableSurface: Double, totalDeclaredSurface: Double, encapsulationRatio: Option[Double]) derives JsonRW
-case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int) derives JsonRW
-case class HealthFactors(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double) derives JsonRW
-case class HealthScore(score: Double, status: String, factors: HealthFactors) derives JsonRW
-
-/** Previous history schemas had one package snapshot per line. */
-private case class LegacyHealthSnapshot(
-    at: String, commit: String, status: String, health: HealthScore,
-    structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
-    findings: HealthFindings, schemaVersion: Int
-) derives JsonRW:
-  def normalized: HealthHistoryEntry =
-    HealthHistoryEntry(at, commit, HealthSnapshot(status, health, structure, cycles, surface, findings))
-
-private case class LegacyHealthScore(score: Int, status: String, penalties: LegacyHealthPenalties) derives JsonRW
-private case class LegacyHealthPenalties(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double) derives JsonRW
-private case class LegacyPenaltySnapshot(
-    at: String, commit: String, status: String, health: LegacyHealthScore,
-    structure: HealthStructure, cycles: HealthCycles, surface: HealthSurface,
-    findings: HealthFindings, schemaVersion: Int
-) derives JsonRW:
-  def normalized: HealthHistoryEntry =
-    val factors = if schemaVersion == 1 then
-      HealthFactors(healthFactor(health.penalties.cycles, 4.0), healthFactor(health.penalties.mutableSurface, 2.5), healthFactor(health.penalties.exposedSurface, 2.0), healthFactor(health.penalties.structuralUse, 1.0), healthFactor(health.penalties.propagators, 0.5))
-    else HealthFactors(10.0 - health.penalties.cycles, 10.0 - health.penalties.mutableSurface, 10.0 - health.penalties.exposedSurface, 10.0 - health.penalties.structuralUse, 10.0 - health.penalties.propagators)
-    HealthHistoryEntry(at, commit, HealthSnapshot(status, HealthScore(health.score, health.status, factors), structure, cycles, surface, findings))
+case class HealthStructure(nodes: Int, edges: Int)
+case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: Int)
+case class HealthSurface(publicSurface: Double, publicMutableSurface: Double, totalDeclaredSurface: Double, encapsulationRatio: Option[Double])
+case class HealthFindings(critical: Int, high: Int, medium: Int, low: Int)
+case class HealthFactors(cycles: Double, mutableSurface: Double, exposedSurface: Double, structuralUse: Double, propagators: Double)
+case class HealthScore(score: Double, status: String, factors: HealthFactors)
 
 object HealthSnapshot:
   def fromReport(report: MetricsReport): HealthSnapshot =
@@ -119,10 +97,7 @@ object HealthHistory:
       acc.flatMap { entries =>
         if line.trim.isEmpty then Right(entries)
         else try
-          val entry =
-            if "\\\"packages\\\"\\s*:".r.findFirstIn(line).nonEmpty then line.parseJson[HealthHistoryEntry]
-            else if "\\\"penalties\\\"\\s*:".r.findFirstIn(line).nonEmpty then line.parseJson[LegacyPenaltySnapshot].normalized
-            else line.parseJson[LegacyHealthSnapshot].normalized
+          val entry = line.parseJson[HealthHistoryEntry]
           Right(entries :+ entry)
         catch case e: Exception => Left(s"invalid history line ${index + 1}: ${e.getMessage}")
       }

@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/report.schema.json",
-  "title": "Codeps metrics report v4",
+  "title": "MetricsReports",
+  "description": "Codeps metrics report v4",
   "type": "object",
   "properties": {
     "schemaVersion": {

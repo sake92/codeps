@@ -80,8 +80,7 @@ private[codeps] object ArtifactCodec {
 
   def mapped[D, W: JsonRW](schema: String)(
       toWire: D => W,
-      fromWire: W => D,
-      migrate: JValue => JValue = identity
+      fromWire: W => D
   ): JsonRW[D] = new JsonRW[D] {
     override def write(value: D): JValue = {
       val json = transform(
@@ -94,7 +93,7 @@ private[codeps] object ArtifactCodec {
     }
     override def parse(path: String, value: JValue): D = {
       try {
-        val json = migrate(value).render()
+        val json = value.render()
         val cursor = root(schema)
         validate(cursor, json)
         val prepared =

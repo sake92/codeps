@@ -2,7 +2,7 @@ package ba.sake.codeps.report
 
 import java.time.Instant
 import ba.sake.codeps.artifacts.ArtifactCodec
-import ba.sake.codeps.artifacts.models.*
+import ba.sake.codeps.artifacts.models
 import ba.sake.tupson.{*, given}
 import org.typelevel.jawn.ast.{JString, JValue}
 
@@ -10,23 +10,23 @@ import org.typelevel.jawn.ast.{JString, JValue}
   * wire types.
   */
 private[codeps] object ArtifactMappings {
-  type WSummary = `Shared codeps artifact definitions__summary`
-  type WCycle = `Shared codeps artifact definitions__cycle`
-  type WSurfaceRow = `Shared codeps artifact definitions__surface`
-  type WPropagatorRow = `Shared codeps artifact definitions__propagator`
-  type WFinding = `Shared codeps artifact definitions__finding`
-  type WCutAnalysis = `Shared codeps artifact definitions__cutAnalysis`
-  type WCutCandidate = `Shared codeps artifact definitions__cut`
-  type WMetricsReport = `Shared codeps artifact definitions__scopeReport`
-  type WMetricsReports = `Codeps metrics report v4`
-  type WFindingsSelection = `Codeps bounded findings selection v1`
-  type WNodeInspection = `Codeps node inspection`
-  type WCycleInspection = `Codeps cycle inspection`
-  type WHealthSnapshot = `Shared codeps artifact definitions__healthSnapshot`
-  type WHealthHistoryEntry = `Codeps health history entry v6`
+  type WSummary = models.Artifact__summary
+  type WCycle = models.Artifact__cycle
+  type WSurfaceRow = models.Artifact__surface
+  type WPropagatorRow = models.Artifact__propagator
+  type WFinding = models.Artifact__finding
+  type WCutAnalysis = models.Artifact__cutAnalysis
+  type WCutCandidate = models.Artifact__cut
+  type WMetricsReport = models.Artifact__scopeReport
+  type WMetricsReports = models.MetricsReports
+  type WFindingsSelection = models.FindingsSelection
+  type WNodeInspection = models.NodeInspection
+  type WCycleInspection = models.CycleInspection
+  type WHealthSnapshot = models.Artifact__healthSnapshot
+  type WHealthHistoryEntry = models.HealthHistoryEntry
 
   def toSummary(v: Summary): WSummary =
-    `Shared codeps artifact definitions__summary`(
+    models.Artifact__summary(
       nodes = v.nodes.toLong,
       edges = v.edges.toLong,
       nodesInCycles = v.nodesInCycles.toLong,
@@ -39,7 +39,7 @@ private[codeps] object ArtifactMappings {
     orphans = Math.toIntExact(v.orphans)
   )
 
-  def toCycle(v: Cycle): WCycle = `Shared codeps artifact definitions__cycle`(
+  def toCycle(v: Cycle): WCycle = models.Artifact__cycle(
     id = v.id,
     members = v.members,
     witnessCycle = v.witnessCycle,
@@ -63,7 +63,7 @@ private[codeps] object ArtifactMappings {
   )
 
   def toSurfaceRow(v: SurfaceRow): WSurfaceRow =
-    `Shared codeps artifact definitions__surface`(
+    models.Artifact__surface(
       node = v.node,
       fanIn = v.fanIn.toLong,
       fanOut = v.fanOut.toLong,
@@ -107,7 +107,7 @@ private[codeps] object ArtifactMappings {
   )
 
   def toPropagatorRow(v: PropagatorRow): WPropagatorRow =
-    `Shared codeps artifact definitions__propagator`(
+    models.Artifact__propagator(
       node = v.node,
       fanIn = v.fanIn.toLong,
       fanOut = v.fanOut.toLong,
@@ -121,7 +121,7 @@ private[codeps] object ArtifactMappings {
   )
 
   def toFinding(v: Finding): WFinding =
-    `Shared codeps artifact definitions__finding`(
+    models.Artifact__finding(
       id = v.id,
       kind =
         literal["cycle" | "propagator" | "mutableSurface" | "structuralUse"](
@@ -144,7 +144,7 @@ private[codeps] object ArtifactMappings {
   )
 
   def toFindingsSelection(v: FindingsSelection): WFindingsSelection =
-    `Codeps bounded findings selection v1`(
+    models.FindingsSelection(
       schemaVersion = 1,
       project = v.project,
       scope = literal["packages" | "files"](v.scope),
@@ -167,7 +167,7 @@ private[codeps] object ArtifactMappings {
     )
 
   def toNodeInspection(v: NodeInspection): WNodeInspection =
-    `Codeps node inspection`(
+    models.NodeInspection(
       id = v.id,
       surface = toSurfaceRow(v.surface),
       cycleId = v.cycleId,
@@ -181,7 +181,7 @@ private[codeps] object ArtifactMappings {
   )
 
   def toCycleInspection(v: CycleInspection): WCycleInspection =
-    `Codeps cycle inspection`(
+    models.CycleInspection(
       id = v.id,
       members = v.members,
       witnessCycle = v.witnessCycle,
@@ -208,7 +208,7 @@ private[codeps] object ArtifactMappings {
     )
 
   def toCutCandidate(v: CutCandidate): WCutCandidate =
-    `Shared codeps artifact definitions__cut`(
+    models.Artifact__cut(
       Seq(v.source, v.target),
       v.weight.toLong
     )
@@ -218,7 +218,7 @@ private[codeps] object ArtifactMappings {
   }
 
   def toCutAnalysis(v: CutAnalysis): WCutAnalysis =
-    `Shared codeps artifact definitions__cutAnalysis`(
+    models.Artifact__cutAnalysis(
       literal[
         "notRequested" | "completedExact" | "completedHeuristic" |
           "budgetExceeded"
@@ -240,7 +240,7 @@ private[codeps] object ArtifactMappings {
     val truncation =
       v.truncation.orElse(if omitted > 0 then Some(ReportTruncation(omitted))
       else None)
-    `Shared codeps artifact definitions__scopeReport`(
+    models.Artifact__scopeReport(
       3,
       literal["packages" | "files"](v.scope),
       Instant.parse(v.generatedAt),
@@ -271,10 +271,10 @@ private[codeps] object ArtifactMappings {
 
   private def packageReport(
       v: MetricsReport
-  ): `Codeps metrics report v4__packages` = {
+  ): models.MetricsReports__packages = {
     require(v.scope == "packages", "expected package report")
     val w = toMetricsReport(v)
-    `Codeps metrics report v4__packages`(
+    models.MetricsReports__packages(
       3,
       "packages",
       w.generatedAt,
@@ -289,10 +289,10 @@ private[codeps] object ArtifactMappings {
   }
   private def fileReport(
       v: MetricsReport
-  ): `Codeps metrics report v4__files` = {
+  ): models.MetricsReports__files = {
     require(v.scope == "files", "expected file report")
     val w = toMetricsReport(v)
-    `Codeps metrics report v4__files`(
+    models.MetricsReports__files(
       3,
       "files",
       w.generatedAt,
@@ -306,7 +306,7 @@ private[codeps] object ArtifactMappings {
     )
   }
   def toMetricsReports(v: MetricsReports): WMetricsReports =
-    `Codeps metrics report v4`(
+    models.MetricsReports(
       schemaVersion = 4,
       files = v.files.map(fileReport),
       packages = packageReport(v.packages)
@@ -314,7 +314,7 @@ private[codeps] object ArtifactMappings {
   def fromMetricsReports(v: WMetricsReports): MetricsReports = {
     val p = v.packages
     val packages = fromMetricsReport(
-      `Shared codeps artifact definitions__scopeReport`(
+      models.Artifact__scopeReport(
         3,
         "packages",
         p.generatedAt,
@@ -329,7 +329,7 @@ private[codeps] object ArtifactMappings {
     )
     val files = v.files.map(f =>
       fromMetricsReport(
-        `Shared codeps artifact definitions__scopeReport`(
+        models.Artifact__scopeReport(
           3,
           "files",
           f.generatedAt,
@@ -349,7 +349,7 @@ private[codeps] object ArtifactMappings {
   private type HealthStatus = "critical" | "unhealthy" | "needs-attention" |
     "healthy" | "excellent"
   def toHealthSnapshot(v: HealthSnapshot): WHealthSnapshot =
-    `Shared codeps artifact definitions__healthSnapshot`(
+    models.Artifact__healthSnapshot(
       literal[HealthStatus](v.status),
       (
         score = v.health.score,
@@ -369,7 +369,7 @@ private[codeps] object ArtifactMappings {
         largestScc = v.cycles.largestScc.toLong,
         internalEdges = v.cycles.internalEdges.toLong
       ),
-      `Shared codeps artifact definitions__healthSnapshot__surface`(
+      models.Artifact__healthSnapshot__surface(
         v.surface.publicSurface,
         v.surface.publicMutableSurface,
         v.surface.totalDeclaredSurface,
@@ -420,7 +420,7 @@ private[codeps] object ArtifactMappings {
       )
     )
   def toHealthHistoryEntry(v: HealthHistoryEntry): WHealthHistoryEntry =
-    `Codeps health history entry v6`(
+    models.HealthHistoryEntry(
       6,
       Instant.parse(v.at),
       v.commit,

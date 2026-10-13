@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/findings.schema.json",
-  "title": "Codeps bounded findings selection v1",
+  "title": "FindingsSelection",
+  "description": "Codeps bounded findings selection v1",
   "type": "object",
   "properties": {
     "schemaVersion": {

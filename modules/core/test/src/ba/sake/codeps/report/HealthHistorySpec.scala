@@ -42,12 +42,9 @@ class HealthHistorySpec extends munit.FunSuite:
     assert(error.contains("line 1"))
   }
 
-  test("NDJSON parser migrates a package-only v1 line") {
+  test("obsolete history entries are rejected") {
     val legacy = """{"at":"2026-09-02T12:00:00Z","commit":"abc123","status":"healthy","health":{"score":7,"status":"healthy","penalties":{"cycles":4,"mutableSurface":2.5,"exposedSurface":2,"structuralUse":1,"propagators":0.5}},"structure":{"nodes":1,"edges":0,"criticalPathLength":0},"cycles":{"count":0,"nodes":0,"largestScc":0,"internalEdges":0},"surface":{"publicSurface":0,"publicMutableSurface":0,"totalDeclaredSurface":0,"encapsulationRatio":null},"findings":{"critical":0,"high":0,"medium":0,"low":0},"schemaVersion":1}"""
-    val parsed = HealthHistory.parseNdjson(legacy).toOption.get.head
-    assertEquals(parsed.schemaVersion, 6)
-    assertEquals(parsed.files, None)
-    assertEquals(parsed.packages.health.factors, HealthFactors(0.0, 0.0, 0.0, 0.0, 0.0))
+    assert(HealthHistory.parseNdjson(legacy).isLeft)
   }
 
   test("health score retains two decimal places after applying penalties") {

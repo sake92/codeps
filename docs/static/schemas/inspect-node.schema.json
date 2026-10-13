@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/inspect-node.schema.json",
-  "title": "Codeps node inspection",
+  "title": "NodeInspection",
+  "description": "Codeps node inspection",
   "type": "object",
   "properties": {
     "id": {

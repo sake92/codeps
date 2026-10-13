@@ -44,7 +44,7 @@ object Node:
 
   /** Manual instance: tupson's derived macro cannot fall back to case-class defaults
     * for missing keys, so the exposure fields (`isExposed`, `ports`, `mutPorts`)
-    * default explicitly for backward compat with graphs that don't carry them.
+    * use the explicit defaults of the internal graph representation.
     */
   given JsonRW[Node] with
     override def write(value: Node): JValue =

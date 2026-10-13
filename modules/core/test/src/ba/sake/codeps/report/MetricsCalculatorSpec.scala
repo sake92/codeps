@@ -88,7 +88,6 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assertEquals(row.encapsulationRatio, Some(0.3))
     assertEquals(row.publicMutableRatio, Some(1.0 / 3.0))
     assertEquals(row.dependentsPerPublicPort, Some(2.0 / 3.0))
-    assertEquals(row.utilization, row.dependentsPerPublicPort)
   }
 
   test("packages scope: fans, surface, orphans, summary on an acyclic graph") {
@@ -198,7 +197,7 @@ class MetricsCalculatorSpec extends munit.FunSuite:
       edges = Set(Edge("p1.A", "p2.B"))
     ) // all ports 0 (no exposure info, e.g. jdeps data)
     val report = MetricsCalculator.run(graph, Scope.Packages).toOption.get
-    report.surface.foreach(r => assertEquals(r.utilization, None))
+    report.surface.foreach(r => assertEquals(r.dependentsPerPublicPort, None))
   }
 
   test("packages scope on package-only graph (jdeps export) reports the packages") {

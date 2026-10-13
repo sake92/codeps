@@ -77,14 +77,7 @@ case class SurfaceRow(
     totalDeclaredSurface: Double = 0.0,
     encapsulationRatio: Option[Double] = None,
     publicMutableRatio: Option[Double] = None
-):
-  /** Source-compatibility alias for consumers of pre-v2.1 reports. It is not
-    * serialized; `dependentsPerPublicPort` is the unambiguous structural proxy. */
-  def utilization: Option[Double] = dependentsPerPublicPort
-  def packageRestrictedSurface: Double = packageSurface
-  def packageRestrictedMutableSurface: Double = packageMutableSurface
-  def privateMembersSurface: Double = privateSurface
-  def privateMembersMutableSurface: Double = privateMutableSurface
+)
 
 /** Counts rows omitted from the bounded JSON report inventories. A missing
   * value means that the findings inventory was truncated. */
@@ -114,7 +107,7 @@ case class Finding(
 
 object MetricsReport:
   private[report] val maxJsonFindings = 10000
-  given JsonRW[MetricsReport] = ArtifactCodec.mapped[MetricsReport, WMetricsReport]("definitions.schema.json#/$defs/scopeReport")(toMetricsReport, fromMetricsReport, LegacyArtifacts.report)
+  given JsonRW[MetricsReport] = ArtifactCodec.mapped[MetricsReport, WMetricsReport]("definitions.schema.json#/$defs/scopeReport")(toMetricsReport, fromMetricsReport)
 
 object Summary:
   given JsonRW[Summary] = ArtifactCodec.mapped[Summary, WSummary]("definitions.schema.json#/$defs/summary")(toSummary, fromSummary)
@@ -123,7 +116,7 @@ object Cycle:
   given JsonRW[Cycle] = ArtifactCodec.mapped[Cycle, WCycle]("definitions.schema.json#/$defs/cycle")(toCycle, fromCycle)
 
 object SurfaceRow:
-  given JsonRW[SurfaceRow] = ArtifactCodec.mapped[SurfaceRow, WSurfaceRow]("definitions.schema.json#/$defs/surface")(toSurfaceRow, fromSurfaceRow, LegacyArtifacts.surface)
+  given JsonRW[SurfaceRow] = ArtifactCodec.mapped[SurfaceRow, WSurfaceRow]("definitions.schema.json#/$defs/surface")(toSurfaceRow, fromSurfaceRow)
 
 object PropagatorRow:
   given JsonRW[PropagatorRow] = ArtifactCodec.mapped[PropagatorRow, WPropagatorRow]("definitions.schema.json#/$defs/propagator")(toPropagatorRow, fromPropagatorRow)

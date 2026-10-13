@@ -81,30 +81,17 @@ class GeneratedArtifactsSpec extends munit.FunSuite {
     assertEquals(json.parseJson[MetricsReports], MetricsReports(report))
   }
 
-  test("legacy v2 surfaces migrate to the generated current shape") {
+  test("obsolete report versions and legacy surface fields are rejected") {
+    val json = report.toJson(spaces = 0)
+    intercept[TupsonException](json.replace("\"schemaVersion\":3", "\"schemaVersion\":2").parseJson[MetricsReport])
     val row = SurfaceRow("p", 1, 1, 2, 0, 2, Some(0.5))
-    val original = report.copy(surface = Seq(row))
-    val tree = original.toJson.parseJson[JValue]
-    fields(tree)("schemaVersion") = JNum(2)
+    val tree = report.copy(surface = Seq(row)).toJson.parseJson[JValue]
     val surface = fields(tree)("surface") match {
       case JArray(rows) => fields(rows.head)
-      case _            => fail("expected surface array")
+      case _ => fail("expected surface array")
     }
     surface("utilization") = surface.remove("dependentsPerPublicPort").get
-    Seq(
-      "publicSurface",
-      "protectedSurface",
-      "packageSurface",
-      "privateSurface",
-      "publicMutableSurface",
-      "protectedMutableSurface",
-      "packageMutableSurface",
-      "privateMutableSurface",
-      "totalDeclaredSurface"
-    ).foreach(surface.remove)
-    val decoded = tree.render().parseJson[MetricsReport]
-    assertEquals(decoded, original)
-    assert(!decoded.toJson.contains("utilization"))
+    intercept[TupsonException](tree.render().parseJson[MetricsReport])
   }
 
   test("generated findings reject unknown enums and invalid timestamps") {

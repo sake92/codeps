@@ -30,6 +30,7 @@
 | CI/CD | `.github/workflows/` |
 
 ## Key Conventions
+- Backward compatibility is not a requirement. Prefer clean breaking changes; do not add or preserve migrations, compatibility aliases, or legacy readers unless explicitly requested.
 - Sources: `modules/<id>/src/` (main), `modules/<id>/test/src/` (tests); test module id is `<id>-test`.
 - Tests: munit `FunSuite`, files named `*Spec.scala`.
 - Fixtures: sources in `testFixtures/example1/`; compiled at test runtime by `FixtureCompiler` into `tmp/` (gitignored). `testFixtures/cyclic.json` is a checked-in graph in the codeps export format — used by CLI tests and as the homepage example output.

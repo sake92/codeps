@@ -139,7 +139,7 @@ class MetricsReportSpec extends munit.FunSuite:
   test("report parser rejects schema version 1") {
     val json = """{"schemaVersion":1,"scope":"packages","generatedAt":"2026-08-27T10:00:00Z","summary":{"nodes":0,"edges":0,"nodesInCycles":0,"orphans":0,"criticalPathLength":0},"cycles":[],"propagators":[],"surface":[],"orphans":[],"findings":[]}"""
     val error = intercept[ba.sake.tupson.TupsonException](json.parseJson[MetricsReport])
-    assert(error.getMessage.contains("incompatible schema version"))
+    assert(error.getMessage.contains("schemaVersion"))
   }
 
   test("surface fields serialize with camelCase names") {

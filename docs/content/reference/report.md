@@ -98,7 +98,7 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 ## JSON Schemas
 
 Machine-readable contracts use JSON Schema Draft 2020-12. The schemas describe
-current output; older versions accepted by compatibility readers are not covered.
+current output; older artifact versions are not supported.
 Unknown properties are allowed for additive evolution. Relative `$ref` links share
 [definitions](/schemas/definitions.schema.json); offline validators need the entire
 `docs/static/schemas/` directory, with each `$id` mapped to its local file.

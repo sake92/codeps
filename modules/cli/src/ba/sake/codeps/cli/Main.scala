@@ -185,12 +185,9 @@ object Main:
       existing <- readHistory(path)
       due <- checkpointDue(existing._3.lastOption, current.at, age)
     yield
-      val containsLegacy = "\\\"packages\\\"\\s*:".r.findFirstIn(existing._2).isEmpty && existing._2.trim.nonEmpty
-      val canonical = if containsLegacy then existing._3.map(_.toJson(spaces = 0, sort = true)).mkString("", "\n", "\n") else existing._2
       HealthHistory.decision(existing._3.lastOption, current, significance, due) match
-        case HealthRecordingDecision.NotSignificant if containsLegacy => writeFile(path, canonical)
         case HealthRecordingDecision.NotSignificant => ()
-        case _ => writeFile(path, canonical + current.toJson(spaces = 0, sort = true) + "\n")
+        case _ => writeFile(path, existing._2 + current.toJson(spaces = 0, sort = true) + "\n")
 
   private def loadConfig(explicit: Option[String], createStarter: Boolean = true): Either[String, Config] =
     val repoRoot = findRepoRoot()

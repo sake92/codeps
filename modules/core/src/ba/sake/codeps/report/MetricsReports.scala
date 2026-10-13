@@ -14,4 +14,4 @@ case class MetricsReports(
 object MetricsReports:
   import ba.sake.codeps.artifacts.ArtifactCodec
   import ArtifactMappings.*
-  given JsonRW[MetricsReports] = ArtifactCodec.mapped[MetricsReports, WMetricsReports]("report.schema.json")(toMetricsReports, fromMetricsReports, ba.sake.codeps.report.LegacyArtifacts.reports)
+  given JsonRW[MetricsReports] = ArtifactCodec.mapped[MetricsReports, WMetricsReports]("report.schema.json")(toMetricsReports, fromMetricsReports)
