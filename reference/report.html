@@ -142,6 +142,9 @@ codeps findings --project root --limit 10 --format json
      <p><code>packages</code> is always present. <code>files</code> is <code>null</code> when the input has no file graph, such as jdeps; readers also accept an omitted <code>files</code> field.</p>
     </li>
     <li>
+     <p><code>truncation</code> is <code>null</code> when no findings were omitted; otherwise <code>findingsOmitted</code> records the omitted count.</p>
+    </li>
+    <li>
      <p><code>nodes</code> / <code>edges</code> — size of the scope graph.</p>
     </li>
     <li>
@@ -152,7 +155,7 @@ codeps findings --project root --limit 10 --format json
     </li>
    </ul>
    <h2 id="json-schemas">JSON Schemas<a href="#json-schemas" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Machine-readable contracts use JSON Schema Draft 2020-12. The schemas describe current output; older versions accepted by compatibility readers are not covered. Unknown properties are allowed for additive evolution. Relative <code>$ref</code> links share <a href="https://sake92.github.io/codeps/schemas/definitions.schema.json">definitions</a>; offline validators need the entire <code>docs/static/schemas/</code> directory, with each <code>$id</code> mapped to its local file.</p>
+   <p>Machine-readable contracts use JSON Schema Draft 2020-12. The schemas describe current output; older artifact versions are not supported. Unknown properties are allowed for additive evolution. Relative <code>$ref</code> links share <a href="https://sake92.github.io/codeps/schemas/definitions.schema.json">definitions</a>; offline validators need the entire <code>docs/static/schemas/</code> directory, with each <code>$id</code> mapped to its local file.</p>
    <table>
     <thead>
      <tr>

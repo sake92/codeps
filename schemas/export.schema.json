@@ -1,50 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/export.schema.json",
-  "title": "Codeps export format",
+  "title": "ExportGraph",
+  "description": "Codeps export format",
   "type": "object",
   "properties": {
     "packages": {
-      "type": "object",
-      "properties": {
-        "nodes": {
-          "type": "array",
-          "items": {
-            "$ref": "definitions.schema.json#/$defs/packageNode"
-          }
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "$ref": "definitions.schema.json#/$defs/edge"
-          }
-        }
-      },
-      "required": [
-        "nodes",
-        "edges"
-      ]
+      "$ref": "definitions.schema.json#/$defs/packageGraph"
     },
     "files": {
-      "type": "object",
-      "properties": {
-        "nodes": {
-          "type": "array",
-          "items": {
-            "$ref": "definitions.schema.json#/$defs/fileNode"
-          }
-        },
-        "edges": {
-          "type": "array",
-          "items": {
-            "$ref": "definitions.schema.json#/$defs/edge"
-          }
-        }
-      },
-      "required": [
-        "nodes",
-        "edges"
-      ]
+      "$ref": "definitions.schema.json#/$defs/fileGraph"
     }
   },
   "required": [

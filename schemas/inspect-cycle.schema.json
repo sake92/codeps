@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/inspect-cycle.schema.json",
-  "title": "Codeps cycle inspection",
+  "title": "CycleInspection",
+  "description": "Codeps cycle inspection",
   "type": "object",
   "properties": {
     "id": {
@@ -21,23 +22,33 @@
     },
     "size": {
       "type": "integer",
-      "minimum": 2
+      "minimum": 2,
+      "format": "int32",
+      "maximum": 2147483647
     },
     "extFanIn": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "format": "int32",
+      "maximum": 2147483647
     },
     "internalEdges": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "format": "int32",
+      "maximum": 2147483647
     },
     "incomingEdges": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "format": "int32",
+      "maximum": 2147483647
     },
     "outgoingEdges": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "format": "int32",
+      "maximum": 2147483647
     },
     "cutAnalysis": {
       "$ref": "definitions.schema.json#/$defs/cutAnalysis"
