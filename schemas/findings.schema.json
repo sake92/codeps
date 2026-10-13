@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sake92.github.io/codeps/schemas/findings.schema.json",
+  "title": "Codeps bounded findings selection v1",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "project": {
+      "type": "string"
+    },
+    "scope": {
+      "enum": [
+        "packages",
+        "files"
+      ]
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of cached findings matching the filters, before applying limit."
+    },
+    "omitted": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cached matches omitted by limit; total equals findings.length plus omitted."
+    },
+    "sourceFindingsOmitted": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Findings omitted when caching the scope report, before these filters. Their kinds/severities are unknown."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "definitions.schema.json#/$defs/finding"
+      },
+      "maxItems": 10000
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "project",
+    "scope",
+    "generatedAt",
+    "total",
+    "omitted",
+    "sourceFindingsOmitted",
+    "findings"
+  ]
+}

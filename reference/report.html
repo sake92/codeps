@@ -48,6 +48,7 @@
          <ul>
           <li><a href="#structure">Structure</a></li>
           <li><a href="#summary">Summary</a></li>
+          <li><a href="#json-schemas">JSON Schemas</a></li>
           <li><a href="#findings">Findings</a></li>
           <li><a href="#history-and-dashboard">History and dashboard</a></li>
           <li><a href="#cycles">Cycles</a></li>
@@ -69,7 +70,7 @@
    <h1 id="metrics-report">Metrics report<a href="#metrics-report" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p><code>codeps status</code> consumes each configured project's source (SemanticDB, jdeps, or an existing <a href="https://sake92.github.io/codeps/reference/json-input.html">codeps export format</a> JSON file) and writes one JSON document to <code>.codeps/out/&lt;project&gt;/report.json</code>. It has a top-level <code>packages</code> report and, where source data contains files, a top-level <code>files</code> report. <code>inspect-cycle</code> and <code>inspect-node</code> read this cached file to render one cycle or node in detail; use <code>--scope files</code> for file detail.</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
-cat .codeps/out/root/report.json
+codeps findings --project root --limit 10 --format json
 </code></pre>
    <p>Core metrics are computed fresh from the graph's node/edge list on every run, so a report is a pure function of its input. Budgeted cycle-cut analysis exists in the core library but is not currently wired into the CLI or config, so every cycle's <code>cutAnalysis.status</code> is <code>notRequested</code> in practice (see <a href="#cycles">Cycles</a>). Set the <code>SOURCE_DATE_EPOCH</code> env var (epoch seconds) to pin <code>generatedAt</code> for deterministic CI diffs.</p>
    <h2 id="structure">Structure<a href="#structure" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
@@ -125,7 +126,7 @@ cat .codeps/out/root/report.json
       <span class="hljs-attr">"subject"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"scc:cache"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"evidence"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"size=2, extFanIn=5, greedyCutEstimate=none"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"confidence"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"high"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"nextAction"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"inspect-cycle scc:cache"</span>
+      <span class="hljs-attr">"nextAction"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"inspect-cycle --id scc:cache"</span>
     <span class="hljs-punctuation">}</span>
     <span class="hljs-punctuation">]</span>
   <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
@@ -138,7 +139,7 @@ cat .codeps/out/root/report.json
      <p>The outer <code>schemaVersion</code> is <code>4</code>; each scope report has <code>schemaVersion</code> <code>3</code>.</p>
     </li>
     <li>
-     <p><code>packages</code> is always present. <code>files</code> is omitted when the input has no file graph, such as jdeps.</p>
+     <p><code>packages</code> is always present. <code>files</code> is <code>null</code> when the input has no file graph, such as jdeps; readers also accept an omitted <code>files</code> field.</p>
     </li>
     <li>
      <p><code>nodes</code> / <code>edges</code> — size of the scope graph.</p>
@@ -150,8 +151,46 @@ cat .codeps/out/root/report.json
      <p><code>orphans</code> — count of nodes with zero fan-in and zero fan-out (dead-code-removal candidates).</p>
     </li>
    </ul>
+   <h2 id="json-schemas">JSON Schemas<a href="#json-schemas" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Machine-readable contracts use JSON Schema Draft 2020-12. The schemas describe current output; older versions accepted by compatibility readers are not covered. Unknown properties are allowed for additive evolution. Relative <code>$ref</code> links share <a href="https://sake92.github.io/codeps/schemas/definitions.schema.json">definitions</a>; offline validators need the entire <code>docs/static/schemas/</code> directory, with each <code>$id</code> mapped to its local file.</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Artifact</th>
+      <th>Schema</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>report.json</code> (outer v4, scope v3)</td>
+      <td><a href="https://sake92.github.io/codeps/schemas/report.schema.json">report.schema.json</a></td>
+     </tr>
+     <tr>
+      <td>Codeps export format</td>
+      <td><a href="https://sake92.github.io/codeps/schemas/export.schema.json">export.schema.json</a></td>
+     </tr>
+     <tr>
+      <td>One health history NDJSON line (v6)</td>
+      <td><a href="https://sake92.github.io/codeps/schemas/history.schema.json">history.schema.json</a></td>
+     </tr>
+     <tr>
+      <td><code>findings --format json</code> (v1)</td>
+      <td><a href="https://sake92.github.io/codeps/schemas/findings.schema.json">findings.schema.json</a></td>
+     </tr>
+     <tr>
+      <td><code>inspect-cycle --format json</code></td>
+      <td><a href="https://sake92.github.io/codeps/schemas/inspect-cycle.schema.json">inspect-cycle.schema.json</a></td>
+     </tr>
+     <tr>
+      <td><code>inspect-node --format json</code></td>
+      <td><a href="https://sake92.github.io/codeps/schemas/inspect-node.schema.json">inspect-node.schema.json</a></td>
+     </tr>
+    </tbody>
+   </table>
+   <p>Unavailable <code>files</code> and file node <code>packageId</code> values serialize as explicit <code>null</code>; readers also accept omitted fields. <code>truncation</code> is omitted when no findings were omitted. Unavailable surface ratios, <code>cycleId</code>, and <code>greedyCutEstimate</code> are explicit <code>null</code>. Export declaration counters default to zero when missing, and edge weight defaults to one. Schemas validate shapes and types; they do not prove that edges reference existing nodes, that cycle paths are valid, or that aggregate counts agree.</p>
    <h2 id="findings">Findings<a href="#findings" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>findings</code> is a deterministic index of actionable diagnostics. Each finding has a stable <code>id</code>, a <code>kind</code> (<code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, or <code>structuralUse</code>), <code>severity</code>, and <code>subject</code>, plus human-readable <code>evidence</code>, <code>confidence</code>, and a <code>nextAction</code>. Findings are ranked by severity, then metric score, then id. They cover every reported SCC, every above-average propagator, every node with exposed mutable ports, and every node whose structural-use proxy is below <code>1.0</code>. The structural-use kind is a graph proxy based on file/package edges; it does not identify individual declarations. JSON serialization bounds <code>findings</code> at 10,000 rows so large projects remain agent-usable. When rows are omitted, <code>truncation.findingsOmitted</code> records the count. Cycles, propagators, surface rows, and orphans are not subject to this JSON inventory bound.</p>
+   <p><code>codeps findings</code> returns a bounded selection of this cached index with exact kind and severity filters. Its <code>omitted</code> counts cached matches beyond the requested limit; <code>sourceFindingsOmitted</code> separately carries the scope report's <code>truncation.findingsOmitted</code>. See the <a href="https://sake92.github.io/codeps/reference/cli.html#findings">CLI contract</a>. Action hints require callers to preserve the selected project and scope when inspecting a subject.</p>
    <h2 id="history-and-dashboard">History and dashboard<a href="#history-and-dashboard" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p><code>.codeps/&lt;project&gt;.ndjson</code> contains one JSON object per recorded commit. Each entry owns its commit metadata once and has direct <code>packages</code> and optional <code>files</code> health sections. Scores are stored and displayed to two decimal places. The dashboard's Home tab shows the two-decimal average of the available package and file scores, with both underlying scores visible; it is a compact directional summary, not a replacement for either scope's evidence.</p>
    <h2 id="cycles">Cycles<a href="#cycles" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
@@ -213,7 +252,7 @@ cat .codeps/out/root/report.json
    <ul>
     <li><code>orphans</code> — node ids with <code>fanIn == 0 AND fanOut == 0</code>, sorted. Step 1 of the improvement loop: dead-code-removal candidates. JSON retains the complete list.</li>
    </ul>
-   <p><code>inspect-cycle</code> and <code>inspect-node</code> render one cycle or node from this cached report at a time (as <code>table</code> or <code>json</code>, via <code>--format</code>); there is no CLI command that renders the full findings/cycles/propagators/surface/orphans lists as a table. Use the JSON report directly for the full inventories; the generated <code>.codeps/out/&lt;project&gt;/index.html</code> dashboard shows trends and summary evidence. The JSON <code>findings</code> array is capped at 10,000 rows and describes any omissions in <code>truncation</code>; the other graph-derived inventories (<code>cycles</code>, <code>propagators</code>, <code>surface</code>, <code>orphans</code>) are never bounded.</p>
+   <p><code>inspect-cycle</code> and <code>inspect-node</code> render one cycle or node from this cached report at a time (as <code>table</code> or <code>json</code>, via <code>--format</code>). <code>findings</code> renders a bounded selection of the findings index; cycles/propagators/surface/orphans have no full-inventory table command. Use the JSON report directly for the full inventories; the generated <code>.codeps/out/&lt;project&gt;/index.html</code> dashboard shows trends and summary evidence. The JSON <code>findings</code> array is capped at 10,000 rows and describes any omissions in <code>truncation</code>; the other graph-derived inventories (<code>cycles</code>, <code>propagators</code>, <code>surface</code>, <code>orphans</code>) are never bounded.</p>
    <div role="group">
     <a role="button" href="https://sake92.github.io/codeps/reference/cli.html">⬅️ CLI</a> <span></span> <a role="button" href="https://sake92.github.io/codeps/reference/json-input.html">Codeps export format ➡️</a>
    </div>

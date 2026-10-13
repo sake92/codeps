@@ -76,6 +76,7 @@
 <span class="hljs-punctuation">}</span>
 </code></pre>
    <h2 id="schema">Schema<a href="#schema" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Machine-readable contract: <a href="https://sake92.github.io/codeps/schemas/export.schema.json">export.schema.json</a> (JSON Schema Draft 2020-12, using <a href="https://sake92.github.io/codeps/schemas/definitions.schema.json">shared definitions</a>). The export format has no <code>schemaVersion</code> field. Both graphs are required, including an empty <code>files</code> graph for package-only inputs; an absent file node <code>packageId</code> may be omitted or <code>null</code> (the serializer emits <code>null</code>).</p>
    <table>
     <thead>
      <tr>

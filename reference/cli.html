@@ -51,6 +51,7 @@
             <li><a href="#include--exclude-patterns">Include / exclude patterns</a></li>
            </ul></li>
           <li><a href="#status">status</a></li>
+          <li><a href="#findings">findings</a></li>
           <li><a href="#inspect-cycle-and-inspect-node">inspect-cycle and inspect-node</a></li>
           <li><a href="#github-pages-ci">GitHub Pages CI</a></li>
          </ul></li>
@@ -63,8 +64,9 @@
    </div>
    <h1 id="cli">CLI<a href="#cli" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p><code>codeps</code> has one normal workflow: configure the projects in the repository, then run <code>codeps status</code>. It parses source data, analyzes both package and file granularity when available, records a compact history, writes an inspectable JSON report, and renders a static HTML dashboard in one command.</p>
-   <p>The only other public commands open detail from the most recent cached report:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --project backend --id scc:example.orders
+   <p>The other public commands select findings or open detail from the most recent cached report:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps findings --project backend --limit 10 --format json
+codeps inspect-cycle --project backend --id scc:example.orders
 codeps inspect-node --project backend --id example.orders
 </code></pre>
    <p><code>--version</code> prints the build version and <code>--help</code> prints complete command usage.</p>
@@ -169,11 +171,53 @@ codeps inspect-node --project backend --id example.orders
     </tbody>
    </table>
    <p>The dashboard opens on Home: a two-decimal average of the available package and file health scores, with both underlying scores shown beside it. Use the Packages and Files pills to inspect each scope's trend and evidence. The combined score is directional, not a claim of perfectly precise architectural measurement.</p>
+   <h2 id="findings">findings<a href="#findings" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps findings [--project id] [--config path] [--scope &lt;packages|files&gt;] [--limit n] [--severity value] [--kind value] [--format &lt;table|json&gt;]
+</code></pre>
+   <p>Reads the cached report without analyzing inputs or recording history. Defaults are <code>--scope packages</code>, <code>--limit 10</code>, and <code>--format table</code>. The limit must be between 1 and 10,000. <code>--project</code> is required when the config contains multiple projects.</p>
+   <p><code>--severity</code> matches exactly one of <code>critical</code>, <code>high</code>, <code>medium</code>, or <code>low</code>. <code>--kind</code> matches exactly one of <code>cycle</code>, <code>propagator</code>, <code>mutableSurface</code>, or <code>structuralUse</code>. Both filters apply together, before the limit; rows retain their cached ranking. No matches is a successful result with an empty <code>findings</code> array.</p>
+   <p>JSON follows the <a href="https://sake92.github.io/codeps/schemas/findings.schema.json">findings selection schema</a>:</p>
+   <table>
+    <thead>
+     <tr>
+      <th>Field</th>
+      <th>Meaning</th>
+     </tr>
+    </thead>
+    <tbody>
+     <tr>
+      <td><code>schemaVersion</code></td>
+      <td><code>1</code> for the findings selection envelope.</td>
+     </tr>
+     <tr>
+      <td><code>project</code>, <code>scope</code>, <code>generatedAt</code></td>
+      <td>Selected project, report scope, and cached analysis time.</td>
+     </tr>
+     <tr>
+      <td><code>total</code></td>
+      <td>Number of cached findings matching the filters, before the limit.</td>
+     </tr>
+     <tr>
+      <td><code>omitted</code></td>
+      <td>Matching cached findings omitted by the limit. <code>total = findings.length + omitted</code>.</td>
+     </tr>
+     <tr>
+      <td><code>sourceFindingsOmitted</code></td>
+      <td>Findings omitted when the scope report was serialized, before these filters. Their kinds and severities are unavailable.</td>
+     </tr>
+     <tr>
+      <td><code>findings</code></td>
+      <td>Selected finding objects, in report order.</td>
+     </tr>
+    </tbody>
+   </table>
+   <p>A selection is exhaustive only when both omission counts are zero. The full cached report remains at <code>.codeps/out/&lt;project&gt;/report.json</code>; selecting findings does not rewrite it. Cached commands require an existing config and report; <code>status</code> creates the starter config and refreshes the report.</p>
    <h2 id="inspect-cycle-and-inspect-node">inspect-cycle and inspect-node<a href="#inspect-cycle-and-inspect-node" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id &lt;cycle-id&gt; [--project id] [--config path] [--format &lt;table|json&gt;]
-codeps inspect-node --id &lt;node-id&gt; [--project id] [--config path] [--format &lt;table|json&gt;]
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id &lt;cycle-id&gt; [--project id] [--config path] [--scope &lt;packages|files&gt;] [--format &lt;table|json&gt;]
+codeps inspect-node --id &lt;node-id&gt; [--project id] [--config path] [--scope &lt;packages|files&gt;] [--format &lt;table|json&gt;]
 </code></pre>
    <p>Both read <code>.codeps/out/&lt;project&gt;/report.json</code>; pass <code>--scope files</code> for file-level detail (packages is the default). Run <code>codeps status</code> first. When the config has more than one project, <code>--project</code> is required.</p>
+   <p>JSON contracts: <a href="https://sake92.github.io/codeps/schemas/inspect-cycle.schema.json">cycle inspection</a> and <a href="https://sake92.github.io/codeps/schemas/inspect-node.schema.json">node inspection</a>. These existing detail shapes have no <code>schemaVersion</code> field. A finding's <code>nextAction</code> is an action hint with <code>--id</code>, not a complete shell command: callers supply <code>codeps</code>, the selected project and scope, any custom config, and argument quoting for the subject id.</p>
    <h2 id="github-pages-ci">GitHub Pages CI<a href="#github-pages-ci" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
    <p>Commit <code>.codeps/config.yaml</code> and the desired <code>.codeps/&lt;project&gt;.ndjson</code> history. Generate the site in CI, then publish the per-project directory directly:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
