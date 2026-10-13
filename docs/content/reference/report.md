@@ -90,6 +90,7 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 
 - The outer `schemaVersion` is `4`; each scope report has `schemaVersion` `3`.
 - `packages` is always present. `files` is `null` when the input has no file graph, such as jdeps; readers also accept an omitted `files` field.
+- `truncation` is `null` when no findings were omitted; otherwise `findingsOmitted` records the omitted count.
 
 - `nodes` / `edges` — size of the scope graph.
 - `nodesInCycles` — total members of all cycles (multi-member strongly connected components).

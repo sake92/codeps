@@ -18,6 +18,7 @@
 | All tests (dev, needs deder) | `deder exec -t test` |
 | Test one module (dev, needs deder) | `deder exec -t test -m core-test` |
 | CLI assembly (dev, needs deder) | `deder exec -t assembly -m cli` |
+| Regenerate artifact models | `deder exec -t openapi4sGenerate -m core` |
 
 ## External References
 | Need | File |
@@ -37,7 +38,7 @@
 - JSON: all emitted JSON field names are camelCase (`generatedAt`, `nodesInCycles`, `solutions`, `propagators`, `score`, `extFanIn`, `fanIn`, `mutPorts`, ...); CLI table headers use the same names. The export graph format is called the *codeps export format* (page title/label; never "common JSON").
 - Keep the actionable usage rules in `context7.json` aligned with the public CLI docs.
 - For agent analysis, read bounded `findings --format json` before selected `inspect-node`/`inspect-cycle` details; preserve project and scope, and check omission counts.
-- Generated — do not edit: `docs/_site/`, `.deder/out/`, `tmp/`.
+- Generated — do not edit: `modules/core/src/ba/sake/codeps/artifacts/models/`, `docs/_site/`, `.deder/out/`, `tmp/`. Change artifact schemas in `docs/static/schemas/`, then regenerate models.
 
 ## Commit Attribution
 AI commits MUST include:

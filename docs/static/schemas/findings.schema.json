@@ -24,17 +24,23 @@
     "total": {
       "type": "integer",
       "minimum": 0,
-      "description": "Number of cached findings matching the filters, before applying limit."
+      "description": "Number of cached findings matching the filters, before applying limit.",
+      "format": "int32",
+      "maximum": 2147483647
     },
     "omitted": {
       "type": "integer",
       "minimum": 0,
-      "description": "Cached matches omitted by limit; total equals findings.length plus omitted."
+      "description": "Cached matches omitted by limit; total equals findings.length plus omitted.",
+      "format": "int32",
+      "maximum": 2147483647
     },
     "sourceFindingsOmitted": {
       "type": "integer",
       "minimum": 0,
-      "description": "Findings omitted when caching the scope report, before these filters. Their kinds/severities are unknown."
+      "description": "Findings omitted when caching the scope report, before these filters. Their kinds/severities are unknown.",
+      "format": "int32",
+      "maximum": 2147483647
     },
     "findings": {
       "type": "array",

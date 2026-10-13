@@ -17,7 +17,10 @@ class PrefixStripperSpec extends munit.FunSuite:
   test("strips package prefix across the whole path") {
     assertEquals(
       PrefixStripper.strip(Seq("org.sake.mod.a.A", "org.sake.mod.b.B")),
-      (Some("org.sake.mod."), Map("org.sake.mod.a.A" -> "a.A", "org.sake.mod.b.B" -> "b.B"))
+      (
+        Some("org.sake.mod."),
+        Map("org.sake.mod.a.A" -> "a.A", "org.sake.mod.b.B" -> "b.B")
+      )
     )
   }
 
@@ -60,24 +63,30 @@ class PrefixStripperSpec extends munit.FunSuite:
 
   test("strips common prefix at file path boundary") {
     assertEquals(
-      PrefixStripper.strip(Seq("server/src/a/A.scala", "server/src/b/B.scala"), '/'),
-      (Some("server/src/"), Map(
-        "server/src/a/A.scala" -> "a/A.scala",
-        "server/src/b/B.scala" -> "b/B.scala"
-      ))
+      PrefixStripper
+        .strip(Seq("server/src/a/A.scala", "server/src/b/B.scala"), '/'),
+      (
+        Some("server/src/"),
+        Map(
+          "server/src/a/A.scala" -> "a/A.scala",
+          "server/src/b/B.scala" -> "b/B.scala"
+        )
+      )
     )
   }
 
   test("does not strip a partial file path segment") {
     assertEquals(
-      PrefixStripper.strip(Seq("serverA/src/a/A.scala", "serverB/src/b/B.scala"), '/'),
+      PrefixStripper
+        .strip(Seq("serverA/src/a/A.scala", "serverB/src/b/B.scala"), '/'),
       (None, Map.empty)
     )
   }
 
   test("does not strip a file prefix absent from every id") {
     assertEquals(
-      PrefixStripper.strip(Seq("server/src/a/A.scala", "deder-common/src/b/B.scala"), '/'),
+      PrefixStripper
+        .strip(Seq("server/src/a/A.scala", "deder-common/src/b/B.scala"), '/'),
       (None, Map.empty)
     )
   }
