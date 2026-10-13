@@ -19,9 +19,12 @@ local const coreModules = new CreateScalaModules {
   root = "modules/core"
   id = "core"
   template = (baseModule) {
+    resources = new { "../../docs/static" }
     deps {
       "com.lihaoyi::fansi:0.5.1"
       "ba.sake::tupson:0.20.0"
+      "ba.sake::validson:0.19.0"
+      "com.networknt:json-schema-validator:1.5.9"
       "com.vladsch.flexmark:flexmark:0.64.8"
       "com.vladsch.flexmark:flexmark-ext-tables:0.64.8"
     }
@@ -95,6 +98,7 @@ local const cliModules = new CreateScalaModules {
       "com.lihaoyi::mainargs:0.7.8"
       "com.lihaoyi::os-lib:0.11.8"
       "org.yaml:snakeyaml:2.3"
+      "org.slf4j:slf4j-nop:2.0.16"
     }
     mainClass = "ba.sake.codeps.cli.Main"
   }

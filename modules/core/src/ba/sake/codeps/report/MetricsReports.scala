@@ -9,4 +9,9 @@ case class MetricsReports(
     packages: MetricsReport,
     files: Option[MetricsReport] = None,
     schemaVersion: Int = 4
-) derives JsonRW
+)
+
+object MetricsReports:
+  import ba.sake.codeps.artifacts.ArtifactCodec
+  import ArtifactMappings.*
+  given JsonRW[MetricsReports] = ArtifactCodec.mapped[MetricsReports, WMetricsReports]("report.schema.json")(toMetricsReports, fromMetricsReports, ba.sake.codeps.report.LegacyArtifacts.reports)

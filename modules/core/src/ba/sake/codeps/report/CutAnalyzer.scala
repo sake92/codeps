@@ -3,8 +3,6 @@ package ba.sake.codeps.report
 import ba.sake.codeps.graph.TarjanScc
 import ba.sake.codeps.model.Edge
 import ba.sake.tupson.JsonRW
-import ba.sake.tupson.{ParseError, ParsingException}
-import org.typelevel.jawn.ast.{JNull, JObject, JValue}
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
@@ -28,33 +26,8 @@ case class CutAnalysis(
 object CutAnalysis:
   val notRequested: CutAnalysis = CutAnalysis("notRequested", None, Seq.empty, 0)
 
-  given JsonRW[CutAnalysis] with
-    override def write(value: CutAnalysis): JValue =
-      JObject(scala.collection.mutable.Map.from(Seq(
-        "status" -> JsonRW[String].write(value.status),
-        "greedyCutEstimate" -> (value.greedyCutEstimate match
-          case None    => JNull
-          case Some(n) => JsonRW[Int].write(n)),
-        "solutions" -> JsonRW[Seq[Solution]].write(value.solutions),
-        "examinedCandidates" -> JsonRW[Int].write(value.examinedCandidates)
-      )))
-    override def parse(path: String, jValue: JValue): CutAnalysis =
-      val fields = jValue match
-        case JObject(value) => value
-        case other =>
-          throw ParsingException(
-            ParseError(path, s"should be Object but it is ${other.valueType.capitalize}", Some(other.render().take(100)))
-          )
-      def required[T](key: String)(using rw: JsonRW[T]): T =
-        fields.get(key) match
-          case Some(value) => rw.parse(s"$path.$key", value)
-          case None        => throw ParsingException(ParseError(s"$path.$key", "is missing"))
-      CutAnalysis(
-        required[String]("status"),
-        required[Option[Int]]("greedyCutEstimate"),
-        required[Seq[Solution]]("solutions"),
-        required[Int]("examinedCandidates")
-      )
+  given JsonRW[CutAnalysis] = ba.sake.codeps.artifacts.ArtifactCodec.mapped[CutAnalysis, ArtifactMappings.WCutAnalysis]("definitions.schema.json#/$defs/cutAnalysis")(
+    ArtifactMappings.toCutAnalysis, ArtifactMappings.fromCutAnalysis)
 
 /** Bounded greedy and enumerative feedback-edge investigation for one SCC. */
 object CutAnalyzer:

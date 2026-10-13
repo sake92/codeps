@@ -8,7 +8,7 @@ case class PackageNode(
     ports: Double,
     mutPorts: Double,
     declarationSurface: DeclarationSurface
-) derives JsonRW
+)
 
 /** Public, scope-specific representation of a source-file summary. */
 case class FileNode(
@@ -17,9 +17,9 @@ case class FileNode(
     ports: Double,
     mutPorts: Double,
     declarationSurface: DeclarationSurface
-) derives JsonRW
+)
 
-case class PackageGraph(nodes: Set[PackageNode], edges: Set[Edge]) derives JsonRW:
+case class PackageGraph(nodes: Set[PackageNode], edges: Set[Edge]):
   private[codeps] def toDepsGraph: DepsGraph =
     DepsGraph(
       nodes.map(n => Node(n.id, NodeKind.`package`, ports = n.ports, mutPorts = n.mutPorts,
@@ -27,7 +27,7 @@ case class PackageGraph(nodes: Set[PackageNode], edges: Set[Edge]) derives JsonR
       edges
     )
 
-case class FileGraph(nodes: Set[FileNode], edges: Set[Edge]) derives JsonRW:
+case class FileGraph(nodes: Set[FileNode], edges: Set[Edge]):
   private[codeps] def toDepsGraph: DepsGraph =
     val files = nodes.map(n => Node(n.id, NodeKind.file, n.packageId, ports = n.ports, mutPorts = n.mutPorts,
       declarationSurface = n.declarationSurface))
@@ -39,6 +39,11 @@ case class FileGraph(nodes: Set[FileNode], edges: Set[Edge]) derives JsonRW:
   * views, so consumers never need to infer a scope from implementation-detail
   * node kinds or symbol ids.
   */
-case class ExportGraph(packages: PackageGraph, files: FileGraph) derives JsonRW:
+case class ExportGraph(packages: PackageGraph, files: FileGraph):
   def packageDeps: DepsGraph = packages.toDepsGraph
   def fileDeps: DepsGraph = files.toDepsGraph
+
+object ExportGraph:
+  import ba.sake.codeps.artifacts.ArtifactCodec
+  import ExportMappings.*
+  given JsonRW[ExportGraph] = ArtifactCodec.mapped[ExportGraph, WExportGraph]("export.schema.json")(toExportGraph, fromExportGraph)

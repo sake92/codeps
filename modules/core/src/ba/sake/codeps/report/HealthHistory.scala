@@ -38,7 +38,7 @@ case class HealthHistoryEntry(
     packages: HealthSnapshot,
     files: Option[HealthSnapshot] = None,
     schemaVersion: Int = 6
-) derives JsonRW
+)
 
 case class HealthStructure(nodes: Int, edges: Int) derives JsonRW
 case class HealthCycles(count: Int, nodes: Int, largestScc: Int, internalEdges: Int) derives JsonRW
@@ -153,3 +153,8 @@ object HealthHistory:
       case (Some(a), Some(b)) if a == b => false
       case (Some(0.0), Some(_)) | (Some(_), Some(0.0)) => true
       case (Some(a), Some(b)) => math.abs(b - a) / math.abs(a) > threshold
+
+object HealthHistoryEntry:
+  import ba.sake.codeps.artifacts.ArtifactCodec
+  import ArtifactMappings.*
+  given JsonRW[HealthHistoryEntry] = ArtifactCodec.mapped[HealthHistoryEntry, WHealthHistoryEntry]("history.schema.json")(toHealthHistoryEntry, fromHealthHistoryEntry)

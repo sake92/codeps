@@ -1,7 +1,8 @@
 package ba.sake.codeps.report
 
 import ba.sake.tupson.{*, given}
-import org.typelevel.jawn.ast.{JNull, JObject, JValue}
+import ba.sake.codeps.artifacts.ArtifactCodec
+import ArtifactMappings.*
 
 /** The selected, report-only detail returned by `inspect-cycle`.
   * No graph or cut analysis is run here: all values come from the v2 report index.
@@ -38,7 +39,7 @@ case class FindingsSelection(
     sourceFindingsOmitted: Int,
     findings: Seq[Finding],
     schemaVersion: Int = 1
-) derives JsonRW
+)
 
 object ReportInspector:
 
@@ -155,33 +156,10 @@ object ReportInspector:
     else value.toString
 
 object CycleInspection:
-  given JsonRW[CycleInspection] with
-    override def write(value: CycleInspection): JValue =
-      JObject(scala.collection.mutable.Map.from(Seq(
-        "id" -> JsonRW[String].write(value.id),
-        "members" -> JsonRW[Seq[String]].write(value.members),
-        "witnessCycle" -> JsonRW[Seq[String]].write(value.witnessCycle),
-        "size" -> JsonRW[Int].write(value.size),
-        "internalEdges" -> JsonRW[Int].write(value.internalEdges),
-        "incomingEdges" -> JsonRW[Int].write(value.incomingEdges),
-        "outgoingEdges" -> JsonRW[Int].write(value.outgoingEdges),
-        "extFanIn" -> JsonRW[Int].write(value.extFanIn),
-        "cutAnalysis" -> JsonRW[CutAnalysis].write(value.cutAnalysis),
-        "findings" -> JsonRW[Seq[Finding]].write(value.findings)
-      )))
-    override def parse(path: String, jValue: JValue): CycleInspection =
-      throw new UnsupportedOperationException("cycle inspections are output-only")
+  given JsonRW[CycleInspection] = ArtifactCodec.mapped[CycleInspection, WCycleInspection]("inspect-cycle.schema.json")(toCycleInspection, fromCycleInspection)
 
 object NodeInspection:
-  given JsonRW[NodeInspection] with
-    override def write(value: NodeInspection): JValue =
-      JObject(scala.collection.mutable.Map.from(Seq(
-        "id" -> JsonRW[String].write(value.id),
-        "surface" -> JsonRW[SurfaceRow].write(value.surface),
-        "cycleId" -> (value.cycleId match
-          case None     => JNull
-          case Some(id) => JsonRW[String].write(id)),
-        "findings" -> JsonRW[Seq[Finding]].write(value.findings)
-      )))
-    override def parse(path: String, jValue: JValue): NodeInspection =
-      throw new UnsupportedOperationException("node inspections are output-only")
+  given JsonRW[NodeInspection] = ArtifactCodec.mapped[NodeInspection, WNodeInspection]("inspect-node.schema.json")(toNodeInspection, fromNodeInspection)
+
+object FindingsSelection:
+  given JsonRW[FindingsSelection] = ArtifactCodec.mapped[FindingsSelection, WFindingsSelection]("findings.schema.json")(toFindingsSelection, fromFindingsSelection)

@@ -160,7 +160,7 @@ class MetricsReportSpec extends munit.FunSuite:
       encapsulationRatio = Some(0.3),
       publicMutableRatio = Some(1.0 / 3.0)
     )
-    val report = MetricsReport("packages", "x", Summary(1, 0, 0, 0), Nil, Nil, Seq(row), Nil,
+    val report = MetricsReport("packages", "2026-08-27T10:00:00Z", Summary(1, 0, 0, 0), Nil, Nil, Seq(row), Nil,
       truncation = Some(ReportTruncation(findingsOmitted = 3)))
     val json = report.toJson(spaces = 0, sort = false)
     assert(json.contains("\"dependentsPerPublicPort\":"))

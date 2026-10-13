@@ -1,8 +1,8 @@
 package ba.sake.codeps.report
 
 import ba.sake.tupson.JsonRW
-import ba.sake.tupson.{ParseError, ParsingException, TupsonException}
-import org.typelevel.jawn.ast.{JNull, JNum, JObject, JValue}
+import ba.sake.codeps.artifacts.ArtifactCodec
+import ArtifactMappings.*
 
 /** The flat metrics report — codeps's only user-facing output (v2.md §5).
   * Field names are camelCase; every value is derived fresh from the scope's
@@ -99,18 +99,6 @@ case class ReportTruncation(
   * omissions in `truncation`. */
 case class PropagatorRow(node: String, fanIn: Int, fanOut: Int, score: Double)
 
-object ReportTruncation:
-  given JsonRW[ReportTruncation] with
-    override def write(value: ReportTruncation): JValue =
-      obj(
-        "findingsOmitted" -> JsonRW[Int].write(value.findingsOmitted)
-      )
-    override def parse(path: String, jValue: JValue): ReportTruncation =
-      val map = objectFields(path, jValue)
-      ReportTruncation(
-        required[Int](map, path, "findingsOmitted")
-      )
-
 /** A stable, structured diagnostic derived from the report index. `evidence` is
   * intentionally human-readable while the subject and id remain machine-stable.
   * Confidence values distinguish direct graph evidence from structural proxies. */
@@ -125,254 +113,31 @@ case class Finding(
 )
 
 object MetricsReport:
-  /** JSON inventories are bounded at the serialization edge; the in-memory
-    * report remains complete so `ReportTable --all` can still show every row. */
   private[report] val maxJsonFindings = 10000
-
-  given JsonRW[MetricsReport] with
-    override def write(value: MetricsReport): JValue =
-      val findings = value.findings.take(maxJsonFindings)
-      val omittedFindings = math.max(0, value.findings.size - findings.size)
-      val truncation = value.truncation.orElse {
-        if omittedFindings > 0 then Some(ReportTruncation(omittedFindings))
-        else None
-      }
-      val fields = scala.collection.mutable.Map[String, JValue](
-        // Schema version is a wire-level contract; callers cannot emit a different version.
-        "schemaVersion" -> JsonRW[Int].write(3),
-        "scope" -> JsonRW[String].write(value.scope),
-        "generatedAt" -> JsonRW[String].write(value.generatedAt),
-        "summary" -> JsonRW[Summary].write(value.summary),
-        "cycles" -> JsonRW[Seq[Cycle]].write(value.cycles),
-        "propagators" -> JsonRW[Seq[PropagatorRow]].write(value.propagators),
-        "surface" -> JsonRW[Seq[SurfaceRow]].write(value.surface),
-        "orphans" -> JsonRW[Seq[String]].write(value.orphans),
-        "findings" -> JsonRW[Seq[Finding]].write(findings)
-      )
-      truncation.foreach(meta => fields("truncation") = JsonRW[ReportTruncation].write(meta))
-      JObject(fields)
-    override def parse(path: String, jValue: JValue): MetricsReport =
-      val map = objectFields(path, jValue)
-      val schemaVersion = required[Int](map, path, "schemaVersion")
-      if schemaVersion != 2 && schemaVersion != 3 then
-        throw TupsonException(s"incompatible schema version: $schemaVersion (expected 2 or 3)")
-      MetricsReport(
-        requiredString(map, path, "scope"),
-        requiredString(map, path, "generatedAt"),
-        required[Summary](map, path, "summary"),
-        required[Seq[Cycle]](map, path, "cycles"),
-        required[Seq[PropagatorRow]](map, path, "propagators"),
-        required[Seq[SurfaceRow]](map, path, "surface"),
-        required[Seq[String]](map, path, "orphans"),
-        schemaVersion,
-        required[Seq[Finding]](map, path, "findings"),
-        map.get("truncation") match
-          case None    => None
-          case Some(v) => Some(JsonRW[ReportTruncation].parse(s"$path.truncation", v))
-      )
+  given JsonRW[MetricsReport] = ArtifactCodec.mapped[MetricsReport, WMetricsReport]("definitions.schema.json#/$defs/scopeReport")(toMetricsReport, fromMetricsReport, LegacyArtifacts.report)
 
 object Summary:
-  given JsonRW[Summary] with
-    override def write(value: Summary): JValue =
-      obj(
-        "nodes" -> JsonRW[Int].write(value.nodes),
-        "edges" -> JsonRW[Int].write(value.edges),
-        "nodesInCycles" -> JsonRW[Int].write(value.nodesInCycles),
-        "orphans" -> JsonRW[Int].write(value.orphans)
-      )
-    override def parse(path: String, jValue: JValue): Summary =
-      val map = objectFields(path, jValue)
-      Summary(
-        required[Int](map, path, "nodes"),
-        required[Int](map, path, "edges"),
-        required[Int](map, path, "nodesInCycles"),
-        required[Int](map, path, "orphans")
-      )
+  given JsonRW[Summary] = ArtifactCodec.mapped[Summary, WSummary]("definitions.schema.json#/$defs/summary")(toSummary, fromSummary)
 
 object Cycle:
-  given JsonRW[Cycle] with
-    override def write(value: Cycle): JValue =
-      obj(
-        "id" -> JsonRW[String].write(value.id),
-        "members" -> JsonRW[Seq[String]].write(value.members),
-        "size" -> JsonRW[Int].write(value.size),
-        "extFanIn" -> JsonRW[Int].write(value.extFanIn),
-        "internalEdges" -> JsonRW[Int].write(value.internalEdges),
-        "incomingEdges" -> JsonRW[Int].write(value.incomingEdges),
-        "outgoingEdges" -> JsonRW[Int].write(value.outgoingEdges),
-        "cutAnalysis" -> JsonRW[CutAnalysis].write(value.cutAnalysis),
-        "witnessCycle" -> JsonRW[Seq[String]].write(value.witnessCycle)
-      )
-    override def parse(path: String, jValue: JValue): Cycle =
-      val map = objectFields(path, jValue)
-      Cycle(
-        requiredString(map, path, "id"),
-        required[Seq[String]](map, path, "members"),
-        required[Int](map, path, "size"),
-        required[Int](map, path, "extFanIn"),
-        required[CutAnalysis](map, path, "cutAnalysis"),
-        required[Int](map, path, "internalEdges"),
-        required[Seq[String]](map, path, "witnessCycle"),
-        required[Int](map, path, "incomingEdges"),
-        required[Int](map, path, "outgoingEdges")
-      )
-
-object Solution:
-  given JsonRW[Solution] with
-    override def write(value: Solution): JValue =
-      obj(
-        "cuts" -> JsonRW[Seq[CutCandidate]].write(value.cuts)
-      )
-    override def parse(path: String, jValue: JValue): Solution =
-      val map = objectFields(path, jValue)
-      Solution(required[Seq[CutCandidate]](map, path, "cuts"))
-
-object CutCandidate:
-  given JsonRW[CutCandidate] with
-    override def write(value: CutCandidate): JValue =
-      obj(
-        "edge" -> JsonRW[Seq[String]].write(Seq(value.source, value.target)),
-        "weight" -> JsonRW[Int].write(value.weight)
-      )
-    override def parse(path: String, jValue: JValue): CutCandidate =
-      val map = objectFields(path, jValue)
-      val edge = required[Seq[String]](map, path, "edge")
-      if edge.size != 2 then
-        throw ParsingException(ParseError(s"$path.edge", "must contain exactly two node ids", Some(edge)))
-      CutCandidate(edge.head, edge(1), required[Int](map, path, "weight"))
+  given JsonRW[Cycle] = ArtifactCodec.mapped[Cycle, WCycle]("definitions.schema.json#/$defs/cycle")(toCycle, fromCycle)
 
 object SurfaceRow:
-  given JsonRW[SurfaceRow] with
-    override def write(value: SurfaceRow): JValue =
-      obj(
-        "node" -> JsonRW[String].write(value.node),
-        "fanIn" -> JsonRW[Int].write(value.fanIn),
-        "fanOut" -> JsonRW[Int].write(value.fanOut),
-        "ports" -> num(value.ports),
-        "mutPorts" -> num(value.mutPorts),
-        "exposure" -> num(value.exposure),
-        "dependentsPerPublicPort" -> (value.dependentsPerPublicPort match
-          case None    => JNull
-          case Some(d) => num(d)),
-        "cycleId" -> (value.cycleId match
-          case None     => JNull
-          case Some(id) => JsonRW[String].write(id)),
-        "publicSurface" -> num(value.publicSurface),
-        "protectedSurface" -> num(value.protectedSurface),
-        "packageSurface" -> num(value.packageSurface),
-        "privateSurface" -> num(value.privateSurface),
-        "publicMutableSurface" -> num(value.publicMutableSurface),
-        "protectedMutableSurface" -> num(value.protectedMutableSurface),
-        "packageMutableSurface" -> num(value.packageMutableSurface),
-        "privateMutableSurface" -> num(value.privateMutableSurface),
-        "totalDeclaredSurface" -> num(value.totalDeclaredSurface),
-        "encapsulationRatio" -> optionalNum(value.encapsulationRatio),
-        "publicMutableRatio" -> optionalNum(value.publicMutableRatio)
-      )
-    override def parse(path: String, jValue: JValue): SurfaceRow =
-      val map = objectFields(path, jValue)
-      SurfaceRow(
-        requiredString(map, path, "node"),
-        required[Int](map, path, "fanIn"),
-        required[Int](map, path, "fanOut"),
-        required[Double](map, path, "ports"),
-        required[Double](map, path, "mutPorts"),
-        required[Double](map, path, "exposure"),
-        proxy(map, path),
-        required[Option[String]](map, path, "cycleId"),
-        optionalDouble(map, path, "publicSurface"),
-        optionalDouble(map, path, "protectedSurface"),
-        optionalDouble(map, path, "packageSurface"),
-        optionalDouble(map, path, "privateSurface"),
-        optionalDouble(map, path, "publicMutableSurface"),
-        optionalDouble(map, path, "protectedMutableSurface"),
-        optionalDouble(map, path, "packageMutableSurface"),
-        optionalDouble(map, path, "privateMutableSurface"),
-        optionalDouble(map, path, "totalDeclaredSurface"),
-        optionalOptionDouble(map, path, "encapsulationRatio"),
-        optionalOptionDouble(map, path, "publicMutableRatio")
-      )
-
-    private def proxy(map: scala.collection.mutable.Map[String, JValue], path: String): Option[Double] =
-      map.get("dependentsPerPublicPort").orElse(map.get("utilization")) match
-        case None    => None
-        case Some(v) => JsonRW[Option[Double]].parse(s"$path.dependentsPerPublicPort", v)
-
-    private def optionalDouble(map: scala.collection.mutable.Map[String, JValue], path: String, key: String): Double =
-      map.get(key) match
-        case None    => 0.0
-        case Some(v) => JsonRW[Double].parse(s"$path.$key", v)
-
-    private def optionalOptionDouble(map: scala.collection.mutable.Map[String, JValue], path: String, key: String): Option[Double] =
-      map.get(key) match
-        case None    => None
-        case Some(v) => JsonRW[Option[Double]].parse(s"$path.$key", v)
+  given JsonRW[SurfaceRow] = ArtifactCodec.mapped[SurfaceRow, WSurfaceRow]("definitions.schema.json#/$defs/surface")(toSurfaceRow, fromSurfaceRow, LegacyArtifacts.surface)
 
 object PropagatorRow:
-  given JsonRW[PropagatorRow] with
-    override def write(value: PropagatorRow): JValue =
-      obj(
-        "node" -> JsonRW[String].write(value.node),
-        "fanIn" -> JsonRW[Int].write(value.fanIn),
-        "fanOut" -> JsonRW[Int].write(value.fanOut),
-        "score" -> num(value.score)
-      )
-    override def parse(path: String, jValue: JValue): PropagatorRow =
-      val map = objectFields(path, jValue)
-      PropagatorRow(
-        requiredString(map, path, "node"),
-        required[Int](map, path, "fanIn"),
-        required[Int](map, path, "fanOut"),
-        required[Double](map, path, "score")
-      )
+  given JsonRW[PropagatorRow] = ArtifactCodec.mapped[PropagatorRow, WPropagatorRow]("definitions.schema.json#/$defs/propagator")(toPropagatorRow, fromPropagatorRow)
 
 object Finding:
-  given JsonRW[Finding] with
-    override def write(value: Finding): JValue =
-      obj(
-        "id" -> JsonRW[String].write(value.id),
-        "kind" -> JsonRW[String].write(value.kind),
-        "severity" -> JsonRW[String].write(value.severity),
-        "subject" -> JsonRW[String].write(value.subject),
-        "evidence" -> JsonRW[String].write(value.evidence),
-        "confidence" -> JsonRW[String].write(value.confidence),
-        "nextAction" -> JsonRW[String].write(value.nextAction)
-      )
-    override def parse(path: String, jValue: JValue): Finding =
-      val map = objectFields(path, jValue)
-      Finding(
-        requiredString(map, path, "id"),
-        requiredString(map, path, "kind"),
-        requiredString(map, path, "severity"),
-        requiredString(map, path, "subject"),
-        requiredString(map, path, "evidence"),
-        requiredString(map, path, "confidence"),
-        requiredString(map, path, "nextAction")
-      )
+  given JsonRW[Finding] = ArtifactCodec.mapped[Finding, WFinding]("definitions.schema.json#/$defs/finding")(toFinding, fromFinding)
 
-/** Integral doubles render as integers (9 not 9.0); fractional halves stay decimals. */
-private def num(d: Double): JValue =
-  if !d.isNaN && !d.isInfinite && d == math.rint(d) then JNum(d.toLong) else JNum(d)
+object CutCandidate:
+  given JsonRW[CutCandidate] = ArtifactCodec.mapped[CutCandidate, WCutCandidate]("definitions.schema.json#/$defs/cut")(toCutCandidate, fromCutCandidate)
 
-private def optionalNum(value: Option[Double]): JValue = value match
-  case None    => JNull
-  case Some(d) => num(d)
+object ReportTruncation:
+  given JsonRW[ReportTruncation] = ArtifactCodec.mapped[ReportTruncation, (findingsOmitted: Long)]("definitions.schema.json#/$defs/scopeReport/properties/truncation")(
+    v => (findingsOmitted = v.findingsOmitted.toLong), v => ReportTruncation(Math.toIntExact(v.findingsOmitted)))
 
-private def obj(fields: (String, JValue)*): JValue =
-  JObject(scala.collection.mutable.Map.from(fields))
-
-private def objectFields(path: String, jValue: JValue): scala.collection.mutable.Map[String, JValue] =
-  jValue match
-    case JObject(fields) => fields
-    case other =>
-      throw ParsingException(
-        ParseError(path, s"should be Object but it is ${other.valueType.capitalize}", Some(other.render().take(100)))
-      )
-
-private def required[T](fields: scala.collection.mutable.Map[String, JValue], path: String, key: String)(using rw: JsonRW[T]): T =
-  fields.get(key) match
-    case Some(value) => rw.parse(s"$path.$key", value)
-    case None        => throw ParsingException(ParseError(s"$path.$key", "is missing"))
-
-private def requiredString(fields: scala.collection.mutable.Map[String, JValue], path: String, key: String): String =
-  required[String](fields, path, key)
+object Solution:
+  given JsonRW[Solution] = ArtifactCodec.mapped[Solution, (cuts: Seq[WCutCandidate])]("definitions.schema.json#/$defs/cutAnalysis/properties/solutions/items")(
+    v => (cuts = v.cuts.map(toCutCandidate)), v => Solution(v.cuts.map(fromCutCandidate)))
