@@ -482,6 +482,8 @@ class MetricsCalculatorSpec extends munit.FunSuite:
     assert(first.findings.exists(f => f.id == "propagator:h" && f.subject == "h"))
     assert(first.findings.exists(f => f.id == "mutableSurface:h" && f.subject == "h"))
     assert(first.findings.exists(f => f.id == "structuralUse:u" && f.subject == "u"))
+    assert(first.findings.forall(f => f.nextAction ==
+      s"${if f.kind == "cycle" then "inspect-cycle" else "inspect-node"} --id ${f.subject}"))
   }
 
   test("files scope: include selects the package's files (descend into it)") {

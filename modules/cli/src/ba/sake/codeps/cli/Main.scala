@@ -72,6 +72,27 @@ object Main:
     result.fold(fail, _ => 0)
 
   @main
+  def findings(
+      @arg(name = "project") project: Option[String] = None,
+      @arg(name = "config") config: Option[String] = None,
+      @arg(name = "scope", doc = "Report scope: packages (default) or files") scope: String = "packages",
+      @arg(name = "limit", doc = "Maximum findings to return (1-10000)") limit: Int = 10,
+      @arg(name = "severity", doc = "Exact severity: critical, high, medium, or low") severity: Option[String] = None,
+      @arg(name = "kind", doc = "Exact kind: cycle, propagator, mutableSurface, or structuralUse") kind: Option[String] = None,
+      @arg(short = 'f', name = "format") format: ReportFormat = ReportFormat.Table
+  ): Int =
+    val result = for
+      loaded <- loadConfig(config, createStarter = false)
+      selected <- selectProject(loaded, project)
+      reports <- readReportInput(reportPath(loaded.repoRoot, selected))
+      report <- reportForScope(reports, scope)
+      selection <- ReportInspector.selectFindings(report, selected.id, limit, severity, kind)
+    yield print(format match
+      case ReportFormat.Json => selection.toJson(spaces = 2, sort = true) + "\n"
+      case ReportFormat.Table => ReportInspector.renderTable(selection))
+    result.fold(fail, _ => 0)
+
+  @main
   def inspectCycle(
       @arg(name = "id") id: String,
       @arg(name = "project") project: Option[String] = None,
@@ -94,7 +115,7 @@ object Main:
       action: ba.sake.codeps.report.MetricsReport => Either[String, Any]
   ): Int =
     val result = for
-      config <- loadConfig(configPath)
+      config <- loadConfig(configPath, createStarter = false)
       project <- selectProject(config, requested)
       reports <- readReportInput(reportPath(config.repoRoot, project))
       report <- reportForScope(reports, scope)
@@ -171,10 +192,10 @@ object Main:
         case HealthRecordingDecision.NotSignificant => ()
         case _ => writeFile(path, canonical + current.toJson(spaces = 0, sort = true) + "\n")
 
-  private def loadConfig(explicit: Option[String]): Either[String, Config] =
+  private def loadConfig(explicit: Option[String], createStarter: Boolean = true): Either[String, Config] =
     val repoRoot = findRepoRoot()
     val path = explicit.map(os.Path(_, os.pwd)).getOrElse(repoRoot / ".codeps" / "config.yaml")
-    if !os.exists(path) && explicit.isEmpty then
+    if !os.exists(path) && explicit.isEmpty && createStarter then
       writeFile(path, starterConfig)
       println(s"created starter config: ${path.relativeTo(repoRoot)}")
       parseConfig(repoRoot, starterConfig)

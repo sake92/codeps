@@ -12,7 +12,8 @@
 | Task | Command |
 |------|---------|
 | Download CLI jar | `curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar` |
-| Run CLI | `java -jar codeps.jar export --from semanticdb -i <dir> -o deps.json` |
+| Analyze configured projects | `java -jar codeps.jar status` |
+| Read bounded findings | `java -jar codeps.jar findings --project <id> --limit 10 --format json` |
 | Build docs | `./scripts/build-docs.sh` (outputs `docs/_site/`) |
 | All tests (dev, needs deder) | `deder exec -t test` |
 | Test one module (dev, needs deder) | `deder exec -t test -m core-test` |
@@ -22,7 +23,7 @@
 | Need | File |
 |------|------|
 | CLI reference | `docs/content/reference/cli.md` |
-| Report JSON schema | `docs/content/reference/report.md` |
+| Artifact JSON Schemas | `docs/static/schemas/` (contracts); `docs/content/reference/report.md` (semantics) |
 | Standard JSON export format | `docs/content/reference/json-input.md` |
 | Build config | `deder.pkl` |
 | Context7 library guidance | `context7.json` |
@@ -34,6 +35,7 @@
 - Fixtures: sources in `testFixtures/example1/`; compiled at test runtime by `FixtureCompiler` into `tmp/` (gitignored). `testFixtures/cyclic.json` is a checked-in graph in the codeps export format — used by CLI tests and as the homepage example output.
 - JSON: all emitted JSON field names are camelCase (`generatedAt`, `nodesInCycles`, `solutions`, `propagators`, `score`, `extFanIn`, `fanIn`, `mutPorts`, ...); CLI table headers use the same names. The export graph format is called the *codeps export format* (page title/label; never "common JSON").
 - Keep the actionable usage rules in `context7.json` aligned with the public CLI docs.
+- For agent analysis, read bounded `findings --format json` before selected `inspect-node`/`inspect-cycle` details; preserve project and scope, and check omission counts.
 - Generated — do not edit: `docs/_site/`, `.deder/out/`, `tmp/`.
 
 ## Commit Attribution

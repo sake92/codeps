@@ -224,7 +224,7 @@ object MetricsCalculator:
           subject = cycle.id,
           evidence = s"size=${cycle.size}, extFanIn=${cycle.extFanIn}, greedyCutEstimate=${cycle.cutAnalysis.greedyCutEstimate.getOrElse("none")}",
           confidence = "high",
-          nextAction = s"inspect-cycle ${cycle.id}"
+          nextAction = s"inspect-cycle --id ${cycle.id}"
         ),
         cycle.size.toDouble + cycle.extFanIn.toDouble / 1000.0
       )
@@ -238,7 +238,7 @@ object MetricsCalculator:
           subject = row.node,
           evidence = s"fanIn=${row.fanIn}, fanOut=${row.fanOut}, score=${formatScore(row.score)}",
           confidence = "high",
-          nextAction = s"inspect-node ${row.node}"
+          nextAction = s"inspect-node --id ${row.node}"
         ),
         row.score
       )
@@ -252,7 +252,7 @@ object MetricsCalculator:
           subject = row.node,
           evidence = s"mutPorts=${formatNumber(row.mutPorts)}, exposure=${formatNumber(row.exposure)}",
           confidence = "high",
-          nextAction = s"inspect-node ${row.node}"
+          nextAction = s"inspect-node --id ${row.node}"
         ),
         row.exposure
       )
@@ -267,7 +267,7 @@ object MetricsCalculator:
             subject = row.node,
             evidence = s"fanIn=${row.fanIn}, ports=${formatNumber(row.ports)}, dependentsPerPublicPort=${formatNumber(dependentsPerPublicPort)}",
             confidence = "structuralProxy",
-            nextAction = s"inspect-node ${row.node}"
+            nextAction = s"inspect-node --id ${row.node}"
           ),
           1.0 - dependentsPerPublicPort
         )

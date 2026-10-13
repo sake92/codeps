@@ -34,6 +34,12 @@ references.
 
 ## Schema
 
+Machine-readable contract: [export.schema.json](/schemas/export.schema.json)
+(JSON Schema Draft 2020-12, using [shared definitions](/schemas/definitions.schema.json)).
+The export format has no `schemaVersion` field. Both graphs are required, including
+an empty `files` graph for package-only inputs; an absent file node `packageId` may
+be omitted or `null` (the serializer emits `null`).
+
 | Field | Type | Meaning |
 |---|---|---|
 | `packages` | `{nodes, edges}` | package-level graph |

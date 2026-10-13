@@ -27,7 +27,44 @@ case class NodeInspection(
     findings: Seq[Finding]
 )
 
+/** A bounded selection from the cached findings inventory, in report order.
+  * `total` counts cached matches; source omissions cannot be filtered retrospectively. */
+case class FindingsSelection(
+    project: String,
+    scope: String,
+    generatedAt: String,
+    total: Int,
+    omitted: Int,
+    sourceFindingsOmitted: Int,
+    findings: Seq[Finding],
+    schemaVersion: Int = 1
+) derives JsonRW
+
 object ReportInspector:
+
+  def selectFindings(
+      report: MetricsReport, project: String, limit: Int,
+      severity: Option[String], kind: Option[String]
+  ): Either[String, FindingsSelection] =
+    val severities = Set("critical", "high", "medium", "low")
+    val kinds = Set("cycle", "propagator", "mutableSurface", "structuralUse")
+    if limit < 1 || limit > 10000 then Left("limit must be between 1 and 10000")
+    else if severity.exists(value => !severities.contains(value)) then
+      Left("unknown severity (expected critical, high, medium, or low)")
+    else if kind.exists(value => !kinds.contains(value)) then
+      Left("unknown kind (expected cycle, propagator, mutableSurface, or structuralUse)")
+    else
+      val matching = report.findings.filter(f => severity.forall(_ == f.severity) && kind.forall(_ == f.kind))
+      val selected = matching.take(limit)
+      Right(FindingsSelection(project, report.scope, report.generatedAt, matching.size,
+        matching.size - selected.size, report.truncation.map(_.findingsOmitted).getOrElse(0), selected))
+
+  def renderTable(selection: FindingsSelection): String =
+    val sb = new StringBuilder
+    sb.append(s"${selection.project} (${selection.scope}): ${selection.findings.size}/${selection.total} cached matches; " +
+      s"omitted=${selection.omitted}, sourceFindingsOmitted=${selection.sourceFindingsOmitted}\n")
+    appendFindings(sb, selection.findings)
+    sb.result()
 
   /** Parses only report JSON carrying schema version 2. */
   def parse(json: String): Either[String, MetricsReport] =

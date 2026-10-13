@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sake92.github.io/codeps/schemas/inspect-cycle.schema.json",
+  "title": "Codeps cycle inspection",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "members": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "witnessCycle": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "extFanIn": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "internalEdges": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "incomingEdges": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "outgoingEdges": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cutAnalysis": {
+      "$ref": "definitions.schema.json#/$defs/cutAnalysis"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "definitions.schema.json#/$defs/finding"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "members",
+    "witnessCycle",
+    "size",
+    "extFanIn",
+    "internalEdges",
+    "incomingEdges",
+    "outgoingEdges",
+    "cutAnalysis",
+    "findings"
+  ]
+}
