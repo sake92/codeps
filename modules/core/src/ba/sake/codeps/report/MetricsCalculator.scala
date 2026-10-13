@@ -1,20 +1,29 @@
 package ba.sake.codeps.report
 
+import ba.sake.codeps.artifacts.models.{
+  Edge as ExportEdge,
+  DeclarationSurface as ExportDeclarationSurface,
+  *
+}
+
 import ba.sake.codeps.graph.{Collapser, Filter, TarjanScc, TestFilter}
 import ba.sake.codeps.model.*
 import scala.collection.mutable
 
 /** The language-agnostic metrics layer (v2.md §4): takes a node/edge list whose
-  * per-node `isExposed`/`ports`/`mutPorts` were resolved by an extraction backend,
-  * and derives every metric fresh from the edge list on each run — nothing here
-  * knows Scala syntax, and nothing is cached or stored between runs. */
+  * per-node `isExposed`/`ports`/`mutPorts` were resolved by an extraction
+  * backend, and derives every metric fresh from the edge list on each run —
+  * nothing here knows Scala syntax, and nothing is cached or stored between
+  * runs.
+  */
 object MetricsCalculator:
 
   enum Scope:
     case Packages, Files
 
-  /** The scope-level graph plus per-scope-node port sums. `ports`/`mutPorts` are
-    * the summed contributions of all nodes aggregated into each scope node. */
+  /** The scope-level graph plus per-scope-node port sums. `ports`/`mutPorts`
+    * are the summed contributions of all nodes aggregated into each scope node.
+    */
   case class ScopeGraph(
       nodes: Set[String],
       edges: Set[Edge],
@@ -91,7 +100,7 @@ object MetricsCalculator:
       collapseRules: Seq[CollapseRule] = Nil,
       testPatterns: Option[Seq[String]] = None,
       cutAnalysisBudget: Option[CutAnalysisBudget] = None
-  ): Either[String, MetricsReport] =
+  ): Either[String, ScopeReport] =
     for
       generatedAt <- generatedAt()
       filtered = Filter(graph, includes, excludes)
@@ -99,38 +108,56 @@ object MetricsCalculator:
         case Some(patterns) => TestFilter.skipTests(filtered, patterns)
         case None           => filtered
       sg <- scopeGraph(scoped, scope)
-    yield compute(collapse(sg, collapseRules), scope, generatedAt, cutAnalysisBudget)
+    yield compute(
+      collapse(sg, collapseRules),
+      scope,
+      generatedAt,
+      cutAnalysisBudget
+    )
 
-  /** Real clock by default; SOURCE_DATE_EPOCH (reproducible-builds.org standard,
-    * epoch seconds) pins generatedAt for deterministic CI diffs. */
-  private def generatedAt(): Either[String, String] =
+  /** Real clock by default; SOURCE_DATE_EPOCH (reproducible-builds.org
+    * standard, epoch seconds) pins generatedAt for deterministic CI diffs.
+    */
+  private def generatedAt(): Either[String, java.time.Instant] =
     sys.env.get("SOURCE_DATE_EPOCH") match
-      case None => Right(java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString)
-      case Some(raw) => raw.toLongOption match
-        case Some(epoch) => Right(java.time.Instant.ofEpochSecond(epoch).toString)
-        case None        => Left(s"invalid SOURCE_DATE_EPOCH: $raw (expected epoch seconds)")
+      case None =>
+        Right(
+          java.time.Instant
+            .now()
+            .truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+        )
+      case Some(raw) =>
+        raw.toLongOption match
+          case Some(epoch) => Right(java.time.Instant.ofEpochSecond(epoch))
+          case None        =>
+            Left(s"invalid SOURCE_DATE_EPOCH: $raw (expected epoch seconds)")
 
   private def compute(
       sg: ScopeGraph,
       scope: Scope,
-      generatedAt: String,
+      generatedAt: java.time.Instant,
       cutAnalysisBudget: Option[CutAnalysisBudget]
-  ): MetricsReport =
+  ): ScopeReport =
     val fanIn = sg.edges.groupMapReduce(_.target)(_ => 1)(_ + _)
     val fanOut = sg.edges.groupMapReduce(_.source)(_ => 1)(_ + _)
     def fanInOf(id: String): Int = fanIn.getOrElse(id, 0)
     def fanOutOf(id: String): Int = fanOut.getOrElse(id, 0)
 
-    val orphans = sg.nodes.filter(n => fanInOf(n) == 0 && fanOutOf(n) == 0).toSeq.sorted
+    val orphans =
+      sg.nodes.filter(n => fanInOf(n) == 0 && fanOutOf(n) == 0).toSeq.sorted
     val cycleSets = TarjanScc.cycles(sg.nodes, sg.edges)
-    val cycleIdByNode = cycleSets.flatMap(scc => scc.map(_ -> ("scc:" + scc.min))).toMap
-    val cycles = cycleSets.map(k => cycleRow(k, sg, cutAnalysisBudget)).sortBy(k => (-k.size, -k.extFanIn, k.id))
+    val cycleIdByNode =
+      cycleSets.flatMap(scc => scc.map(_ -> ("scc:" + scc.min))).toMap
+    val cycles = cycleSets
+      .map(k => cycleRow(k, sg, cutAnalysisBudget))
+      .sortBy(k => (-k.size, -k.extFanIn, k.id))
 
     val surface = sg.nodes.toSeq
       .map { id =>
         val p = sg.ports.getOrElse(id, 0.0)
         val mp = sg.mutPorts.getOrElse(id, 0.0)
-        val declarations = sg.declarationSurface.getOrElse(id, DeclarationSurface())
+        val declarations =
+          sg.declarationSurface.getOrElse(id, DeclarationSurface())
         val fi = fanInOf(id)
         val publicSurface = declarations.public.toDouble
         val protectedSurface = declarations.`protected`.toDouble
@@ -138,17 +165,20 @@ object MetricsCalculator:
         val privateSurface = declarations.privateMembers.toDouble
         val publicMutableSurface = declarations.publicMutable.toDouble
         val protectedMutableSurface = declarations.protectedMutable.toDouble
-        val packageMutableSurface = declarations.packageRestrictedMutable.toDouble
+        val packageMutableSurface =
+          declarations.packageRestrictedMutable.toDouble
         val privateMutableSurface = declarations.privateMutable.toDouble
-        val totalDeclaredSurface = publicSurface + protectedSurface + packageSurface + privateSurface
-        SurfaceRow(
+        val totalDeclaredSurface =
+          publicSurface + protectedSurface + packageSurface + privateSurface
+        Surface(
           node = id,
           fanIn = fi,
           fanOut = fanOutOf(id),
           ports = p,
           mutPorts = mp,
           exposure = p + mp * 3,
-          dependentsPerPublicPort = if fi > 0 && p > 0 then Some(fi / p) else None,
+          dependentsPerPublicPort =
+            if fi > 0 && p > 0 then Some(fi / p) else None,
           cycleId = cycleIdByNode.get(id),
           publicSurface = publicSurface,
           protectedSurface = protectedSurface,
@@ -159,37 +189,58 @@ object MetricsCalculator:
           packageMutableSurface = packageMutableSurface,
           privateMutableSurface = privateMutableSurface,
           totalDeclaredSurface = totalDeclaredSurface,
-          encapsulationRatio = if totalDeclaredSurface > 0 then Some(publicSurface / totalDeclaredSurface) else None,
-          publicMutableRatio = if publicSurface > 0 then Some(publicMutableSurface / publicSurface) else None
+          encapsulationRatio = if totalDeclaredSurface > 0 then
+            Some(publicSurface / totalDeclaredSurface)
+          else None,
+          publicMutableRatio =
+            if publicSurface > 0 then Some(publicMutableSurface / publicSurface)
+            else None
         )
       }
-      .sortBy(r => (if r.dependentsPerPublicPort.isEmpty then 1 else 0, r.dependentsPerPublicPort.getOrElse(0.0), r.node))
+      .sortBy(r =>
+        (
+          if r.dependentsPerPublicPort.isEmpty then 1 else 0,
+          r.dependentsPerPublicPort.getOrElse(0.0),
+          r.node
+        )
+      )
 
-    val avgFanIn = if sg.nodes.isEmpty then 0.0 else sg.edges.size.toDouble / sg.nodes.size
+    val avgFanIn =
+      if sg.nodes.isEmpty then 0.0 else sg.edges.size.toDouble / sg.nodes.size
     val avgFanOut = avgFanIn // sum(fanIn) == sum(fanOut) == edges.size
     val propagators =
       if avgFanIn <= 0.0 then Seq.empty
       else
         sg.nodes.toSeq
           .map { id =>
-            val score = (fanInOf(id) / avgFanIn + fanOutOf(id) / avgFanOut) / 2.0
-            PropagatorRow(id, fanInOf(id), fanOutOf(id), score)
+            val score =
+              (fanInOf(id) / avgFanIn + fanOutOf(id) / avgFanOut) / 2.0
+            Propagator(
+              node = id,
+              fanIn = fanInOf(id),
+              fanOut = fanOutOf(id),
+              score = score
+            )
           }
           .filter(_.score > 1.0)
           .sortBy(r => (-r.score, r.node))
-          // Keep the report index complete. ReportTable applies the human-facing
-          // top-10 bound at the presentation edge (or shows all with --all).
+        // Keep the report index complete. ReportTable applies the human-facing
+        // top-10 bound at the presentation edge (or shows all with --all).
 
     val findings = buildFindings(cycles, propagators, surface)
-    val omittedFindings = math.max(0, findings.size - MetricsReport.maxJsonFindings)
+    val omittedFindings =
+      math.max(0, findings.size - ReportInspector.maxJsonFindings)
     val truncation =
-      if omittedFindings > 0 then Some(ReportTruncation(omittedFindings))
+      if omittedFindings > 0 then
+        Some(ReportTruncation(findingsOmitted = omittedFindings))
       else None
 
-    MetricsReport(
-      scope = scope match
-        case Scope.Packages => "packages"
-        case Scope.Files    => "files",
+    ScopeReport(
+      scope = {
+        scope match
+          case Scope.Packages => "packages"
+          case Scope.Files    => "files"
+      },
       generatedAt = generatedAt,
       summary = Summary(
         nodes = sg.nodes.size,
@@ -202,18 +253,20 @@ object MetricsCalculator:
       surface = surface,
       orphans = orphans,
       findings = findings,
-      truncation = truncation
+      truncation = truncation,
+      schemaVersion = 3
     )
 
   private case class RankedFinding(finding: Finding, score: Double)
 
   /** Builds stable diagnostics from the already-derived index rows. Findings
     * deliberately carry no new graph computation: their score is only used to
-    * rank findings within a severity band and is not serialized. */
+    * rank findings within a severity band and is not serialized.
+    */
   private def buildFindings(
       cycles: Seq[Cycle],
-      propagators: Seq[PropagatorRow],
-      surface: Seq[SurfaceRow]
+      propagators: Seq[Propagator],
+      surface: Seq[Surface]
   ): Seq[Finding] =
     val cycleFindings = cycles.map { cycle =>
       RankedFinding(
@@ -222,7 +275,8 @@ object MetricsCalculator:
           kind = "cycle",
           severity = if cycle.size >= 10 then "critical" else "high",
           subject = cycle.id,
-          evidence = s"size=${cycle.size}, extFanIn=${cycle.extFanIn}, greedyCutEstimate=${cycle.cutAnalysis.greedyCutEstimate.getOrElse("none")}",
+          evidence =
+            s"size=${cycle.size}, extFanIn=${cycle.extFanIn}, greedyCutEstimate=${cycle.cutAnalysis.greedyCutEstimate.getOrElse("none")}",
           confidence = "high",
           nextAction = s"inspect-cycle --id ${cycle.id}"
         ),
@@ -236,7 +290,8 @@ object MetricsCalculator:
           kind = "propagator",
           severity = if row.score >= 2.0 then "high" else "medium",
           subject = row.node,
-          evidence = s"fanIn=${row.fanIn}, fanOut=${row.fanOut}, score=${formatScore(row.score)}",
+          evidence =
+            s"fanIn=${row.fanIn}, fanOut=${row.fanOut}, score=${formatScore(row.score)}",
           confidence = "high",
           nextAction = s"inspect-node --id ${row.node}"
         ),
@@ -250,7 +305,8 @@ object MetricsCalculator:
           kind = "mutableSurface",
           severity = "high",
           subject = row.node,
-          evidence = s"mutPorts=${formatNumber(row.mutPorts)}, exposure=${formatNumber(row.exposure)}",
+          evidence =
+            s"mutPorts=${formatNumber(row.mutPorts)}, exposure=${formatNumber(row.exposure)}",
           confidence = "high",
           nextAction = s"inspect-node --id ${row.node}"
         ),
@@ -258,19 +314,21 @@ object MetricsCalculator:
       )
     }
     val structuralUseFindings = surface.flatMap { row =>
-      row.dependentsPerPublicPort.filter(_ < 1.0).map { dependentsPerPublicPort =>
-        RankedFinding(
-          Finding(
-            id = s"structuralUse:${row.node}",
-            kind = "structuralUse",
-            severity = "low",
-            subject = row.node,
-            evidence = s"fanIn=${row.fanIn}, ports=${formatNumber(row.ports)}, dependentsPerPublicPort=${formatNumber(dependentsPerPublicPort)}",
-            confidence = "structuralProxy",
-            nextAction = s"inspect-node --id ${row.node}"
-          ),
-          1.0 - dependentsPerPublicPort
-        )
+      row.dependentsPerPublicPort.filter(_ < 1.0).map {
+        dependentsPerPublicPort =>
+          RankedFinding(
+            Finding(
+              id = s"structuralUse:${row.node}",
+              kind = "structuralUse",
+              severity = "low",
+              subject = row.node,
+              evidence =
+                s"fanIn=${row.fanIn}, ports=${formatNumber(row.ports)}, dependentsPerPublicPort=${formatNumber(dependentsPerPublicPort)}",
+              confidence = "structuralProxy",
+              nextAction = s"inspect-node --id ${row.node}"
+            ),
+            1.0 - dependentsPerPublicPort
+          )
       }
     }
     (cycleFindings ++ propagatorFindings ++ mutableSurfaceFindings ++ structuralUseFindings)
@@ -297,14 +355,17 @@ object MetricsCalculator:
       sg: ScopeGraph,
       cutAnalysisBudget: Option[CutAnalysisBudget]
   ): Cycle =
-    val extFanIn = sg.edges.count(e => scc.contains(e.target) && !scc.contains(e.source))
-    val internalEdges = sg.edges.count(e => scc.contains(e.source) && scc.contains(e.target))
-    val outgoingEdges = sg.edges.count(e => scc.contains(e.source) && !scc.contains(e.target))
+    val extFanIn =
+      sg.edges.count(e => scc.contains(e.target) && !scc.contains(e.source))
+    val internalEdges =
+      sg.edges.count(e => scc.contains(e.source) && scc.contains(e.target))
+    val outgoingEdges =
+      sg.edges.count(e => scc.contains(e.source) && !scc.contains(e.target))
     val cutAnalysis = cutAnalysisBudget match
       case Some(budget) => CutAnalyzer.analyze(scc, sg.edges, budget)
-      case None         => CutAnalysis.notRequested
+      case None         => CutAnalyzer.notRequested
     Cycle(
-      id = "scc:" + scc.min, // stable key: min member id, NOT a counter
+      id = "scc:" + scc.min,
       members = scc.toSeq.sorted,
       size = scc.size,
       extFanIn = extFanIn,
@@ -319,7 +380,8 @@ object MetricsCalculator:
     * node repeated at the end). Deterministic: DFS from the min member over
     * sorted adjacency; the first edge back to the start closes the path. Every
     * SCC with >1 member contains such a cycle. Defensive fallback (unreachable
-    * for a true SCC): sorted members plus the start. */
+    * for a true SCC): sorted members plus the start.
+    */
   private def cyclePath(scc: Set[String], sg: ScopeGraph): Seq[String] =
     val start = scc.min
     val adj = sg.edges.toSeq

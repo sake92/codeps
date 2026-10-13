@@ -8,7 +8,7 @@ import org.typelevel.jawn.ast.{JObject, JString, JValue}
   * finer-grained references this edge represents: 1 at parser level, summed
   * when aggregation/collapse maps several edges onto the same pair.
   * JSON: `{"source": ..., "target": ..., "weight": ...}` — `weight` defaults
-  * to 1 when absent (backward compat with producers that don't emit it).
+  * to 1 when absent, as specified by the codeps export schema.
   */
 case class Edge(source: String, target: String, weight: Int = 1)
 

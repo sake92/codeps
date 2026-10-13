@@ -90,6 +90,7 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 
 - The outer `schemaVersion` is `4`; each scope report has `schemaVersion` `3`.
 - `packages` is always present. `files` is `null` when the input has no file graph, such as jdeps; readers also accept an omitted `files` field.
+- `truncation` is `null` when no findings were omitted; otherwise `findingsOmitted` records the omitted count.
 
 - `nodes` / `edges` — size of the scope graph.
 - `nodesInCycles` — total members of all cycles (multi-member strongly connected components).
@@ -98,7 +99,7 @@ in practice (see [Cycles](#cycles)). Set the `SOURCE_DATE_EPOCH` env var (epoch 
 ## JSON Schemas
 
 Machine-readable contracts use JSON Schema Draft 2020-12. The schemas describe
-current output; older versions accepted by compatibility readers are not covered.
+current output; older artifact versions are not supported.
 Unknown properties are allowed for additive evolution. Relative `$ref` links share
 [definitions](/schemas/definitions.schema.json); offline validators need the entire
 `docs/static/schemas/` directory, with each `$id` mapped to its local file.

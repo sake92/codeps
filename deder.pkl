@@ -1,7 +1,23 @@
 amends "https://sake92.github.io/deder/config/v0.20.0/DederProject.pkl"
 import "https://sake92.github.io/deder-plugins/config/deder-web-dashboard/early-access/WebDashboardPlugin.pkl" as WD
+import "https://sake92.github.io/deder-plugins/config/deder-openapi4s/early-access/Openapi4sPlugin.pkl" as OA
+
+repositories {
+  new MavenRepository { url = "https://central.sonatype.com/repository/maven-snapshots" }
+}
 
 plugins {
+  new OA.Openapi4sPlugin {
+    config {
+      defaults {
+        basePackage = "ba.sake.codeps.artifacts"
+        framework = "none"
+        version = "0.9.0-16-9f89a2-SNAPSHOT"
+        input = "../../docs/static/schemas"
+        targetDir = "src"
+      }
+    }
+  }
   new WD.WebDashboardPlugin {
     // version = "1.2.3" // optionally override version
     config { // most plugins have some config
@@ -22,6 +38,7 @@ local const coreModules = new CreateScalaModules {
     deps {
       "com.lihaoyi::fansi:0.5.1"
       "ba.sake::tupson:0.20.0"
+      "ba.sake::validson:0.19.0"
       "com.vladsch.flexmark:flexmark:0.64.8"
       "com.vladsch.flexmark:flexmark-ext-tables:0.64.8"
     }

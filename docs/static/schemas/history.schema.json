@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sake92.github.io/codeps/schemas/history.schema.json",
-  "title": "Codeps health history entry v6",
+  "title": "HealthHistoryEntry",
+  "description": "Codeps health history entry v6",
   "type": "object",
   "properties": {
     "schemaVersion": {

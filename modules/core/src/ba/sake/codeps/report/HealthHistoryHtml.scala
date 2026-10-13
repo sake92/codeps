@@ -1,13 +1,22 @@
 package ba.sake.codeps.report
 
+import ba.sake.codeps.artifacts.models.{
+  Edge as ExportEdge,
+  DeclarationSurface as ExportDeclarationSurface,
+  *
+}
+
 import ba.sake.tupson.{*, given}
 
 /** HTML presentation of compact health history. The generated page uses the
   * same small Pico CSS dependency as the documentation site and D3 for its
-  * responsive SVG chart. */
+  * responsive SVG chart.
+  */
 object HealthHistoryHtml:
   def render(entries: Seq[HealthHistoryEntry]): String =
-    val data = entries.map(_.toJson(spaces = 0, sort = true)).mkString("[", ",", "]")
+    val data = entries
+      .map(_.toJson(spaces = 0, sort = true))
+      .mkString("[", ",", "]")
       .replace("<", "\\u003c")
       .replace(">", "\\u003e")
       .replace("&", "\\u0026")

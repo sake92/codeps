@@ -1,5 +1,14 @@
 package ba.sake.codeps.graph
 
+import ba.sake.codeps.model.ExportGraphOps
+import ba.sake.codeps.model.ExportGraphOps.*
+
+import ba.sake.codeps.artifacts.models.{
+  Edge as ExportEdge,
+  DeclarationSurface as ExportDeclarationSurface,
+  *
+}
+
 import ba.sake.codeps.model.*
 
 class AggregatorSpec extends munit.FunSuite:
@@ -8,28 +17,68 @@ class AggregatorSpec extends munit.FunSuite:
     nodes = Set(
       Node("com.a", NodeKind.`package`),
       Node("com.b", NodeKind.`package`),
-      Node("com.a.A", NodeKind.`type`, Some("com.a"), Some("src/A.scala"), ports = 3.0),
-      Node("com.a.A#m", NodeKind.member, Some("com.a.A"), Some("src/A.scala"), ports = 1.0, mutPorts = 1.0,
-        declarationSurface = DeclarationSurface(public = 1, publicMutable = 1)),
-      Node("com.b.B", NodeKind.`type`, Some("com.b"), Some("src/B.scala"), ports = 0.5),
+      Node(
+        "com.a.A",
+        NodeKind.`type`,
+        Some("com.a"),
+        Some("src/A.scala"),
+        ports = 3.0
+      ),
+      Node(
+        "com.a.A#m",
+        NodeKind.member,
+        Some("com.a.A"),
+        Some("src/A.scala"),
+        ports = 1.0,
+        mutPorts = 1.0,
+        declarationSurface = DeclarationSurface(public = 1, publicMutable = 1)
+      ),
+      Node(
+        "com.b.B",
+        NodeKind.`type`,
+        Some("com.b"),
+        Some("src/B.scala"),
+        ports = 0.5
+      ),
       Node("src/A.scala", NodeKind.file),
       Node("src/B.scala", NodeKind.file)
     ),
     edges = Set(
       Edge("com.a.A#m", "com.b.B"),
       Edge("com.b.B", "com.a.A"),
-      Edge("com.a.A#m", "com.a.A") // intra-file, becomes a self-loop and is dropped
+      Edge(
+        "com.a.A#m",
+        "com.a.A"
+      ) // intra-file, becomes a self-loop and is dropped
     )
   )
 
   test("type/member nodes collapse into file nodes; ports sum; edges re-wire") {
     val agg = Aggregator.fileLevel(granular)
-    assertEquals(agg.nodes.map(_.kind).toSet, Set(NodeKind.`package`, NodeKind.file))
+    assertEquals(
+      agg.nodes.map(_.kind).toSet,
+      Set(NodeKind.`package`, NodeKind.file)
+    )
     val a = agg.nodes.find(_.id == "src/A.scala").get
-    assertEquals(a, Node("src/A.scala", NodeKind.file, Some("com.a"), ports = 4.0, mutPorts = 1.0,
-      declarationSurface = DeclarationSurface(public = 1, publicMutable = 1)))
+    assertEquals(
+      a,
+      Node(
+        "src/A.scala",
+        NodeKind.file,
+        Some("com.a"),
+        ports = 4.0,
+        mutPorts = 1.0,
+        declarationSurface = DeclarationSurface(public = 1, publicMutable = 1)
+      )
+    )
     assertEquals(agg.nodes.find(_.id == "src/B.scala").get.ports, 0.5)
-    assertEquals(agg.edges, Set(Edge("src/A.scala", "src/B.scala"), Edge("src/B.scala", "src/A.scala")))
+    assertEquals(
+      agg.edges,
+      Set(
+        Edge("src/A.scala", "src/B.scala"),
+        Edge("src/B.scala", "src/A.scala")
+      )
+    )
   }
 
   test("file-less type nodes collapse into their root package (jdeps shape)") {
@@ -51,23 +100,54 @@ class AggregatorSpec extends munit.FunSuite:
     val g = granular.copy(edges = granular.edges + Edge("com.a.A", "com.b.B"))
     val agg = Aggregator.fileLevel(g)
     assertEquals(agg.edges.count(_.source == "src/A.scala"), 1)
-    assertEquals(agg.edges.find(e => e.source == "src/A.scala" && e.target == "src/B.scala").get.weight, 2)
+    assertEquals(
+      agg.edges
+        .find(e => e.source == "src/A.scala" && e.target == "src/B.scala")
+        .get
+        .weight,
+      2
+    )
   }
 
-  test("export materializes independent package and file graphs with summaries") {
+  test(
+    "export materializes independent package and file graphs with summaries"
+  ) {
     val exported = Aggregator.toExport(granular)
 
     assertEquals(
       exported.files.nodes.find(_.id == "src/A.scala").get,
-      FileNode("src/A.scala", Some("com.a"), 4.0, 1.0,
-        DeclarationSurface(public = 1, publicMutable = 1))
+      FileNode(
+        id = "src/A.scala",
+        packageId = Some("com.a"),
+        ports = 4.0,
+        mutPorts = 1.0,
+        declarationSurface = ExportGraphOps.declarations(
+          DeclarationSurface(public = 1, publicMutable = 1)
+        )
+      )
     )
-    assertEquals(exported.files.edges, Set(Edge("src/A.scala", "src/B.scala"), Edge("src/B.scala", "src/A.scala")))
+    assertEquals(
+      exported.fileDeps.edges,
+      Set(
+        Edge("src/A.scala", "src/B.scala"),
+        Edge("src/B.scala", "src/A.scala")
+      )
+    )
 
     assertEquals(
       exported.packages.nodes.find(_.id == "com.a").get,
-      PackageNode("com.a", 4.0, 1.0, DeclarationSurface(public = 1, publicMutable = 1))
+      PackageNode(
+        id = "com.a",
+        ports = 4.0,
+        mutPorts = 1.0,
+        declarationSurface = ExportGraphOps.declarations(
+          DeclarationSurface(public = 1, publicMutable = 1)
+        )
+      )
     )
     assertEquals(exported.packages.nodes.find(_.id == "com.b").get.ports, 0.5)
-    assertEquals(exported.packages.edges, Set(Edge("com.a", "com.b"), Edge("com.b", "com.a")))
+    assertEquals(
+      exported.packageDeps.edges,
+      Set(Edge("com.a", "com.b"), Edge("com.b", "com.a"))
+    )
   }

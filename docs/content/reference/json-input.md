@@ -51,7 +51,8 @@ be omitted or `null` (the serializer emits `null`).
 `ports` and `mutPorts` are numbers. `declarationSurface` is an object with optional
 integer fields: `public`, `protected`, `packageRestricted`, `privateMembers`,
 `publicMutable`, `protectedMutable`, `packageRestrictedMutable`, and `privateMutable`.
-Missing declaration fields are zero. An omitted `weight` is `1`.
+Missing or `null` declaration fields are zero. An omitted or `null` `weight` is `1`.
+Integer counters and weights use the 32-bit signed range.
 
 The parser derives both graphs from the same input projection. Package node summaries
 include the summaries of their files; package edges aggregate inter-package file edges and

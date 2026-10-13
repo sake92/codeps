@@ -1,63 +1,33 @@
 package ba.sake.codeps.report
 
+import ba.sake.codeps.artifacts.models.{
+  Edge as ExportEdge,
+  DeclarationSurface as ExportDeclarationSurface,
+  *
+}
+
 import ba.sake.codeps.graph.TarjanScc
 import ba.sake.codeps.model.Edge
 import ba.sake.tupson.JsonRW
-import ba.sake.tupson.{ParseError, ParsingException}
-import org.typelevel.jawn.ast.{JNull, JObject, JValue}
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 
-/** Limits for the optional cut investigation of one strongly connected component.
-  * Both limits are enforced before every candidate simulation. A report without a
-  * budget does not invoke [[CutAnalyzer]] at all.
+/** Limits for the optional cut investigation of one strongly connected
+  * component. Both limits are enforced before every candidate simulation. A
+  * report without a budget does not invoke [[CutAnalyzer]] at all.
   */
 case class CutAnalysisBudget(timeLimit: FiniteDuration, candidateLimit: Int)
 
-/** Result of an optional cut investigation. `solutions` only contains complete,
-  * validated cut sets; partial work is never presented as a solution.
-  */
-case class CutAnalysis(
-    status: String,
-    greedyCutEstimate: Option[Int],
-    solutions: Seq[Solution],
-    examinedCandidates: Int
-)
-
-object CutAnalysis:
-  val notRequested: CutAnalysis = CutAnalysis("notRequested", None, Seq.empty, 0)
-
-  given JsonRW[CutAnalysis] with
-    override def write(value: CutAnalysis): JValue =
-      JObject(scala.collection.mutable.Map.from(Seq(
-        "status" -> JsonRW[String].write(value.status),
-        "greedyCutEstimate" -> (value.greedyCutEstimate match
-          case None    => JNull
-          case Some(n) => JsonRW[Int].write(n)),
-        "solutions" -> JsonRW[Seq[Solution]].write(value.solutions),
-        "examinedCandidates" -> JsonRW[Int].write(value.examinedCandidates)
-      )))
-    override def parse(path: String, jValue: JValue): CutAnalysis =
-      val fields = jValue match
-        case JObject(value) => value
-        case other =>
-          throw ParsingException(
-            ParseError(path, s"should be Object but it is ${other.valueType.capitalize}", Some(other.render().take(100)))
-          )
-      def required[T](key: String)(using rw: JsonRW[T]): T =
-        fields.get(key) match
-          case Some(value) => rw.parse(s"$path.$key", value)
-          case None        => throw ParsingException(ParseError(s"$path.$key", "is missing"))
-      CutAnalysis(
-        required[String]("status"),
-        required[Option[Int]]("greedyCutEstimate"),
-        required[Seq[Solution]]("solutions"),
-        required[Int]("examinedCandidates")
-      )
-
 /** Bounded greedy and enumerative feedback-edge investigation for one SCC. */
 object CutAnalyzer:
+
+  val notRequested: CutAnalysis = CutAnalysis(
+    status = "notRequested",
+    greedyCutEstimate = None,
+    solutions = Nil,
+    examinedCandidates = 0
+  )
 
   private val maxCutCandidates = 6
   private val maxSolutions = 3
@@ -66,7 +36,11 @@ object CutAnalyzer:
   private case class GreedyPlan(count: Int, edges: Seq[Edge], complete: Boolean)
   private case class EnumerationResult(solutions: Seq[Seq[Edge]], exact: Boolean)
 
-  def analyze(scc: Set[String], edges: Set[Edge], budget: CutAnalysisBudget): CutAnalysis =
+  def analyze(
+      scc: Set[String],
+      edges: Set[Edge],
+      budget: CutAnalysisBudget
+  ): CutAnalysis =
     val deadline = deadlineNanos(budget.timeLimit)
     val state = new SearchState(deadline, budget.candidateLimit)
     val internal = edges.toSeq
@@ -75,23 +49,39 @@ object CutAnalyzer:
 
     val greedy = greedyCutPlan(scc, edges, state)
     if state.exceeded then
-      CutAnalysis("budgetExceeded", None, Seq.empty, state.examined)
+      CutAnalysis(
+        status = "budgetExceeded",
+        greedyCutEstimate = None,
+        solutions = Seq.empty,
+        examinedCandidates = state.examined
+      )
     else
       val enumeration = enumerateSolutions(scc, edges, internal, state)
-      val status =
+      val status: "budgetExceeded" | "completedExact" | "completedHeuristic" =
         if state.exceeded then "budgetExceeded"
         else if enumeration.exact then "completedExact"
         else "completedHeuristic"
       val completeSolutions = enumeration.solutions.map(toSolution)
       val withFallback =
         if completeSolutions.nonEmpty then completeSolutions
-        else if !state.exceeded && greedy.complete && dissolves(greedy.edges.toSet, scc, edges) then
+        else if !state.exceeded && greedy.complete && dissolves(
+            greedy.edges.toSet,
+            scc,
+            edges
+          )
+        then
           // Large SCCs skip exact enumeration. Serialize the greedy plan only
           // after validating it against the original SCC; a cut can split one
           // SCC into several cyclic components, all of which must be dissolved.
           Seq(toSolution(greedy.edges))
         else Seq.empty
-      CutAnalysis(status, if greedy.complete then Some(greedy.count) else None, withFallback, state.examined)
+      CutAnalysis(
+        status = status,
+        greedyCutEstimate =
+          if greedy.complete then Some(greedy.count) else None,
+        solutions = withFallback,
+        examinedCandidates = state.examined
+      )
 
   private final class SearchState(val deadline: Long, val candidateLimit: Int):
     var examined: Int = 0
@@ -206,7 +196,11 @@ object CutAnalyzer:
       if result > limit then limit + 1 else result.toInt
 
   private def toSolution(edges: Seq[Edge]): Solution =
-    Solution(edges.sortBy(e => (e.weight, e.source, e.target)).map(e => CutCandidate(e.source, e.target, e.weight)))
+    Solution(cuts =
+      edges
+        .sortBy(e => (e.weight, e.source, e.target))
+        .map(e => Cut(edge = Seq(e.source, e.target), weight = e.weight))
+    )
 
   private def dissolves(cuts: Set[Edge], scc: Set[String], edges: Set[Edge]): Boolean =
     val comps = TarjanScc.components(scc, edges -- cuts)
