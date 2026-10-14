@@ -140,11 +140,21 @@ preserve the selected project and scope when inspecting a subject.
 
 ## History and dashboard
 
-`.codeps/<project>.ndjson` contains one JSON object per recorded commit. Each entry owns its
+`.codeps/<project>.ndjson` contains one JSON object per recorded snapshot. Each entry owns its
 commit metadata once and has direct `packages` and optional `files` health sections. Scores are
 stored and displayed to two decimal places. The dashboard's Home tab shows the two-decimal average
 of the available package and file scores, with both underlying scores visible; it is a compact
 directional summary, not a replacement for either scope's evidence.
+
+The trend chart spaces snapshots evenly in recording order and labels its axis with short
+commit IDs. Dirty snapshots retain the `-dirty` suffix; timestamp-based IDs remain intact.
+Hovering or focusing a point shows its full ID, timestamp, and metric value. Selecting a point
+updates its metric details. On long histories the axis shows a subset of labels; every recorded
+point remains available through pages of up to 20 snapshots. The chart opens on the newest
+page; Older and Newer navigate history, while Latest snapshot always shows the newest recorded
+entry for the selected scope. Switching scopes opens that scope's newest page.
+Snapshot metadata defaults and overrides are defined in the
+[CLI reference](/reference/cli.html#status).
 
 ## Cycles
 

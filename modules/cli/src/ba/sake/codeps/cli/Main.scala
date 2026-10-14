@@ -71,6 +71,7 @@ object Main:
       testPatterns: Seq[String], significance: Double, maxSnapshotAge: String
   )
   private case class Config(repoRoot: os.Path, projects: Seq[Project])
+  private case class SnapshotMetadata(commit: String, at: Instant)
 
   @main
   def status(
@@ -84,7 +85,8 @@ object Main:
       loaded <- loadConfig(config)
       selected <- selectProjects(loaded, projects)
       _ <- if out.nonEmpty && selected.size != 1 then Left("--out requires exactly one selected project") else Right(())
-      _ <- sequence(selected.map(runStatusProject(loaded.repoRoot, _, commit, generatedAt, out)))
+      metadata <- snapshotMetadata(commit, generatedAt, loaded.repoRoot)
+      _ <- sequence(selected.map(runStatusProject(loaded.repoRoot, _, metadata, generatedAt, out)))
     yield ()
     result.fold(fail, _ => 0)
 
@@ -155,7 +157,7 @@ object Main:
   private def runStatusProject(
       repoRoot: os.Path,
       project: Project,
-      explicitCommit: Option[String],
+      metadata: SnapshotMetadata,
       rawGeneratedAt: Option[String],
       explicitOut: Option[String]
   ): Either[String, Unit] =
@@ -192,11 +194,10 @@ object Main:
       datedFiles <- files match
         case None         => Right(None)
         case Some(report) => setGeneratedAt(report, rawGeneratedAt).map(Some(_))
-      commit <- resolvedCommit(explicitCommit, repoRoot)
       age <- parseMaxSnapshotAge(project.maxSnapshotAge)
       current = HealthHistoryEntry(
-        at = datedPackages.generatedAt,
-        commit = commit,
+        at = metadata.at,
+        commit = metadata.commit,
         packages = HealthCalculator.fromReport(datedPackages),
         files = datedFiles.map(HealthCalculator.fromReport),
         schemaVersion = 6
@@ -342,12 +343,34 @@ projects:
             Left(
               s"invalid --generated-at: $raw (expected ISO-8601 UTC instant)"
             )
-  private def resolvedCommit(explicit: Option[String], root: os.Path): Either[String, String] = explicit match
-    case Some(value) if value.nonEmpty => Right(value)
-    case Some(_) => Left("--commit must not be empty")
-    case None =>
-      val result = os.proc("git", "rev-parse", "HEAD").call(cwd = root, check = false, stderr = os.Pipe)
-      if result.exitCode == 0 then Right(result.out.text().trim) else Left("unable to resolve git HEAD; pass --commit explicitly")
+  private def snapshotMetadata(
+      explicitCommit: Option[String],
+      rawGeneratedAt: Option[String],
+      root: os.Path
+  ): Either[String, SnapshotMetadata] =
+    if explicitCommit.contains("") then Left("--commit must not be empty")
+    else
+      val analysisAt = rawGeneratedAt match
+        case None => Right(Instant.now())
+        case Some(raw) =>
+          try Right(Instant.parse(raw))
+          catch case _: Exception => Left(s"invalid --generated-at: $raw (expected ISO-8601 UTC instant)")
+      analysisAt.flatMap { now =>
+        val head = os.proc("git", "show", "-s", "--format=%H%n%ct", "HEAD")
+          .call(cwd = root, check = false, stderr = os.Pipe)
+        if head.exitCode != 0 then
+          Right(SnapshotMetadata(explicitCommit.getOrElse(now.toEpochMilli.toString), now))
+        else
+          val status = os.proc("git", "status", "--porcelain", "--untracked-files=normal")
+            .call(cwd = root, check = false, stderr = os.Pipe)
+          if status.exitCode != 0 then Left(s"unable to read git working tree status: $root")
+          else
+            val lines = head.out.text().trim.linesIterator.toSeq
+            val dirty = status.out.text().nonEmpty
+            val commit = explicitCommit.getOrElse(lines.head + (if dirty then "-dirty" else ""))
+            val at = if dirty || rawGeneratedAt.nonEmpty then now else Instant.ofEpochSecond(lines(1).toLong)
+            Right(SnapshotMetadata(commit, at))
+      }
   private def readHistory(path: os.Path): Either[String, (os.Path, String, Seq[HealthHistoryEntry])] =
     if os.exists(path) && !os.isFile(path) then Left(s"history path is not a file: $path")
     else

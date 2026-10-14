@@ -59,6 +59,9 @@ object HealthHistoryHtml:
     .chart-tooltip strong, .chart-tooltip small { display: block; }
     .chart-tooltip small { color: var(--pico-muted-color); }
     .trend-header h2 { margin-bottom: 0; }
+    #history-pages { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: .5rem; }
+    #history-pages[hidden] { display: none; }
+    #history-pages button { width: auto; margin: 0; padding: .35rem .75rem; }
     .trend-layout { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
     .metric-control { margin-bottom: 1rem; }
     #metric { min-height: 0; padding: .35rem .6rem; font-size: .9rem; }
@@ -98,6 +101,11 @@ object HealthHistoryHtml:
           <div id="chart-tooltip" class="chart-tooltip" role="tooltip" aria-hidden="true"></div>
         </div>
       </div>
+      <nav id="history-pages" aria-label="History pages" hidden>
+        <button id="older-page" class="secondary" type="button">Older</button>
+        <small id="history-page-label" aria-live="polite"></small>
+        <button id="newer-page" class="secondary" type="button">Newer</button>
+      </nav>
     </article>
       <article><h2 id="factors-title">Health factors</h2><small class="section-note">Higher is better — each factor is scored from 0 to 10.</small><div id="factors"></div></article>
     <div class="grid">
@@ -111,6 +119,9 @@ object HealthHistoryHtml:
     (() => {
       const entries = __HEALTH_DATA__;
       let scope = "home";
+      const pageSize = 20;
+      let historyPage = 0;
+      let allSnapshots = [];
       let snapshots = [];
       const metricDefs = [
         { key: "health.score", label: "Health score", description: "The overall score from 1 to 10; higher is better.", value: s => s.health.score, format: value => `${scoreText(value)}/10` },
@@ -142,7 +153,7 @@ object HealthHistoryHtml:
         const publicSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.publicSurface, 0);
         const totalSurface = snapshots.reduce((sum, snapshot) => sum + snapshot.surface.totalDeclaredSurface, 0);
         return {
-          at: entry.at, commit: entry.commit, date: new Date(entry.at),
+          at: entry.at, commit: entry.commit,
           status: statusForScore(score),
           health: { score, factors: { cycles: factor("cycles"), mutableSurface: factor("mutableSurface"), exposedSurface: factor("exposedSurface"), structuralUse: factor("structuralUse"), propagators: factor("propagators") } },
           cycles: { count: snapshots.reduce((sum, snapshot) => sum + snapshot.cycles.count, 0), nodes: snapshots.reduce((sum, snapshot) => sum + snapshot.cycles.nodes, 0), largestScc: Math.max(...snapshots.map(snapshot => snapshot.cycles.largestScc)) },
@@ -154,17 +165,31 @@ object HealthHistoryHtml:
       };
       function selectScope(nextScope) {
         scope = nextScope;
-        snapshots = scope === "home" ? entries.map(homeSnapshot) : entries.flatMap(entry => entry[scope] ? [{ ...entry[scope], at: entry.at, commit: entry.commit, date: new Date(entry.at) }] : []);
-        selected = Math.max(0, snapshots.length - 1);
+        allSnapshots = scope === "home" ? entries.map(homeSnapshot) : entries.flatMap(entry => entry[scope] ? [{ ...entry[scope], at: entry.at, commit: entry.commit }] : []);
+        historyPage = 0;
         metricSelect.value = "health.score";
+        updateMetricHelp();
         document.querySelector(".metric-control").hidden = scope === "home";
         document.querySelectorAll("#scope-tabs button").forEach(button => {
           const active = button.dataset.scope === scope;
           button.setAttribute("aria-selected", active);
           button.classList.toggle("secondary", !active);
         });
+        showHistoryPage();
+      }
+      function showHistoryPage() {
+        const end = allSnapshots.length - historyPage * pageSize;
+        const start = Math.max(0, end - pageSize);
+        snapshots = allSnapshots.slice(start, end);
+        selected = Math.max(0, snapshots.length - 1);
+        document.getElementById("history-pages").hidden = allSnapshots.length <= pageSize;
+        document.getElementById("older-page").disabled = start === 0;
+        document.getElementById("newer-page").disabled = historyPage === 0;
+        document.getElementById("history-page-label").textContent = allSnapshots.length ? `${start + 1}–${end} of ${allSnapshots.length}` : "";
         updateDetails(); draw();
       }
+      document.getElementById("older-page").addEventListener("click", () => { historyPage++; showHistoryPage(); });
+      document.getElementById("newer-page").addEventListener("click", () => { historyPage--; showHistoryPage(); });
       ["home", "packages", ...(entries.some(entry => entry.files) ? ["files"] : [])].forEach(tabScope => {
         const button = document.createElement("button");
         button.type = "button"; button.dataset.scope = tabScope; button.setAttribute("role", "tab");
@@ -183,8 +208,7 @@ object HealthHistoryHtml:
 
       function formatNumber(value) { return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }); }
       function scoreText(value) { return Number(value).toFixed(2); }
-      function shortCommit(commit) { return commit.length > 12 ? commit.slice(0, 12) : commit; }
-      function axisDateText(date) { return d3.utcFormat("%b %-d, %H:%M UTC")(date); }
+      function shortCommit(commit) { return /^[0-9a-f]{40,64}(-dirty)?$/i.test(commit) ? commit.slice(0, 7) + (commit.endsWith("-dirty") ? "-dirty" : "") : commit; }
       function dateText(at) { return new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }); }
       function statusColor(status) {
         return status === "excellent" || status === "healthy" ? "var(--pico-ins-color)" : status === "needs-attention" ? "var(--pico-mark-background-color)" : "var(--pico-del-color)";
@@ -198,10 +222,10 @@ object HealthHistoryHtml:
       }
       function showTooltip(point, xPosition, yPosition, xScale, yScale) {
         const definition = selectedMetric();
-        const plotX = xScale(point.date), plotY = yScale(point.value);
+        const plotX = xScale(point.index), plotY = yScale(point.value);
         d3.select(chart).select(".hover-line").style("display", null).attr("x1", plotX).attr("x2", plotX);
         d3.select(chart).select(".hover-marker").style("display", null).attr("cx", plotX).attr("cy", plotY);
-        tooltip.innerHTML = `<strong>${escapeHtml(definition.label)}: ${escapeHtml(definition.format(point.value))}</strong><small>${escapeHtml(dateText(point.snapshot.at))}</small><small>commit ${escapeHtml(shortCommit(point.snapshot.commit))}</small>`;
+        tooltip.innerHTML = `<strong>${escapeHtml(definition.label)}: ${escapeHtml(definition.format(point.value))}</strong><small>${escapeHtml(point.snapshot.commit)}</small><small>${escapeHtml(dateText(point.snapshot.at))}</small>`;
         tooltip.style.display = "block";
         tooltip.setAttribute("aria-hidden", "false");
         const bounds = chartWrap.getBoundingClientRect();
@@ -219,40 +243,41 @@ object HealthHistoryHtml:
         const svg = d3.select(chart).attr("viewBox", `0 0 ${width} ${height}`);
         svg.selectAll("*").remove();
         if (!snapshots.length) { svg.append("text").attr("x", width / 2).attr("y", height / 2).attr("text-anchor", "middle").text("No snapshots recorded."); return; }
-        const points = snapshots.map((snapshot, index) => ({ snapshot, index, date: snapshot.date, value: definition.value(snapshot) }));
+        const points = snapshots.map((snapshot, index) => ({ snapshot, index, value: definition.value(snapshot) }));
         const valid = points.filter(point => point.value != null && Number.isFinite(point.value));
         if (!valid.length) { svg.append("text").attr("x", width / 2).attr("y", height / 2).attr("text-anchor", "middle").text("No numeric values recorded for this metric."); return; }
         const [minValue, maxValue] = d3.extent(valid, point => point.value);
         const valueRange = maxValue === minValue ? Math.max(1, Math.abs(maxValue) * .1) : maxValue - minValue;
-        const dates = d3.extent(points, point => point.date);
-        const dateRange = dates[0].getTime() === dates[1].getTime() ? [new Date(dates[0].getTime() - 86400000), new Date(dates[1].getTime() + 86400000)] : dates;
-        const x = d3.scaleUtc().domain(dateRange).range([0, innerWidth]);
+        const x = d3.scalePoint().domain(points.map(point => point.index)).range([8, innerWidth - 8]);
         const y = d3.scaleLinear().domain([minValue - valueRange * .12, maxValue + valueRange * .12]).nice().range([innerHeight, 0]);
         const plot = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
         const hoverLine = plot.append("line").attr("class", "hover-line").attr("y1", 0).attr("y2", innerHeight).style("display", "none");
         const hoverMarker = plot.append("circle").attr("class", "hover-marker").attr("r", 6).style("display", "none");
-        const bisect = d3.bisector(point => point.date).center;
         const moveTooltip = function(event) {
           const [pointerX] = d3.pointer(event, this);
-          const point = points[Math.max(0, Math.min(points.length - 1, bisect(points, x.invert(pointerX))))];
+          const index = Math.max(0, Math.min(points.length - 1, Math.round((pointerX - x(0)) / (x.step() || 1))));
+          const point = points[index];
           if (point.value == null || !Number.isFinite(point.value)) { hideTooltip(); return; }
           showTooltip(point, event.clientX, event.clientY, x, y);
         };
         plot.append("rect").attr("class", "chart-hit").attr("width", innerWidth).attr("height", innerHeight)
           .on("pointermove", moveTooltip).on("pointerleave", hideTooltip).on("pointerdown", moveTooltip);
         plot.append("g").attr("class", "grid").call(d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat(() => ""));
-        plot.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(Math.min(5, snapshots.length)).tickFormat(axisDateText));
+        const maxTicks = Math.max(2, Math.floor(innerWidth / 125));
+        const tickCount = Math.min(points.length, maxTicks);
+        const tickValues = Array.from({ length: tickCount }, (_, index) => Math.round(index * (points.length - 1) / Math.max(1, tickCount - 1)));
+        plot.append("g").attr("class", "commit-axis").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).tickValues(tickValues).tickFormat(index => shortCommit(snapshots[index].commit)));
         plot.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(definition.format));
-        plot.append("path").datum(points).attr("class", "trend-line").attr("d", d3.line().defined(point => point.value != null).x(point => x(point.date)).y(point => y(point.value)));
-        plot.selectAll(".trend-point").data(valid).join("circle").attr("class", point => point.index === selected ? "trend-point selected-point" : "trend-point").attr("cx", point => x(point.date)).attr("cy", point => y(point.value)).attr("r", point => point.index === selected ? 7 : 5).attr("fill", point => statusColor(point.snapshot.status)).attr("tabindex", 0).attr("role", "button").attr("aria-label", point => `${definition.label}: ${definition.format(point.value)} at ${dateText(point.snapshot.at)}`).on("pointerenter", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointermove", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointerleave", hideTooltip).on("focus", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("blur", hideTooltip).on("click", (_, point) => { selected = point.index; updateDetails(); draw(); }).on("keydown", (event, point) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selected = point.index; updateDetails(); draw(); } });
+        plot.append("path").datum(points).attr("class", "trend-line").attr("d", d3.line().defined(point => point.value != null && Number.isFinite(point.value)).x(point => x(point.index)).y(point => y(point.value)));
+        plot.selectAll(".trend-point").data(valid).join("circle").attr("class", point => point.index === selected ? "trend-point selected-point" : "trend-point").attr("cx", point => x(point.index)).attr("cy", point => y(point.value)).attr("r", point => point.index === selected ? 7 : 5).attr("fill", point => statusColor(point.snapshot.status)).attr("tabindex", 0).attr("role", "button").attr("aria-label", point => `${point.snapshot.commit}: ${definition.label} ${definition.format(point.value)} at ${dateText(point.snapshot.at)}`).on("pointerenter", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointermove", (event, point) => showTooltip(point, event.clientX, event.clientY, x, y)).on("pointerleave", hideTooltip).on("focus", (event, point) => { const bounds = event.currentTarget.getBoundingClientRect(); showTooltip(point, bounds.x + bounds.width / 2, bounds.y, x, y); }).on("blur", hideTooltip).on("click", (_, point) => { selected = point.index; updateDetails(); draw(); }).on("keydown", (event, point) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selected = point.index; updateDetails(); draw(); } });
       }
       function updateDetails() {
         if (!snapshots.length) { d3.select("#latest").text("No snapshots"); d3.select("#trend-summary").text(""); d3.selectAll("#cycle-metrics, #architecture-metrics, #surface-metrics, #factors").selectAll("*").remove(); return; }
-        const snapshot = snapshots[selected], latest = snapshots[snapshots.length - 1];
+        const snapshot = snapshots[selected], latest = allSnapshots[allSnapshots.length - 1];
         const scopeScoreCards = latest.scopeScores ? `<div class="scope-scores">${latest.scopeScores.map(view => `<span class="scope-score">${escapeHtml(view.label)} <strong style="color:${statusColor(view.status)}">${scoreText(view.score)}/10</strong></span>`).join("")}</div>` : "";
-        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${scoreText(latest.health.score)}/10</div><div class="status">${scope === "home" ? "combined health" : escapeHtml(latest.status)}</div><small>${escapeHtml(dateText(latest.at))}</small>${scopeScoreCards}`);
-        d3.select("#trend-summary").text(`${snapshots.length} recorded snapshot${snapshots.length === 1 ? "" : "s"}`);
-        d3.select("#selected-meta").html(`Selected snapshot · health <strong>${scoreText(snapshot.health.score)}/10</strong> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span> · ${escapeHtml(dateText(snapshot.at))} · commit <strong>${escapeHtml(shortCommit(snapshot.commit))}</strong>`);
+        d3.select("#latest").html(`<div class="score" style="color:${statusColor(latest.status)}">${scoreText(latest.health.score)}/10</div><div class="status">${scope === "home" ? "combined health" : escapeHtml(latest.status)}</div><small title="${escapeHtml(dateText(latest.at))}">${escapeHtml(shortCommit(latest.commit))}</small>${scopeScoreCards}`);
+        d3.select("#trend-summary").text(`${allSnapshots.length} recorded snapshot${allSnapshots.length === 1 ? "" : "s"} · in recording order`);
+        d3.select("#selected-meta").html(`Selected snapshot <strong title="${escapeHtml(dateText(snapshot.at))}">${escapeHtml(shortCommit(snapshot.commit))}</strong> · health <strong>${scoreText(snapshot.health.score)}/10</strong> · <span style="color:${statusColor(snapshot.status)}">${escapeHtml(snapshot.status)}</span>`);
         const home = scope === "home";
         document.getElementById("cycles-title").textContent = home ? "Cycle signals" : "Cycles";
         document.getElementById("architecture-title").textContent = home ? "Scope scores" : "Architecture";
