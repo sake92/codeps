@@ -28,6 +28,103 @@ class MainSpec extends munit.FunSuite:
   private val history = os.pwd / ".codeps" / "fixture.ndjson"
   private val output = os.pwd / ".codeps" / "out" / "fixture"
 
+  private def withSnapshotProject(git: Boolean)(body: os.Path => Unit): Unit =
+    val repo = os.temp.dir(prefix = "codeps-snapshot-")
+    try
+      os.makeDir.all(repo / ".codeps")
+      os.copy(os.pwd / "testFixtures" / "cyclic.json", repo / "graph.json")
+      os.write(repo / ".gitignore", ".codeps/out/\n.codeps/*.ndjson\n")
+      os.write(repo / ".codeps" / "config.yaml",
+        "projects:\n  fixture:\n    source: export\n    inputs: [graph.json]\n    max-snapshot-age: off\n")
+      if git then
+        os.proc("git", "init", "-q").call(cwd = repo)
+        os.proc("git", "add", ".").call(cwd = repo)
+        os.proc("git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com",
+          "commit", "-qm", "fixture").call(cwd = repo,
+          env = Map("GIT_AUTHOR_DATE" -> "2026-09-01T09:00:00Z", "GIT_COMMITTER_DATE" -> "2026-09-02T10:00:00Z"))
+      body(repo)
+    finally os.remove.all(repo)
+
+  private def snapshot(repo: os.Path): HealthHistoryEntry =
+    os.read.lines(repo / ".codeps" / "fixture.ndjson").last.parseJson[HealthHistoryEntry]
+
+  test("clean snapshots use HEAD and its committer timestamp, keeping report generation time") {
+    withSnapshotProject(git = true) { repo =>
+      val head = os.proc("git", "rev-parse", "HEAD").call(cwd = repo).out.text().trim
+      val result = runCliIn(repo, "status")
+      assertEquals(result.exitCode, 0, result.err.text())
+      assertEquals(snapshot(repo).commit, head)
+      assertEquals(snapshot(repo).at, java.time.Instant.parse("2026-09-02T10:00:00Z"))
+      val report = os.read(repo / ".codeps" / "out" / "fixture" / "report.json").parseJson[MetricsReports]
+      assert(report.packages.generatedAt.isAfter(snapshot(repo).at))
+      val before = os.read(repo / ".codeps" / "fixture.ndjson")
+      assertEquals(runCliIn(repo, "status").exitCode, 0)
+      assertEquals(os.read(repo / ".codeps" / "fixture.ndjson"), before)
+    }
+  }
+
+  test("unstaged, staged and untracked changes mark snapshots dirty with analysis time") {
+    for change <- Seq("unstaged", "staged", "untracked") do
+      withSnapshotProject(git = true) { repo =>
+        val head = os.proc("git", "rev-parse", "HEAD").call(cwd = repo).out.text().trim
+        if change == "untracked" then os.write(repo / "new.txt", "new")
+        else
+          os.write.append(repo / ".gitignore", "\n# changed\n")
+          if change == "staged" then os.proc("git", "add", ".gitignore").call(cwd = repo)
+        val before = java.time.Instant.now()
+        val result = runCliIn(repo, "status")
+        assertEquals(result.exitCode, 0, result.err.text())
+        assertEquals(snapshot(repo).commit, s"$head-dirty")
+        assert(!snapshot(repo).at.isBefore(before))
+        assert(!snapshot(repo).at.isAfter(java.time.Instant.now()))
+      }
+  }
+
+  test("non-Git directories and unborn repositories use epoch milliseconds as snapshot IDs") {
+    for unborn <- Seq(false, true) do
+      withSnapshotProject(git = false) { repo =>
+        if unborn then os.proc("git", "init", "-q").call(cwd = repo)
+        val result = runCliIn(repo, "status")
+        assertEquals(result.exitCode, 0, result.err.text())
+        val entry = snapshot(repo)
+        assertEquals(entry.commit, entry.at.toEpochMilli.toString)
+      }
+  }
+
+  test("snapshot metadata overrides work independently") {
+    withSnapshotProject(git = true) { repo =>
+      val result = runCliIn(repo, "status", "--commit", "custom")
+      assertEquals(result.exitCode, 0, result.err.text())
+      assertEquals(snapshot(repo).commit, "custom")
+      assertEquals(snapshot(repo).at, java.time.Instant.parse("2026-09-02T10:00:00Z"))
+    }
+    withSnapshotProject(git = false) { repo =>
+      val at = java.time.Instant.parse("2026-09-04T10:00:00Z")
+      val result = runCliIn(repo, "status", "--generated-at", at.toString)
+      assertEquals(result.exitCode, 0, result.err.text())
+      assertEquals(snapshot(repo).at, at)
+      assertEquals(snapshot(repo).commit, at.toEpochMilli.toString)
+    }
+  }
+
+  test("all projects share metadata resolved before history writes dirty the checkout") {
+    withSnapshotProject(git = true) { repo =>
+      os.write.over(repo / ".gitignore", ".codeps/out/\n")
+      os.write.append(repo / ".codeps" / "config.yaml",
+        "  other:\n    source: export\n    inputs: [graph.json]\n")
+      os.proc("git", "add", ".").call(cwd = repo)
+      os.proc("git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com",
+        "commit", "-qm", "second project").call(cwd = repo)
+      val head = os.proc("git", "rev-parse", "HEAD").call(cwd = repo).out.text().trim
+      val result = runCliIn(repo, "status")
+      assertEquals(result.exitCode, 0, result.err.text())
+      val other = os.read.lines(repo / ".codeps" / "other.ndjson").last.parseJson[HealthHistoryEntry]
+      assertEquals(snapshot(repo).commit, head)
+      assertEquals(other.commit, head)
+      assertEquals(other.at, snapshot(repo).at)
+    }
+  }
+
   override def beforeEach(context: BeforeEach): Unit =
     os.makeDir.all(config / os.up)
     os.write.over(
@@ -66,7 +163,7 @@ class MainSpec extends munit.FunSuite:
     assert(html.contains("Home"))
     assert(html.contains("combined health"))
     assert(html.contains("aria-selected"))
-    assert(html.contains("%b %-d, %H:%M UTC"))
+    assert(html.contains("commit-axis"))
     assert(!html.contains("Maximum layer depth"))
     assert(html.contains("https://cdn.jsdelivr.net/npm/d3@7.9.0"))
     val report = os.read(output / "report.json")

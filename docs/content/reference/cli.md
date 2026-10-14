@@ -72,6 +72,16 @@ codeps status [--config path] [--project id]... [--commit sha] [--generated-at i
 
 With no `--project`, codeps runs every configured project. `--commit` and `--generated-at` are one-off overrides; `--out` is allowed only for exactly one selected project.
 
+Snapshot metadata is resolved once per invocation, before any project writes its history:
+
+| Working tree | Snapshot `commit` | Snapshot `at` |
+|---|---|---|
+| Clean Git checkout | Full HEAD hash | HEAD committer timestamp |
+| Dirty Git checkout (staged, unstaged, or untracked changes) | Full HEAD hash followed by `-dirty` | Analysis time |
+| No resolvable Git HEAD, including a repository without commits | Epoch milliseconds at analysis time | Analysis time |
+
+`--commit` overrides the snapshot ID. `--generated-at` overrides the snapshot timestamp and report generation timestamps; without Git, it also supplies the timestamp used for the fallback ID. Cached reports otherwise keep their actual analysis timestamps, including in clean checkouts. Ignored files do not mark a checkout dirty.
+
 For a project named `backend`, default artifacts are:
 
 | Path | Purpose |
