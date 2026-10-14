@@ -114,6 +114,11 @@ local const cliModules = new CreateScalaModules {
       "org.yaml:snakeyaml:2.3"
     }
     mainClass = "ba.sake.codeps.cli.Main"
+    pomSettings {
+      groupId = "ba.sake"
+      artifactId = "codeps-cli"
+      version = read?("env:VERSION")
+    }
   }
   testTemplate = (template.asTest()) {
     junitXmlReport {

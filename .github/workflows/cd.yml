@@ -116,9 +116,16 @@ jobs:
         run: brew install sake92/tap/deder
       - name: Build CLI assembly
         shell: bash -eo pipefail {0}
+        env:
+          VERSION: ${{ needs.precheck.outputs.version }}
         run: |
           deder exec -t assembly -m cli
-          cp .deder/out/cli/assembly/out.jar codeps-cli-${{ needs.precheck.outputs.version }}.jar
+          ACTUAL_VERSION=$(java -jar .deder/out/cli/assembly/out.jar --version)
+          if [[ "$ACTUAL_VERSION" != "$VERSION" ]]; then
+            echo "CLI version mismatch: expected $VERSION, got $ACTUAL_VERSION" >&2
+            exit 1
+          fi
+          cp .deder/out/cli/assembly/out.jar "codeps-cli-$VERSION.jar"
       - name: Release and publish Homebrew formula
         uses: jreleaser/release-action@v2
         with:
