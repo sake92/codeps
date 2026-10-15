@@ -14,8 +14,8 @@ generates a static dashboard for each configured project.
 Configure the repository once, then run one command in CI:
 
 ```shell
-curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar status
+brew install sake92/tap/codeps
+codeps status
 ```
 
 The examples below use `codeps` as the installed CLI command.

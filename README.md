@@ -27,11 +27,6 @@ Requires a JDK (11+).
 # macOS or Linux (Homebrew)
 brew install sake92/tap/codeps
 
-# Or download the prebuilt CLI jar
-curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-
-# In the commands below, `codeps` means `java -jar codeps.jar`.
-
 # Scala: compile with SemanticDB enabled
 scala-cli compile --server=false --semanticdb -d classes src/
 
