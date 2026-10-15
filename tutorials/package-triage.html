@@ -82,22 +82,25 @@
     <span class="hljs-attr">include:</span> [<span class="hljs-string">com.example</span>]
     <span class="hljs-attr">exclude:</span> [<span class="hljs-string">com.example.internal</span>]
 </code></pre>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps status --project app
 </code></pre>
    <h2 id="2-choose-one-finding">2. Choose one finding<a href="#2-choose-one-finding" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Read the report JSON in this order (the dashboard is for trend and summary evidence):</p>
+   <p>Read a bounded selection from the cached report:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps findings --project app --limit 10 --format json
+</code></pre>
+   <p>Check <code>total</code>, <code>omitted</code>, and <code>sourceFindingsOmitted</code>. The selection is exhaustive only when both omission counts are zero. Narrow it with <code>--kind cycle</code> or <code>--severity high</code> if needed. Prioritize the evidence in this order:</p>
    <ol>
     <li><strong>Cycles</strong> — a package SCC blocks clean module boundaries. Start with the largest SCC; <code>extFanIn</code> shows how much code feeds into it.</li>
     <li><strong>Change propagators</strong> — high <code>fanIn</code> and <code>fanOut</code> identify packages whose changes spread widely. They are useful candidates for a narrower API or a split.</li>
-    <li><strong>Surface risks</strong> — low <code>use</code> (<code>dependentsPerPublicPort</code>) can indicate a package exposing more API than its consumers need. Check <code>ports</code>, <code>mut</code>, and <code>encap%</code> together; no single score is a verdict.</li>
-    <li><strong>Orphans</strong> — isolated nodes are dead-code-removal candidates. Confirm they are not entry points or reflection targets before deleting anything.</li>
+    <li><strong>Surface risks</strong> — low <code>dependentsPerPublicPort</code> can indicate a package exposing more API than its consumers need. Inspect <code>ports</code>, <code>mutPorts</code>, and declaration-surface metrics together; no single score is a verdict.</li>
    </ol>
+   <p>Orphans are outside the findings index. If investigating removal candidates, read the cached report's <code>packages.orphans</code> field, confirm each source still exists, and check entry points and reflection before proposing deletion.</p>
    <h2 id="3-investigate-the-package-not-every-metric">3. Investigate the package, not every metric<a href="#3-investigate-the-package-not-every-metric" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
-   <p>Ask codeps for a cached report detail using an id printed in the report:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --id scc:com.example.orders
-codeps inspect-node --id com.example.orders
+   <p>Ask codeps for cached detail using a finding's <code>subject</code> value as the id. For example:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-cycle --project app --id scc:com.example.orders
+codeps inspect-node --project app --id com.example.orders
 </code></pre>
-   <p>Both commands read the most recent <code>.codeps/out/&lt;project&gt;/report.json</code>, so run <code>codeps status</code> first. Cut analysis is not currently exposed by the CLI: <code>cutAnalysis.status</code> in the report is always <code>notRequested</code>, so a suggested cut list will not be populated. Use <code>extFanIn</code>, <code>members</code>, and <code>witnessCycle</code> to reason about the cycle by hand.</p>
+   <p>Both commands read the most recent <code>.codeps/out/app/report.json</code>, so run <code>codeps status --project app</code> first. Cut analysis is not currently exposed by the CLI: <code>cutAnalysis.status</code> in the report is always <code>notRequested</code>, so a suggested cut list will not be populated. Use <code>extFanIn</code>, <code>members</code>, and <code>witnessCycle</code> to reason about the cycle by hand.</p>
    <p>For field meanings, see <a href="https://sake92.github.io/codeps/reference/report.html">Metrics report</a>.</p>
    <p>The information a cycle or propagator finding surfaces is an investigation lead. Validate the dependency direction and domain ownership before changing an API.</p>
    <h2 id="4-keep-large-graphs-readable">4. Keep large graphs readable<a href="#4-keep-large-graphs-readable" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>

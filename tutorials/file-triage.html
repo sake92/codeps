@@ -70,8 +70,12 @@
 </code></pre>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps status --project app
 </code></pre>
-   <p>The report uses the same sections as the package report, but ids are source-file paths. Start with cycles, then change propagators, then surface risks.</p>
+   <p>Read bounded file findings from the cached report:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">codeps findings --project app --scope files --limit 10 --format json
+</code></pre>
+   <p>Check <code>omitted</code> and <code>sourceFindingsOmitted</code>; both must be zero for an exhaustive selection. File ids are source-file paths. Start with cycles, then change propagators, then surface risks.</p>
    <h2 id="2-inspect-the-concrete-file">2. Inspect the concrete file<a href="#2-inspect-the-concrete-file" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Use a subject id returned by file findings, keeping <code>--project app --scope files</code>:</p>
    <pre><code class="language-shell hljs" data-highlighted="yes">codeps inspect-node --project app --scope files --id src/com/example/orders/OrderService.scala
 </code></pre>
    <p>For a file-level cycle, inspect the SCC directly:</p>

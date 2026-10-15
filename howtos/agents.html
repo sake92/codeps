@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Install the Codeps skill and ask your agent to find dependency problems and quick wins">
+  <title> Use codeps with an AI agent | codeps </title>
+  <link rel="shortcut icon" href="https://sake92.github.io/codeps/images/favicon.png" type="image/png">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-dark.min.css" media="(prefers-color-scheme: dark)" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/a11y-light.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.conditional.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/default.css">
+  <link rel="stylesheet" href="https://sake92.github.io/codeps/styles/main.css">
+ </head>
+ <body>
+  <header class="pico container">
+   <nav>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/">Home</a></li>
+    </ul>
+    <ul>
+     <li>
+      <form action="https://sake92.github.io/codeps/search/results.html" method="GET">
+       <input name="q" type="search" placeholder="Search">
+      </form>
+     </li>
+    </ul>
+    <ul>
+     <li><a href="https://sake92.github.io/codeps/tutorials">Tutorials</a></li>
+     <li><a href="https://sake92.github.io/codeps/howtos">How-Tos</a></li>
+     <li><a href="https://sake92.github.io/codeps/reference">Reference</a></li>
+    </ul>
+   </nav>
+  </header>
+  <main class="pico container">
+   <div class="grid">
+    <div>
+     <details open>
+      <summary>On this page</summary>
+      <nav aria-label="Table of contents">
+       <ul>
+        <li><a href="#use-codeps-with-an-ai-agent">Use codeps with an AI agent</a>
+         <ul>
+          <li><a href="#install-the-skill">Install the skill</a></li>
+          <li><a href="#ask-for-an-analysis">Ask for an analysis</a></li>
+          <li><a href="#follow-up-on-a-finding">Follow up on a finding</a></li>
+         </ul></li>
+       </ul>
+      </nav>
+     </details>
+    </div>
+    <div></div>
+    <div></div>
+   </div>
+   <h1 id="use-codeps-with-an-ai-agent">Use codeps with an AI agent<a href="#use-codeps-with-an-ai-agent" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
+   <h2 id="install-the-skill">Install the skill<a href="#install-the-skill" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Install the <a href="https://github.com/sake92/skills/tree/main/skills/codeps">Codeps skill</a> from your project directory:</p>
+   <pre><code class="language-shell hljs" data-highlighted="yes">npx skills add sake92/skills --skill codeps
+</code></pre>
+   <p>Select your coding agent in the installer. Add <code>-g</code> to make the skill available across your projects. See the <a href="https://github.com/vercel-labs/skills#readme">skills installer documentation</a> for supported agents and installation options.</p>
+   <h2 id="ask-for-an-analysis">Ask for an analysis<a href="#ask-for-an-analysis" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Open your project in the coding agent and give it a prompt such as:</p>
+   <blockquote>
+    <p>Use the codeps skill to analyze this codebase. First configure codeps for this project, or verify its existing configuration: select the correct dependency producer, project root, fresh build inputs, and include/exclude rules so the analysis covers our code. Assess the package-per-feature structure: whether related feature code belongs together and dependencies between features are clear. Find dependency cycles, the messiest parts, and quick wins for simplification. Rank the findings by likely impact and effort, with concrete files or packages and evidence for each. Analyze and recommend changes first.</p>
+   </blockquote>
+   <p>The skill guides the agent through choosing dependency inputs, building the project, running codeps, and inspecting relevant findings. It includes a runner for the supported CLI version. If your project needs input setup or the build fails, the agent should explain what is missing and which conclusions it cannot verify.</p>
+   <h2 id="follow-up-on-a-finding">Follow up on a finding<a href="#follow-up-on-a-finding" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h2>
+   <p>Choose a recommendation and ask the agent to implement it:</p>
+   <blockquote>
+    <p>Implement the smallest change that breaks the cycle you identified. Rebuild, run the relevant tests, and use codeps to verify the cycle is gone. Show the before and after evidence.</p>
+   </blockquote>
+   <p>For manual analysis commands, see the <a href="https://sake92.github.io/codeps/reference/cli.html">CLI reference</a> and <a href="https://sake92.github.io/codeps/tutorials/package-triage.html">package triage tutorial</a>.</p>
+   <div role="group">
+    <span></span> <span></span> <a role="button" href="https://sake92.github.io/codeps/howtos/semdb.html">Export Scala/SemanticDB projects ➡️</a>
+   </div>
+  </main>
+  <footer class="pico container">codeps | Code deps health tracker</footer>
+ </body>
+</html>
