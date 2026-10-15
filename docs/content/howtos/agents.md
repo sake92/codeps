@@ -24,10 +24,14 @@ for supported agents and installation options.
 
 Open your project in the coding agent and give it a prompt such as:
 
-> Use the codeps skill to analyze this codebase. Find dependency cycles, the
-> messiest parts, and quick wins for simplification. Rank the findings by likely
-> impact and effort, with concrete files or packages and evidence for each.
-> Analyze and recommend changes first.
+> Use the codeps skill to analyze this codebase. First configure codeps for this
+> project, or verify its existing configuration: select the correct dependency
+> producer, project root, fresh build inputs, and include/exclude rules so the
+> analysis covers our code. Assess the package-per-feature structure: whether
+> related feature code belongs together and dependencies between features are
+> clear. Find dependency cycles, the messiest parts, and quick wins for
+> simplification. Rank the findings by likely impact and effort, with concrete
+> files or packages and evidence for each. Analyze and recommend changes first.
 
 The skill guides the agent through choosing dependency inputs, building the
 project, running codeps, and inspecting relevant findings. It includes a runner
