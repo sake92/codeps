@@ -55,8 +55,8 @@
    <h1 id="codeps">codeps<a href="#codeps" class="flatmark-anchor" aria-label="Anchor"> 🔗</a></h1>
    <p>codeps tracks broad dependency-health trends for JVM projects. It reads compiler output, identifies cycles and coupling signals, keeps compact history, and generates a static dashboard for each configured project.</p>
    <p>Configure the repository once, then run one command in CI:</p>
-   <pre><code class="language-shell hljs" data-highlighted="yes">curl -L -o codeps.jar https://github.com/sake92/codeps/releases/download/main/codeps-cli-main.jar
-java -jar codeps.jar status
+   <pre><code class="language-shell hljs" data-highlighted="yes">brew install sake92/tap/codeps
+codeps status
 </code></pre>
    <p>The examples below use <code>codeps</code> as the installed CLI command.</p>
    <p>The command writes:</p>
