@@ -1,82 +1,47 @@
 ---
 layout: howto.html
 title: Use codeps with an AI agent
-description: Install the Codeps skill and investigate bounded dependency findings
+description: Install the Codeps skill and ask your agent to find dependency problems and quick wins
 ---
 
 # Use codeps with an AI agent
 
-Use this workflow with a configured `.codeps/config.yaml` and a working dependency
-producer: SemanticDB, jdeps, or codeps export JSON. For input setup, see the
-[CLI reference](/reference/cli.html#configuration).
-
 ## Install the skill
 
 Install the [Codeps skill](https://github.com/sake92/skills/tree/main/skills/codeps)
-from the project directory:
+from your project directory:
 
 ```shell
 npx skills add sake92/skills --skill codeps
 ```
 
-Select your coding agent in the installer, or add `--agent <name>` to target one.
-Add `-g` to install for your user across projects. See the
+Select your coding agent in the installer. Add `-g` to make the skill available
+across your projects. See the
 [skills installer documentation](https://github.com/vercel-labs/skills#readme)
 for supported agents and installation options.
 
-The skill targets Codeps 0.6.0. Check `codeps --version`; if your installed version
-differs, use the skill's bundled `scripts/codeps-cli` runner from its installed
-directory. The runner downloads and verifies the pinned release on first use.
-Use that runner in place of `codeps` in the commands below.
+## Ask for an analysis
 
-## Refresh and select findings
+Open your project in the coding agent and give it a prompt such as:
 
-Build the project with its existing dependency producer before running analysis.
-Check that relevant reported source paths still exist; stale compiler output from
-deleted or moved sources requires fresh build inputs and another analysis.
+> Use the codeps skill to analyze this codebase. Find dependency cycles, the
+> messiest parts, and quick wins for simplification. Rank the findings by likely
+> impact and effort, with concrete files or packages and evidence for each.
+> Analyze and recommend changes first.
 
-For a configured project named `app`:
+The skill guides the agent through choosing dependency inputs, building the
+project, running codeps, and inspecting relevant findings. It includes a runner
+for the supported CLI version. If your project needs input setup or the build
+fails, the agent should explain what is missing and which conclusions it cannot
+verify.
 
-```shell
-codeps status --project app
-codeps findings --project app --limit 10 --format json
-```
+## Follow up on a finding
 
-Check `total`, `omitted`, and `sourceFindingsOmitted`. Claim an exhaustive selection
-only when both omission counts are zero. Narrow the selection when needed:
+Choose a recommendation and ask the agent to implement it:
 
-```shell
-codeps findings --project app --kind cycle --limit 10 --format json
-codeps findings --project app --scope files --severity high --limit 5 --format json
-```
+> Implement the smallest change that breaks the cycle you identified. Rebuild,
+> run the relevant tests, and use codeps to verify the cycle is gone. Show the
+> before and after evidence.
 
-Use file scope only when the input supplies file data; jdeps supplies packages only.
-
-## Inspect selected subjects
-
-Use the `subject` values returned by findings as inspection ids. For example:
-
-```shell
-codeps inspect-cycle --project app --id scc:com.example.orders --format json
-codeps inspect-node --project app --scope files --id src/com/example/orders/OrderService.scala --format json
-```
-
-Preserve the finding's project and scope. Its `nextAction` is an action hint;
-supply the `codeps` command, project, scope, any custom `--config` path, and shell
-quoting for ids. Read the named source and its consumers before recommending a change.
-
-Fetch only the [artifact schemas](/reference/report.html#json-schemas) needed to
-parse or validate selected output. Read specific cached report fields when the
-question needs evidence outside findings, such as summary counts or orphans.
-
-## Verify a change
-
-After an authorized refactoring, rebuild and repeat `status`, bounded findings,
-and selected inspection for the same project and scope. Compare the affected
-cycles and metrics with the baseline using stable analysis settings. Report build
-failures or stale inputs as limits on verification.
-
-Keep temporary exports and reports under `.codeps/temp/`. Codeps automatically
-labels snapshots with clean HEAD, HEAD plus `-dirty`, or epoch milliseconds when
-HEAD is unavailable. Avoid overriding changed worktree inputs with unchanged HEAD.
-For timestamp rules and overrides, see [status](/reference/cli.html#status).
+For manual analysis commands, see the [CLI reference](/reference/cli.html) and
+[package triage tutorial](/tutorials/package-triage.html).

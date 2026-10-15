@@ -39,4 +39,4 @@ Tos](/howtos) for SemanticDB and jdeps input. You can also use the
 repositories to try, and the
 [codeps skill](https://github.com/sake92/skills/tree/main/skills/codeps) with
 an AI coding agent. See [Use codeps with an AI agent](/howtos/agents.html) for
-installation and the bounded analysis workflow.
+installation and example prompts.
