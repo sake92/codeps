@@ -114,8 +114,8 @@ Unknown properties are allowed for additive evolution. Relative `$ref` links sha
 | `inspect-node --format json` | [inspect-node.schema.json](/schemas/inspect-node.schema.json) |
 
 Unavailable `files` and file node `packageId` values serialize as explicit `null`;
-readers also accept omitted fields. `truncation` is omitted when no findings were
-omitted. Unavailable surface ratios, `cycleId`, and `greedyCutEstimate` are explicit `null`.
+readers also accept omitted fields. `truncation` is explicit `null` when no findings
+were omitted. Unavailable surface ratios, `cycleId`, and `greedyCutEstimate` are explicit `null`.
 Export declaration counters default to zero when missing, and edge weight defaults
 to one. Schemas validate shapes and types; they do not prove that edges reference
 existing nodes, that cycle paths are valid, or that aggregate counts agree.

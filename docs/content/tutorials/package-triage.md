@@ -48,34 +48,44 @@ projects:
 ```
 
 ```shell
-codeps status
+codeps status --project app
 ```
 
 ## 2. Choose one finding
 
-Read the report JSON in this order (the dashboard is for trend and summary evidence):
+Read a bounded selection from the cached report:
+
+```shell
+codeps findings --project app --limit 10 --format json
+```
+
+Check `total`, `omitted`, and `sourceFindingsOmitted`. The selection is exhaustive
+only when both omission counts are zero. Narrow it with `--kind cycle` or
+`--severity high` if needed. Prioritize the evidence in this order:
 
 1. **Cycles** — a package SCC blocks clean module boundaries. Start with the
    largest SCC; `extFanIn` shows how much code feeds into it.
 2. **Change propagators** — high `fanIn` and `fanOut` identify packages whose
    changes spread widely. They are useful candidates for a narrower API or a
    split.
-3. **Surface risks** — low `use` (`dependentsPerPublicPort`) can indicate a
-   package exposing more API than its consumers need. Check `ports`, `mut`, and
-   `encap%` together; no single score is a verdict.
-4. **Orphans** — isolated nodes are dead-code-removal candidates. Confirm they
-   are not entry points or reflection targets before deleting anything.
+3. **Surface risks** — low `dependentsPerPublicPort` can indicate a
+   package exposing more API than its consumers need. Inspect `ports`, `mutPorts`,
+   and declaration-surface metrics together; no single score is a verdict.
+
+Orphans are outside the findings index. If investigating removal candidates, read
+the cached report's `packages.orphans` field, confirm each source still exists,
+and check entry points and reflection before proposing deletion.
 
 ## 3. Investigate the package, not every metric
 
-Ask codeps for a cached report detail using an id printed in the report:
+Ask codeps for cached detail using a finding's `subject` value as the id. For example:
 
 ```shell
-codeps inspect-cycle --id scc:com.example.orders
-codeps inspect-node --id com.example.orders
+codeps inspect-cycle --project app --id scc:com.example.orders
+codeps inspect-node --project app --id com.example.orders
 ```
 
-Both commands read the most recent `.codeps/out/<project>/report.json`, so run `codeps status`
+Both commands read the most recent `.codeps/out/app/report.json`, so run `codeps status --project app`
 first. Cut analysis is not currently exposed by the CLI: `cutAnalysis.status` in the report is
 always `notRequested`, so a suggested cut list will not be populated. Use `extFanIn`, `members`,
 and `witnessCycle` to reason about the cycle by hand.

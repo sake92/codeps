@@ -13,7 +13,7 @@
     "Snapshot IDs use HEAD for clean Git checkouts, HEAD-dirty for local changes, and epoch milliseconds without a resolvable HEAD; clean snapshot timestamps use the committer time. --commit and --generated-at override metadata. Dashboard points are evenly spaced in recording order, with timestamps on hover or focus; Older and Newer navigate pages of up to 20 snapshots, starting on the newest page.",
     "Treat include and exclude as package-prefix patterns, not globs; exclude takes precedence. The * and ** wildcard syntax applies only to collapse rules.",
     "Use test-pattern only with skip-tests: true; skip-tests removes test files before package analysis.",
-    "Run status to refresh cached reports before findings or inspection; specify --project when the config contains multiple projects.",
+    "Build with the existing dependency producer, then run status to refresh cached reports before findings or inspection; specify --project when the config contains multiple projects. Stale compiler output for deleted or moved sources requires fresh inputs and reanalysis.",
     "Start agent triage with `codeps findings --project <id> --limit 10 --format json`; filter with --severity or --kind and inspect only selected subjects instead of dumping report.json.",
     "Preserve --project and --scope when drilling into findings; inspect-cycle and inspect-node require --id, and nextAction is an action hint rather than a complete shell command.",
     "Use the JSON Schemas linked from the artifact reference docs; check schemaVersion, omitted, and sourceFindingsOmitted before claiming a findings selection is exhaustive.",
