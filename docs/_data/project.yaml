@@ -9,6 +9,8 @@ tutorials:
     url: "/tutorials/file-triage.html"
 
 howtos:
+  - label: "Use codeps with an AI agent"
+    url: "/howtos/agents.html"
   - label: "Export Scala/SemanticDB projects"
     url: "/howtos/semdb.html"
   - label: "Export Java/JVM projects with jdeps"

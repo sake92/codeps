@@ -5,10 +5,10 @@ pagination:
   enabled: false
 ---
 
-# Configure project input
+# How-to guides
 
-Use these short setup guides to configure a codeps project's `source`/`inputs`. Once that
-works, go to [Tutorials](/tutorials) for the day-to-day analysis workflow.
+Use these guides to configure project input or analyze a project with an AI agent.
+For a guided first analysis, see [Tutorials](/tutorials).
 
 {% for tut in site.data.project.howtos %}- [{{ tut.label }}]({{ tut.url }})
 {% endfor %}

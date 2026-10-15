@@ -28,10 +28,19 @@ projects:
 codeps status --project app
 ```
 
-The report uses the same sections as the package report, but ids are source-file
-paths. Start with cycles, then change propagators, then surface risks.
+Read bounded file findings from the cached report:
+
+```shell
+codeps findings --project app --scope files --limit 10 --format json
+```
+
+Check `omitted` and `sourceFindingsOmitted`; both must be zero for an exhaustive
+selection. File ids are source-file paths. Start with cycles, then change
+propagators, then surface risks.
 
 ## 2. Inspect the concrete file
+
+Use a subject id returned by file findings, keeping `--project app --scope files`:
 
 ```shell
 codeps inspect-node --project app --scope files --id src/com/example/orders/OrderService.scala

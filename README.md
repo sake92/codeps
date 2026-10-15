@@ -13,6 +13,7 @@ over the package graph, or the file graph of the packages you select.
 - [Documentation](https://sake92.github.io/codeps/)
 - [Example projects](https://github.com/sake92/codeps-examples)
 - [Codeps skill](https://github.com/sake92/skills/tree/main/skills/codeps)
+- [Use codeps with an AI agent](https://sake92.github.io/codeps/howtos/agents.html)
 
 ## Quick start
 
@@ -73,10 +74,19 @@ The metrics are language-agnostic once the node/edge list carries per-node `isEx
 (see the [metrics report](https://sake92.github.io/codeps/reference/report.html#exposed-surface)) —
 a TS/Python extractor only has to emit the same generic JSON shape.
 
-Human reports are bounded to 10 rows per section; add `--all` for every table or Markdown row.
-Use `--analyze-cuts` (optionally with `--cut-time-limit` and `--cut-candidate-limit`) to request
-bounded SCC cut analysis. The [CLI reference](https://sake92.github.io/codeps/reference/cli.html)
-covers filtering, surface-column groups, ANSI color modes, and `inspect-cycle`/`inspect-node`.
+Start with bounded findings from the latest cached report, then inspect selected subjects:
+
+```shell
+codeps findings --project app --limit 10 --format json
+codeps inspect-cycle --project app --id scc:com.example.orders
+codeps inspect-node --project app --id com.example.orders
+```
+
+Use ids returned by findings and preserve the selected project and scope. Check both
+`omitted` and `sourceFindingsOmitted` before treating the selection as exhaustive.
+The [CLI reference](https://sake92.github.io/codeps/reference/cli.html) covers finding
+filters, file scope, and inspection. Cycle-cut analysis is available in the core library;
+CLI reports have `cutAnalysis.status: notRequested`.
 
 ## Development
 
